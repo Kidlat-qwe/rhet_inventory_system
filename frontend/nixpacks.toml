@@ -1,0 +1,14 @@
+# Coolify / Nixpacks — Vite SPA
+# Build static assets, then serve dist (SPA fallback via `serve -s`).
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci || npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"
