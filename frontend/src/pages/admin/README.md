@@ -12,7 +12,7 @@ Admin role entry points. Workspace pages re-export shared implementations; API K
 | `adminReports.jsx` | Wrapper → `ReportsPage` |
 | `adminCategories.jsx` | Wrapper → `CategoriesPage` |
 | `adminApiKeys.jsx` | Full implementation |
-| `adminUsers.jsx` | Full implementation |
+| `adminUsers.jsx` | Full implementation (list, role change, **Add user**) |
 | `adminSettings.jsx` | Full implementation |
 
 Import via the barrel:

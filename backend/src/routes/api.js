@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pool } from '../database/pool.js';
 import * as controller from '../controllers/inventory.controller.js';
 import { dashboardSummary } from '../services/dashboard.service.js';
-import { AppError, asyncHandler, camelize, success } from '../utils/api.js';
+import { asyncHandler, camelize, success } from '../utils/api.js';
 import { validate } from '../middleware/validate.js';
 import { requireAdminRole } from '../middleware/auth.js';
 import { createInventorySchema, idParams, listInventorySchema, movementListSchema, movementSchema, updateInventorySchema } from '../validation/schemas.js';
@@ -11,7 +11,9 @@ import {
   integrationSystemCodeParams,
   updateIntegrationClientSchema,
 } from '../validation/integration.schemas.js';
+import { createUserSchema, updateUserRoleSchema } from '../validation/users.schemas.js';
 import * as integrationClientController from '../controllers/integration-client.controller.js';
+import * as usersController from '../controllers/users.controller.js';
 
 export const api = Router();
 
@@ -20,30 +22,9 @@ api.get('/dashboard', asyncHandler(async (_req, res) => success(res, await dashb
 api.get('/categories', asyncHandler(async (_req, res) => {
   const result = await pool.query('SELECT * FROM categories ORDER BY category_name'); success(res, camelize(result.rows));
 }));
-api.get('/users', requireAdminRole, asyncHandler(async (_req, res) => {
-  const result = await pool.query(
-    'SELECT user_id, firebase_uid, email, full_name, role, status, created_at, updated_at FROM users ORDER BY full_name',
-  );
-  success(res, camelize(result.rows));
-}));
-api.patch('/users/:id/role', requireAdminRole, asyncHandler(async (req, res) => {
-  const role = String(req.body.role || '').toUpperCase();
-  if (!['ADMIN', 'USER'].includes(role)) {
-    throw new AppError(422, 'VALIDATION_ERROR', 'Role must be ADMIN or USER');
-  }
-  if (req.params.id === req.admin.user_id && role !== 'ADMIN') {
-    throw new AppError(422, 'VALIDATION_ERROR', 'You cannot remove your own administrator role');
-  }
-  const result = await pool.query(
-    `UPDATE users
-     SET role = $1, updated_at = NOW()
-     WHERE user_id = $2
-     RETURNING user_id, firebase_uid, email, full_name, role, status, created_at, updated_at`,
-    [role, req.params.id],
-  );
-  if (!result.rowCount) throw new AppError(404, 'USER_NOT_FOUND', 'User was not found');
-  success(res, camelize(result.rows[0]));
-}));
+api.get('/users', requireAdminRole, usersController.list);
+api.post('/users', requireAdminRole, validate(createUserSchema), usersController.create);
+api.patch('/users/:id/role', requireAdminRole, validate(updateUserRoleSchema), usersController.updateRole);
 api.get('/integration-clients', requireAdminRole, integrationClientController.list);
 api.post('/integration-clients', requireAdminRole, validate(createIntegrationClientSchema), integrationClientController.create);
 api.patch('/integration-clients/:systemCode', requireAdminRole, validate(updateIntegrationClientSchema), integrationClientController.update);

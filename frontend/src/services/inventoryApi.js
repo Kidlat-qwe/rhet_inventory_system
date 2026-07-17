@@ -14,6 +14,9 @@ export const fetchDashboard = () => api('/dashboard').then((response) => respons
 export const fetchCategories = () => api('/categories').then((response) => response.data)
 export const fetchUsers = () => api('/users').then((response) => response.data)
 
+export const createUser = (body) =>
+  api('/users', { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
+
 export const updateUserRole = (userId, role) =>
   api(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }).then((response) => response.data)
 export const fetchIntegrationClients = () => api('/integration-clients').then((response) => response.data)
