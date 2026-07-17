@@ -1,29 +1,27 @@
-# PSMS Integration
+# External System Integrations
 
-Connect the PSMS merchandise page to RHET Inventory using machine-to-machine API calls.
+Connect any external system to RHET Inventory using machine-to-machine API calls and per-system API keys.
 
-**PSMS setup guide (paste into PSMS project):** [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md)
+| Guide | Use when |
+|---|---|
+| [EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md) | Generic setup for **any** external system |
+| [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md) | PSMS / CMS-specific walkthrough |
 
 ## Authentication
 
-Set a shared secret in the inventory backend:
-
-```env
-PSMS_INTEGRATION_KEY=your-long-random-secret
-PSMS_WEBHOOK_URL=https://your-psms-domain.com/api/webhooks/inventory
-```
-
-Every PSMS request must include:
+Generate a key in RHET Inventory → **API Keys**, then send it on every request:
 
 ```http
-X-Integration-Key: your-long-random-secret
+X-Integration-Key: rhet_<system>_<secret>
 ```
 
 or
 
 ```http
-Authorization: Bearer your-long-random-secret
+Authorization: Bearer rhet_<system>_<secret>
 ```
+
+Optional default webhook can be stored per integration client in the API Keys UI. Legacy env vars `PSMS_INTEGRATION_KEY` / `PSMS_WEBHOOK_URL` are not required for new setups.
 
 ## Base URL
 

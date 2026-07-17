@@ -54,8 +54,9 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const reload = useCallback(async () => {
-    setLoading(true)
+  const reload = useCallback(async (options = {}) => {
+    const silent = Boolean(options?.silent)
+    if (!silent) setLoading(true)
     setError('')
     try {
       const me = await fetchMe()
@@ -80,9 +81,11 @@ function App() {
     } catch (err) {
       setError(err.message)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
+
+  const refreshQuietly = useCallback(() => reload({ silent: true }), [reload])
 
   useEffect(() => firebaseConfigured ? observeAuth(setUser) : undefined, [])
   useEffect(() => {
@@ -128,19 +131,19 @@ function App() {
         case 'Dashboard':
           return <AdminDashboard dashboard={dashboard} admin={admin} goInventory={() => setPage('Inventory')} goMovements={() => setPage('Stock Movements')} />
         case 'Inventory':
-          return <AdminInventory items={inventory} categories={categories} onRefresh={reload} onExport={handleExport} />
+          return <AdminInventory items={inventory} categories={categories} onRefresh={refreshQuietly} onExport={handleExport} />
         case 'Stock Requests':
-          return <AdminStockRequests requests={stockRequests} onRefresh={reload} />
+          return <AdminStockRequests requests={stockRequests} onRefresh={refreshQuietly} />
         case 'Release Logs':
           return <AdminReleaseLogs requests={stockRequests} />
         case 'Stock Movements':
           return <AdminStockMovements movements={movements} />
         case 'Categories':
-          return <AdminCategories categories={categories} onRefresh={reload} />
+          return <AdminCategories categories={categories} onRefresh={refreshQuietly} />
         case 'Users':
-          return <AdminUsers users={admins} currentAdmin={admin} onRefresh={reload} />
+          return <AdminUsers users={admins} currentAdmin={admin} onRefresh={refreshQuietly} />
         case 'API Keys':
-          return <AdminApiKeys clients={integrationClients} onRefresh={reload} />
+          return <AdminApiKeys clients={integrationClients} onRefresh={refreshQuietly} />
         case 'Reports':
           return <AdminReports dashboard={dashboard} onExport={handleExport} />
         case 'Settings':
@@ -154,15 +157,15 @@ function App() {
       case 'Dashboard':
         return <UserDashboard dashboard={dashboard} admin={admin} goInventory={() => setPage('Inventory')} goMovements={() => setPage('Stock Movements')} />
       case 'Inventory':
-        return <UserInventory items={inventory} categories={categories} onRefresh={reload} onExport={handleExport} />
+        return <UserInventory items={inventory} categories={categories} onRefresh={refreshQuietly} onExport={handleExport} />
       case 'Stock Requests':
-        return <UserStockRequests requests={stockRequests} onRefresh={reload} />
+        return <UserStockRequests requests={stockRequests} onRefresh={refreshQuietly} />
       case 'Release Logs':
         return <UserReleaseLogs requests={stockRequests} />
       case 'Stock Movements':
         return <UserStockMovements movements={movements} />
       case 'Categories':
-        return <UserCategories categories={categories} onRefresh={reload} />
+        return <UserCategories categories={categories} onRefresh={refreshQuietly} />
       case 'Reports':
         return <UserReports dashboard={dashboard} onExport={handleExport} />
       case 'Users':

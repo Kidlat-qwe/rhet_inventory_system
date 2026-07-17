@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { StatusBadge } from '../../components/StatusBadge'
 import { baseUrl } from '../../services/api'
-import { createIntegrationClient, revokeIntegrationApiKey } from '../../services/inventoryApi'
+import { createIntegrationClient, regenerateIntegrationApiKey, revokeIntegrationApiKey } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
 
 const integrationApiUrl = `${baseUrl.replace(/\/+$/, '')}/integrations`
@@ -62,6 +62,25 @@ export default function AdminApiKeys({ clients, onRefresh }) {
     }
   }
 
+  function openRevealFromResult(result, fallback = {}) {
+    const apiKey = result?.apiKey || result?.client?.apiKey || ''
+    if (!apiKey) {
+      throw new Error('API key was created, but the server did not return the full key.')
+    }
+    setShowGenerateModal(false)
+    setSystemName('')
+    setExpiration('none')
+    setCopiedField('')
+    setError('')
+    setMenuOpenFor(null)
+    setRevealed({
+      systemCode: result.client?.systemCode || fallback.systemCode || '',
+      displayName: result.client?.displayName || fallback.displayName || '',
+      apiKey,
+      expiresAt: result.client?.apiKeyExpiresAt || null,
+    })
+  }
+
   async function submit(e) {
     e.preventDefault()
     setError('')
@@ -87,17 +106,35 @@ export default function AdminApiKeys({ clients, onRefresh }) {
         webhookUrl: null,
         expiration,
       })
-      setShowGenerateModal(false)
-      setSystemName('')
-      setExpiration('none')
-      setCopiedField('')
-      setRevealed({
-        systemCode: result.client?.systemCode || systemCode,
-        displayName: result.client?.displayName || displayName,
-        apiKey: result.apiKey,
-        expiresAt: result.client?.apiKeyExpiresAt || null,
+      openRevealFromResult(result, { systemCode, displayName })
+      await onRefresh?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function regenerateKey(client) {
+    if (!client?.systemCode) return
+    const confirmed = window.confirm(
+      `Regenerate API key for ${client.displayName || client.systemCode}? The previous key will stop working immediately.`,
+    )
+    if (!confirmed) {
+      setMenuOpenFor(null)
+      return
+    }
+
+    setBusy(true)
+    setError('')
+    setMenuOpenFor(null)
+    try {
+      const result = await regenerateIntegrationApiKey(client.systemCode)
+      openRevealFromResult(result, {
+        systemCode: client.systemCode,
+        displayName: client.displayName,
       })
-      await onRefresh()
+      await onRefresh?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -107,7 +144,9 @@ export default function AdminApiKeys({ clients, onRefresh }) {
 
   async function revokeKey(client) {
     if (!client?.hasApiKey) return
-    const confirmed = window.confirm(`Revoke API key for ${client.displayName || client.systemCode}? External systems using this key will stop working immediately.`)
+    const confirmed = window.confirm(
+      `Revoke API key for ${client.displayName || client.systemCode}? External systems using this key will stop working immediately.`,
+    )
     if (!confirmed) {
       setMenuOpenFor(null)
       return
@@ -118,7 +157,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
     setMenuOpenFor(null)
     try {
       await revokeIntegrationApiKey(client.systemCode)
-      await onRefresh()
+      await onRefresh?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -182,6 +221,9 @@ export default function AdminApiKeys({ clients, onRefresh }) {
                       </button>
                       {menuOpenFor === client.systemCode && (
                         <div className="actions-dropdown">
+                          <button type="button" disabled={busy} onClick={() => regenerateKey(client)}>
+                            Regenerate API key
+                          </button>
                           <button
                             type="button"
                             className="danger-action"
@@ -241,7 +283,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
             </label>
             {error && <div className="page-error">{error}</div>}
             <div className="integration-note warn">
-              After generating, copy the key immediately and paste it into the external system backend <code>.env</code> as <code>INVENTORY_INTEGRATION_KEY</code>.
+              After generating, a copy modal will show the API URL and full key for your external system <code>.env</code>.
             </div>
             <div className="modal-actions">
               <button type="button" className="secondary" onClick={closeGenerateModal} disabled={busy}>Cancel</button>

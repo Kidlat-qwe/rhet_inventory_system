@@ -29,3 +29,17 @@
 .api-env-block{margin-top:16px;padding:14px;border:1px solid #dfe4eb;border-radius:9px;background:#f8fafc}
 .api-env-block pre{margin:0 0 12px;padding:12px;border-radius:7px;background:#17242d;color:#edf3f6;white-space:pre-wrap;overflow-wrap:anywhere;font:10px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
 @media(max-width:560px){.api-config-field>div{align-items:stretch;flex-direction:column}.api-config-field button,.api-env-block button{width:100%}}
+.request-detail-modal{width:min(720px,calc(100vw - 30px))}
+.request-detail-status{display:flex;align-items:center;gap:12px;margin:4px 0 16px}
+.request-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.request-detail-grid>div{padding:12px;border:1px solid #e7e9ee;border-radius:8px;background:#f8fafc}
+.request-detail-grid>div.full{grid-column:1 / -1}
+.request-detail-grid span{display:block;font-size:9px;color:#8b93a0;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.request-detail-grid strong{font-size:12px;color:#2b3448;word-break:break-word}
+.request-detail-grid .danger-text{color:#b84b45}
+@media(max-width:560px){.request-detail-grid{grid-template-columns:1fr}.modal-actions{flex-wrap:wrap}.modal-actions button{flex:1 1 100%}}
+.stock-warning-banner{margin:0 0 14px;padding:14px;border:1px solid #f0c7c3;border-radius:9px;background:#fdebea;color:#8f3b36}
+.stock-warning-banner strong{display:block;font-size:13px;margin-bottom:6px}
+.stock-warning-banner p{margin:0;font-size:11px;line-height:1.5}
+.stock-warning-list{margin:12px 0 0;padding-left:18px;font-size:11px;line-height:1.7}
+.approve-warning-modal .integration-note{margin-top:0}
