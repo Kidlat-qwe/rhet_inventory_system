@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { EmptyState } from '../../components/EmptyState'
 import { StatusBadge } from '../../components/StatusBadge'
+import { baseUrl } from '../../services/api'
 import { createIntegrationClient, revokeIntegrationApiKey } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
+
+const integrationApiUrl = `${baseUrl.replace(/\/+$/, '')}/integrations`
 
 export default function AdminApiKeys({ clients, onRefresh }) {
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -11,7 +13,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [revealed, setRevealed] = useState(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedField, setCopiedField] = useState('')
   const [menuOpenFor, setMenuOpenFor] = useState(null)
 
   function deriveSystemCode(name) {
@@ -46,17 +48,17 @@ export default function AdminApiKeys({ clients, onRefresh }) {
 
   function closeRevealModal() {
     setRevealed(null)
-    setCopied(false)
+    setCopiedField('')
+    setError('')
   }
 
-  async function copyKeyOnce() {
-    if (!revealed?.apiKey || copied) return
+  async function copyValue(value, field) {
+    if (!value) return
     try {
-      await navigator.clipboard.writeText(revealed.apiKey)
-      setCopied(true)
-      setRevealed((current) => (current ? { ...current, apiKey: null } : null))
+      await navigator.clipboard.writeText(value)
+      setCopiedField(field)
     } catch {
-      setError('Unable to copy. Select the key and copy it manually, then close this dialog.')
+      setError('Unable to copy automatically. Select the value and copy it manually.')
     }
   }
 
@@ -88,7 +90,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
       setShowGenerateModal(false)
       setSystemName('')
       setExpiration('none')
-      setCopied(false)
+      setCopiedField('')
       setRevealed({
         systemCode: result.client?.systemCode || systemCode,
         displayName: result.client?.displayName || displayName,
@@ -251,7 +253,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
 
       {revealed && (
         <div className="modal-backdrop">
-          <div className="modal small">
+          <div className="modal api-key-modal">
             <div className="modal-head">
               <div>
                 <h2>API key created</h2>
@@ -259,21 +261,49 @@ export default function AdminApiKeys({ clients, onRefresh }) {
               </div>
               <button type="button" onClick={closeRevealModal}>×</button>
             </div>
-            <div className="api-key-reveal">
-              <span>{copied ? 'Key copied' : 'Copy this key now'}</span>
-              <code>{copied ? '••••••••••••••••••••••••••••••••' : revealed.apiKey}</code>
-              <button type="button" className="secondary" onClick={copyKeyOnce} disabled={copied || !revealed.apiKey}>
-                {copied ? 'Copied once' : 'Copy API key'}
+            <div className="integration-note warn">
+              This API key is shown only in this modal. Copy the configuration before closing it.
+            </div>
+            <div className="api-config-field">
+              <label htmlFor="integration-api-url">Inventory API URL</label>
+              <div>
+                <input id="integration-api-url" readOnly value={integrationApiUrl} onFocus={(event) => event.target.select()} />
+                <button type="button" className="secondary" onClick={() => copyValue(integrationApiUrl, 'url')}>
+                  {copiedField === 'url' ? 'Copied' : 'Copy URL'}
+                </button>
+              </div>
+            </div>
+            <div className="api-config-field">
+              <label htmlFor="integration-api-key">Inventory API key</label>
+              <div>
+                <input id="integration-api-key" readOnly value={revealed.apiKey || ''} onFocus={(event) => event.target.select()} />
+                <button type="button" className="secondary" onClick={() => copyValue(revealed.apiKey, 'key')} disabled={!revealed.apiKey}>
+                  {copiedField === 'key' ? 'Copied' : 'Copy key'}
+                </button>
+              </div>
+            </div>
+            <div className="api-env-block">
+              <span>External system <code>.env</code></span>
+              <pre>{`INVENTORY_API_URL=${integrationApiUrl}
+INVENTORY_API_KEY=${revealed.apiKey || ''}`}</pre>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => copyValue(
+                  `INVENTORY_API_URL=${integrationApiUrl}\nINVENTORY_API_KEY=${revealed.apiKey || ''}`,
+                  'env',
+                )}
+                disabled={!revealed.apiKey}
+              >
+                {copiedField === 'env' ? 'Configuration copied' : 'Copy .env configuration'}
               </button>
             </div>
             <div className="integration-note">
               Expiration: <strong>{formatExpiration(revealed.expiresAt)}</strong>
             </div>
             {error && <div className="page-error">{error}</div>}
-            <div className={`integration-note ${copied ? '' : 'warn'}`}>
-              {copied
-                ? 'This key will not be shown again. Store it in your external system backend only.'
-                : 'You can copy this key only once. After copying, it will be hidden permanently from this screen.'}
+            <div className="integration-note">
+              Store these values only in the external system backend. Send the key as <code>X-Integration-Key</code>.
             </div>
             <div className="modal-actions">
               <button type="button" className="primary" onClick={closeRevealModal}>Done</button>
