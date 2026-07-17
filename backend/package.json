@@ -1,0 +1,24 @@
+{
+  "name": "rhet-inventory-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "lint": "powershell -NoProfile -Command \"Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }\"",
+    "test": "node --test",
+    "db:migrate": "node src/database/migrate.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "firebase-admin": "^13.6.0",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  }
+}
