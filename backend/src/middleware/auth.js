@@ -59,9 +59,20 @@ export async function requireAuth(req, _res, next) {
     next();
   } catch (error) {
     if (error instanceof AppError) return next(error);
-    console.error('Authentication failed', error.message);
+    console.error('Authentication failed', error.code || '', error.message);
     if (error.code === '28000' || error.code === '57P01' || /SSL|insecure|ECONNREFUSED|timeout/i.test(error.message || '')) {
       return next(new AppError(503, 'DATABASE_UNAVAILABLE', 'Unable to reach the database. Check DB host/SSL settings.'));
+    }
+    // Coolify often mangles FIREBASE_PRIVATE_KEY — surface that as 503, not a fake "invalid token".
+    if (
+      /private.?key|DECODER|PEM|credential|FIREBASE|Failed to parse|invalid_grant/i.test(error.message || '')
+      || ['app/invalid-credential', 'auth/invalid-credential', 'app/invalid-app-options'].includes(error.code)
+    ) {
+      return next(new AppError(
+        503,
+        'FIREBASE_ADMIN_MISCONFIGURED',
+        'Firebase Admin cannot verify tokens. Check FIREBASE_PRIVATE_KEY or FIREBASE_PRIVATE_KEY_BASE64 on the server.',
+      ));
     }
     next(new AppError(401, 'INVALID_TOKEN', 'The Firebase token is invalid, expired, or revoked'));
   }
