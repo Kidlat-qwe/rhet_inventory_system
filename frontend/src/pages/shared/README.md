@@ -7,6 +7,7 @@ Role-agnostic page implementations used by both admin and user wrappers under `p
 | `DashboardPage.jsx` | Dashboard |
 | `InventoryPage.jsx` | Inventory |
 | `StockRequestsPage.jsx` | Stock Requests (details modal + approve warning when out of stock) |
+| `OnlineOrdersPage.jsx` | Online Orders (Shopee CSV/manual import, SKU mapping, auto stock deduction) |
 | `ReleaseLogsPage.jsx` | Merchandise releasing logs |
 | `StockMovementsPage.jsx` | Stock Movements |
 | `ReportsPage.jsx` | Reports |

@@ -1,7 +1,7 @@
 import { AppError } from '../utils/api.js';
 
 const positiveTypes = new Set(['STOCK_IN', 'RETURN']);
-const negativeTypes = new Set(['STOCK_OUT', 'DAMAGED', 'RELEASED']);
+const negativeTypes = new Set(['STOCK_OUT', 'DAMAGED', 'RELEASED', 'ONLINE_SALE']);
 
 export function calculateStockChange(previous, input) {
   let delta;

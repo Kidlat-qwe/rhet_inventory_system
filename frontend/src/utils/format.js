@@ -7,6 +7,12 @@ const statusLabels = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   FULFILLED: 'Fulfilled',
+  RECEIVED: 'Received',
+  NEEDS_ATTENTION: 'Needs attention',
+  DEDUCTED: 'Deducted',
+  UNMATCHED: 'Unmatched',
+  OVERSOLD: 'Oversold',
+  CANCELLED: 'Cancelled',
   FAILED: 'Failed',
   NOT_CONFIGURED: 'Not configured',
   CONFIGURED: 'Awaiting connection',
@@ -24,6 +30,7 @@ const movementLabels = {
   DAMAGED: 'Damaged',
   RELEASED: 'Released',
   CANCELLED: 'Cancelled',
+  ONLINE_SALE: 'Online sale',
 }
 
 export function formatStatus(status) {

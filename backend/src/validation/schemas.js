@@ -35,7 +35,7 @@ export const updateInventorySchema = z.object({ body: z.object({
 }).refine((body) => Object.keys(body).length > 0, 'At least one field is required'), query: z.any(), params: z.object({ id: uuid }) });
 
 export const movementSchema = z.object({ body: z.object({
-  movementType: z.enum(['STOCK_IN', 'STOCK_OUT', 'ADJUSTMENT', 'RETURN', 'DAMAGED', 'RELEASED', 'CANCELLED']),
+  movementType: z.enum(['STOCK_IN', 'STOCK_OUT', 'ADJUSTMENT', 'RETURN', 'DAMAGED', 'RELEASED', 'CANCELLED', 'ONLINE_SALE']),
   quantity: z.coerce.number().int().positive().optional(),
   newStock: z.coerce.number().int().min(0).optional(),
   direction: z.enum(['ADD', 'DEDUCT']).optional(),

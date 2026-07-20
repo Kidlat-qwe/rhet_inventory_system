@@ -7,6 +7,7 @@ User role entry points. Each file wraps a shared page and forwards all props unc
 | `userDashboard.jsx` | `DashboardPage` |
 | `userInventory.jsx` | `InventoryPage` |
 | `userStockRequests.jsx` | `StockRequestsPage` |
+| `userOnlineOrders.jsx` | `OnlineOrdersPage` |
 | `userReleaseLogs.jsx` | `ReleaseLogsPage` |
 | `userStockMovements.jsx` | `StockMovementsPage` |
 | `userReports.jsx` | `ReportsPage` |

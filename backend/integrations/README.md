@@ -1,172 +1,75 @@
 # External System Integrations
 
-Connect any external system to RHET Inventory using machine-to-machine API calls and per-system API keys.
+Machine-to-machine API for any external app to request stock from RHET Inventory.
 
-| Guide | Use when |
+## Documentation
+
+| Document | Use when |
 |---|---|
-| [EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md) | Generic setup for **any** external system |
-| [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md) | PSMS / CMS-specific walkthrough |
+| **[EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md)** | Full reference (URLs, API, matching, webhooks, troubleshooting) |
+| **[EXTERNAL_SYSTEM_PASTE_PROMPT.md](./EXTERNAL_SYSTEM_PASTE_PROMPT.md)** | Copy-paste into Cursor / another repo to implement integration |
+| **[PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md)** | PSMS/CMS-specific notes and field mapping |
+| **[SHOPEE_ONLINE_ORDERS.md](./SHOPEE_ONLINE_ORDERS.md)** | Shopee online orders (CSV/manual now, live API later) |
+| **[CMS_PROCESSED_BY_FIX.md](./CMS_PROCESSED_BY_FIX.md)** | CMS still shows "RHET Inventory" in Approved By — map `processedBy` |
 
-## Authentication
+## Quick start
 
-Generate a key in RHET Inventory → **API Keys**, then send it on every request:
+### 1. RHET Inventory (admin)
+
+1. **API Keys** → Generate API key (system name e.g. `PSMS`, `HR`)
+2. Copy modal → `.env` for external backend
+3. Optional RHET backend fallback: `PSMS_WEBHOOK_URL=https://external-api.../api/webhooks/inventory`
+
+### 2. External system (backend)
+
+```env
+INVENTORY_API_URL=https://api-inventory.lca-app.com/api/v1/integrations
+INVENTORY_INTEGRATION_KEY=rhet_<system>_<secret>
+INVENTORY_WEBHOOK_URL=https://your-api-domain.com/api/webhooks/inventory
+```
+
+### 3. Test
+
+```bash
+curl https://api-inventory.lca-app.com/api/v1/integrations/catalog \
+  -H "X-Integration-Key: YOUR_KEY"
+```
+
+## Auth
 
 ```http
 X-Integration-Key: rhet_<system>_<secret>
 ```
 
-or
-
-```http
-Authorization: Bearer rhet_<system>_<secret>
-```
-
-Optional default webhook can be stored per integration client in the API Keys UI. Legacy env vars `PSMS_INTEGRATION_KEY` / `PSMS_WEBHOOK_URL` are not required for new setups.
-
-## Base URL
-
-```text
-http://localhost:3000/api/v1/integrations
-```
-
-## Endpoints
-
-### Catalog (populate PSMS dropdowns)
-
-```http
-GET /catalog
-```
-
-Returns active categories and inventory rows (no SKU required on PSMS side).
-
-### Check availability
-
-```http
-GET /availability?categoryName=School%20Uniform&gender=Male&type=Shirt&size=M
-```
-
-### Submit stock request(s)
-
-Each row in the PSMS form becomes one request record.
-
-```http
-POST /stock-requests
-Content-Type: application/json
-
-{
-  "requestDate": "2026-07-16",
-  "requestedBy": "Paul Camus",
-  "reason": "Restock campus store display",
-  "webhookUrl": "https://psms.example.com/api/webhooks/inventory",
-  "items": [
-    {
-      "categoryName": "School Uniform",
-      "gender": "Male",
-      "type": "Shirt",
-      "size": "M",
-      "quantity": 2,
-      "externalReference": "PSMS-REQ-1001"
-    }
-  ]
-}
-```
-
-### Track request status
-
-```http
-GET /stock-requests/{requestId}
-```
-
-## Matching without SKU
-
-Uniform-like categories (`Uniform`, `PE Uniform`, `School Uniform`, etc.) are matched using:
-
-```text
-Category + Gender + Type + Size
-```
-
-This maps to inventory `variation`:
-
-```text
-Male · Shirt · M
-```
-
-Other categories can send `itemName` instead of gender/type/size.
+Keys are generated in RHET → **API Keys** (hashed in DB). Legacy shared `PSMS_INTEGRATION_KEY` for **incoming** auth is not used.
 
 ## Workflow
 
-1. PSMS submits request → status `PENDING`
-2. Inventory admin opens **Stock Requests** in RHET Inventory
-3. Admin approves → stock is deducted (`RELEASED` movement) → status `FULFILLED`
-4. Inventory sends webhook to PSMS
+1. External backend → `POST /stock-requests` → RHET **Pending**
+2. RHET user → **Stock Requests** → Review → Approve
+3. RHET warehouse stock **decreases**
+4. Webhook → external system → local/branch stock **increases** (your code)
 
-## Webhook events
+## API summary
 
-| Event | When |
-|---|---|
-| `stock_request.created` | Request stored |
-| `stock_request.fulfilled` | Admin approved and stock deducted |
-| `stock_request.rejected` | Admin rejected |
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/catalog` | Categories + items |
+| GET | `/availability` | Stock check |
+| POST | `/stock-requests` | Submit request |
+| GET | `/stock-requests/:id` | Poll status (`processedBy` = approver display name) |
 
-Example payload:
+Base URL: `https://api-inventory.lca-app.com/api/v1/integrations` (production)
+
+## Webhook `processedBy`
+
+On `stock_request.fulfilled` / `stock_request.rejected`, payload includes:
 
 ```json
-{
-  "event": "stock_request.fulfilled",
-  "requestId": "uuid",
-  "externalReference": "PSMS-REQ-1001",
-  "status": "FULFILLED",
-  "requestedBy": "Paul Camus",
-  "categoryName": "School Uniform",
-  "gender": "Male",
-  "type": "Shirt",
-  "size": "M",
-  "quantity": 2,
-  "matchedSku": "SCH-M-SHIRT-M",
-  "processedAt": "2026-07-16T08:00:00.000Z"
-}
+"processedBy": "Abby",
+"approvedBy": "Abby",
+"processedByName": "Abby",
+"processedByUserId": "e16bb708-1396-40aa-95e0-7235e20d7f60"
 ```
 
-## PSMS example (Node.js)
-
-```javascript
-const INVENTORY_URL = 'http://localhost:3000/api/v1/integrations'
-const INTEGRATION_KEY = process.env.PSMS_INTEGRATION_KEY
-
-async function submitStockRequest(form) {
-  const response = await fetch(`${INVENTORY_URL}/stock-requests`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Integration-Key': INTEGRATION_KEY,
-    },
-    body: JSON.stringify({
-      requestDate: form.requestDate,
-      requestedBy: form.requestedBy,
-      reason: form.reason,
-      items: form.items.map((row, index) => ({
-        categoryName: row.categoryName,
-        gender: row.gender,
-        type: row.type,
-        size: row.size,
-        quantity: Number(row.quantity),
-        externalReference: row.externalReference || `${form.batchId}-${index + 1}`,
-      })),
-    }),
-  })
-
-  const payload = await response.json()
-  if (!response.ok) throw new Error(payload.error?.message || 'Inventory request failed')
-  return payload.data
-}
-```
-
-## Admin actions
-
-| Action | Endpoint |
-|---|---|
-| List requests | `GET /api/v1/stock-requests` (Firebase admin auth) |
-| Approve | `POST /api/v1/stock-requests/:id/approve` |
-| Reject | `POST /api/v1/stock-requests/:id/reject` |
-
-Approving automatically deducts stock. Rejecting notifies PSMS via webhook only.
+`processedBy` (and aliases) are always a **display name**, never a UUID. Use `processedByUserId` if you need the user id.

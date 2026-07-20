@@ -72,6 +72,11 @@ All paths except health require `Authorization: Bearer <Firebase ID token>`. Res
 | GET/PATCH | `/api/v1/inventory/:id` | Read/edit/archive item metadata |
 | POST | `/api/v1/inventory/:id/movements` | Add, deduct, adjust, return, damage, release, or cancel stock |
 | GET | `/api/v1/stock-movements` | Paginated audit history and date filters |
+| GET | `/api/v1/online-orders` | List Shopee/marketplace online orders |
+| GET | `/api/v1/online-orders/:id` | Online order detail with line items |
+| POST | `/api/v1/online-orders/import` | Import Shopee CSV export (admin) |
+| POST | `/api/v1/online-orders/manual` | Create manual online order (admin) |
+| POST | `/api/v1/online-orders/items/:id/resolve` | Map Shopee SKU to inventory and deduct (admin) |
 | GET | `/api/v1/reports/inventory.csv` | Current stock/valuation/category/status CSV |
 
 Inventory query parameters: `search`, `categoryId`, `variation`, `status`, `sortBy`, `order`, `page`, `limit`. Movement parameters: `inventoryId`, `type`, `from`, `to`, `page`, `limit`. Low-stock and out-of-stock reports are inventory requests with the corresponding `status`; category reports use `categoryId`; valuation is included in the CSV. The movement endpoint supplies date-range transaction reports and can be exported client-side or extended with the same CSV serializer.
