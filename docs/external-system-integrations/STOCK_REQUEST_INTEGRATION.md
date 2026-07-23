@@ -232,16 +232,18 @@ Store `requestId` + `externalReference` on your local request row.
 
 ## 8. Learning Kits (read carefully)
 
+> **RHET model (2026-07):** Learning Kit stock is **virtual**. The kit BOM lists **categories only**. The requesting system fills concrete items via `components[]` (uniform: gender/type/size; non-uniform: itemName/sku). Displayed available kits ≈ `min(category stock totals)`. Approve deducts the resolved component SKUs. CMS Learning Kit UI may still be out of scope; API `components[]` is required for kit requests.
+
 ### 8.1 What a Learning Kit is in RHET
 
-A Learning Kit is a normal inventory row (it has its **own kit stock**) plus a **bill of materials (BOM)**.
+A Learning Kit is a catalog row (price / SKU / name) plus a **bill of materials (BOM)** of **categories**.
 
 | Concept | Meaning |
 |---|---|
-| Kit stock | How many assembled kits RHET has available |
-| BOM | List of **categories** the kit includes (e.g. LCA T-Shirt, School Uniform, Backpack) |
-| Recipe qty | Always **1** per category slot on the kit definition |
-| Concrete SKUs | **Not** stored on the kit. Chosen by **your request** |
+| Kit stock (displayed) | **Computed** from included category stock totals |
+| BOM | Categories the kit includes (e.g. School Uniform, Backpack, ID Lace) |
+| Recipe qty | Always **1** per category slot |
+| Concrete SKUs | Chosen by **your stock request** `components[]` |
 
 RHET admin UI for kits: category-only rows. No gender/type/size and no pinned backpack SKU on the kit itself.
 

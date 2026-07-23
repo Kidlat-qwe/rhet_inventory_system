@@ -11,7 +11,7 @@ Reusable presentational and modal components used across admin and user pages.
 | `MovementTable.jsx` | Stock movement history table |
 | `Sidebar.jsx` | App navigation sidebar |
 | `Header.jsx` | Top bar with breadcrumbs and sign-out |
-| `ItemModal.jsx` | Create / edit a single inventory item. For **Learning Kit**, BOM rows are category-only; concrete items (uniform attrs or item name/SKU) are chosen on the external stock request. |
+| `ItemModal.jsx` | Create / edit a single inventory item. For **Learning Kit**, BOM rows are **category-only**; the external stock request fills concrete items. Available kit stock is computed from category totals. |
 | `UniformItemModal.jsx` | Add / edit a uniform set: creates or updates both type rows (Polo+Short / Blouse+Skirt / Shirt+Pants) together, sharing gender and size |
 | `ActionsMenu.jsx` | Floating ellipsis (•••) actions menu rendered in a portal |
 | `Pagination.jsx` | Presentational pager (pairs with the `usePagination` hook) |

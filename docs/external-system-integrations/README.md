@@ -10,6 +10,8 @@ Guides for any partner system that requests stock from the **RHET Centralized In
 | **[CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md)** | **Paste this next** — redesign Merchandise Request Stock UI to mirror RHET Inventory (catalog category → variant); fixes failures like `LCA Bag` not found |
 | **[CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md)** | **Paste for Superadmin create merchandise** — align local Add Merchandise fields/values with RHET (category, Male/Female, XS–5XL, Polo≠Shirt); no auto-create in RHET |
 | **[CMS_PSMS_WEBHOOK_UPDATED_AT_FIX_PROMPT.md](./CMS_PSMS_WEBHOOK_UPDATED_AT_FIX_PROMPT.md)** | **Paste to fix stuck Pending** — CMS webhook 500 `column "updated_at" does not exist` after RHET FULFILLED (e.g. PSMS-33) |
+| **[CMS_PSMS_FULFILL_MATCH_EXISTING_TYPE_PROMPT.md](./CMS_PSMS_FULFILL_MATCH_EXISTING_TYPE_PROMPT.md)** | **Paste when fulfill creates `lca-backpack`** — add stock to existing CMS type (Backpack) by RHET `categoryName`, not new type from `itemName` |
+| **[CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md](./CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md)** | **Paste to enable Learning Kit Request Stock** — unblock kits; send `components[]`; fulfill under type `Learning Kit` |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
 Related (implementation notes inside this repo):
@@ -41,5 +43,6 @@ Related (implementation notes inside this repo):
 1. Open [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
 2. Open [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form = RHET catalog concept.
 3. Open [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Superadmin Create Merchandise fields = RHET vocabulary (local stock only).
-4. Optional: [CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md](./CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md) for touchpoint detail.
-5. Re-run verification before production deploy.
+4. Open [CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md](./CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md) — enable Learning Kit requests with `components[]`.
+5. Optional: [CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md](./CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md) for touchpoint detail.
+6. Re-run verification before production deploy.

@@ -332,9 +332,22 @@ export default function InventoryPage({ items, categories, allocations = [], can
                     <td><span className="sku-chip">{item.sku}</span></td>
                     <td className="variation-cell">{item.variation || '—'}</td>
                     <td>
-                      <button type="button" className="stock-link" onClick={() => setStock(item)}>
+                      <button
+                        type="button"
+                        className="stock-link"
+                        onClick={() => {
+                          if (item.stockMode === 'VIRTUAL_BUNDLE' || isLearningKitCategory(item.categoryId, categories)) {
+                            setError('Learning Kit stock is computed from pinned components. Restock those raw items (or edit the kit BOM) instead of adjusting kit stock directly.')
+                            return
+                          }
+                          setStock(item)
+                        }}
+                        title={item.stockMode === 'VIRTUAL_BUNDLE' ? 'Computed from components' : 'Adjust stock'}
+                      >
                         <strong className={item.stocks === 0 ? 'zero' : item.stocks <= item.lowStockThreshold ? 'low' : ''}>{item.stocks}</strong>
-                        <small>Threshold: {item.lowStockThreshold}</small>
+                        <small>
+                          {item.stockMode === 'VIRTUAL_BUNDLE' ? 'Computed from BOM' : `Threshold: ${item.lowStockThreshold}`}
+                        </small>
                       </button>
                     </td>
                     <td>

@@ -5,7 +5,7 @@ Role-agnostic page implementations used by both admin and user wrappers under `p
 | File | Route label |
 |------|-------------|
 | `DashboardPage.jsx` | Dashboard |
-| `InventoryPage.jsx` | Inventory — category summary (Category, Total stocks, Total Shopee, Status rollup, Last updated) with a "View raw stocks" drill-in per category. Adding an item inside a uniform category creates the type pair (Polo+Short / Shirt+Pants) via `UniformItemModal`; **Learning Kit** and other categories use `ItemModal` (kits include editable BOM component rows). Includes the "Shopee" allocation column/action for admins. |
+| `InventoryPage.jsx` | Inventory — category summary with drill-in. Uniforms use `UniformItemModal`; **Learning Kit** uses `ItemModal` with **category-slot BOM** (concrete items filled by requester) and **computed** available kits. Shopee allocation for admins. |
 | `StockRequestsPage.jsx` | Stock Requests (details modal + approve warning when out of stock) |
 | `OnlineOrdersPage.jsx` | Online Orders — fulfillment tracking board (Shopee CSV/manual import, SKU mapping for visibility only, manual delivery status moves, return confirmation). Stock is no longer deducted on order import; see channel allocation below. |
 | `ReleaseLogsPage.jsx` | Merchandise releasing logs |

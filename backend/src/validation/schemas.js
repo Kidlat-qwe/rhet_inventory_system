@@ -22,7 +22,7 @@ const money = z.coerce.number().min(0).max(9999999999.99);
 
 const bundleComponentBody = z.object({
   categoryId: uuid,
-  // Ignored on save — all BOM slots are category-only; concrete SKUs come from the request.
+  // Category-only BOM on the kit. Concrete SKUs come from the external stock request.
   componentInventoryId: uuid.optional().nullable(),
   quantity: z.coerce.number().int().positive().default(1).refine((v) => v === 1, 'Component quantity must be 1'),
 });

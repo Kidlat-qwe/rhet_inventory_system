@@ -69,8 +69,19 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     [categories],
   )
 
+  const computedKitStocks = useMemo(() => {
+    if (!isLearningKit) return null
+    const selected = components.map((row) => row.categoryId).filter(Boolean)
+    if (!selected.length) return 0
+    const totals = selected.map((categoryId) => items
+      .filter((entry) => entry.categoryId === categoryId)
+      .reduce((sum, entry) => sum + (Number(entry.stocks) || 0), 0))
+    if (totals.length !== selected.length) return 0
+    return Math.min(...totals)
+  }, [isLearningKit, components, items])
+
   useEffect(() => {
-    if (item.inventoryId) return // SKU is immutable once the item exists
+    if (item.inventoryId) return
     const nextSku = generateUniqueSku(form, categories, items)
     setForm((current) => (current.sku === nextSku ? current : { ...current, sku: nextSku }))
   }, [item.inventoryId, form.categoryId, form.itemName, form.uniformGender, form.uniformType, form.uniformSize, categories, items])
@@ -162,11 +173,11 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     }
 
     if (!resolved.length) {
-      setLocalError('Add at least one component to the Learning Kit.')
+      setLocalError('Add at least one category to the Learning Kit.')
       return
     }
 
-    onSave({ ...form, components: resolved })
+    onSave({ ...form, stocks: 0, components: resolved })
   }
 
   return (
@@ -175,7 +186,11 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
         <div className="modal-head">
           <div>
             <h2>{item.inventoryId ? 'Edit merchandise' : 'Add new merchandise'}</h2>
-            <p>{isLearningKit ? 'Define kit stock and which categories each kit includes. Concrete items are chosen on the stock request.' : 'Enter the item and stock information below.'}</p>
+            <p>
+              {isLearningKit
+                ? 'Choose which categories this kit includes. The external system picks the concrete items (size / SKU) when requesting stock. Available kits = minimum total stock across those categories.'
+                : 'Enter the item and stock information below.'}
+            </p>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </div>
@@ -224,7 +239,17 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
           </label>
           <label>{isUniform ? 'Per-piece price (₱) *' : 'Selling price (₱) *'}<input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => set('price', e.target.value)} /></label>
           <label>Low-stock threshold *<input required type="number" min="0" value={form.lowStockThreshold} onChange={(e) => set('lowStockThreshold', e.target.value)} /></label>
-          {!item.inventoryId && <label>Initial stock *<input required type="number" min="0" value={form.stocks} onChange={(e) => set('stocks', e.target.value)} /></label>}
+          {isLearningKit ? (
+            <label>
+              Available kits (computed)
+              <input className="readonly-input" readOnly value={computedKitStocks ?? 0} tabIndex={-1} />
+              <small className="field-hint">
+                Minimum of total stock in each included category. Concrete sizes/SKUs are chosen when an external system requests the kit.
+              </small>
+            </label>
+          ) : (
+            !item.inventoryId && <label>Initial stock *<input required type="number" min="0" value={form.stocks} onChange={(e) => set('stocks', e.target.value)} /></label>
+          )}
         </div>
 
         {isLearningKit && (
@@ -233,8 +258,8 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
               <div>
                 <strong>Included categories</strong>
                 <p>
-                  Pick categories only. The external stock request must specify the concrete item
-                  (uniform: gender · type · size; non-uniform: item name / SKU). Quantity on the recipe is always 1.
+                  Pick categories only. The external stock request fills the concrete inventory item
+                  (uniform: gender · type · size; non-uniform: item name / SKU). Recipe quantity is always 1.
                 </p>
               </div>
               <button type="button" className="secondary" onClick={() => setComponents((rows) => [...rows, newComponentRow()])}>
@@ -249,7 +274,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                 <thead>
                   <tr>
                     <th>Category</th>
-                    <th>Resolved on request</th>
+                    <th>Filled by requester</th>
                     <th>Qty</th>
                     <th />
                   </tr>

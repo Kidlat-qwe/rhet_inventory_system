@@ -51,7 +51,7 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
 
 - `categories (1) → (many) inventory`: every item belongs to a controlled category.
 - `inventory (1) → (many) stock_movements`: the immutable transaction history for an item.
-- `inventory (1) → (many) inventory_bundle_components`: Learning Kit bill of materials (category slots only; concrete SKUs come from stock-request components).
+- `inventory (1) → (many) inventory_bundle_components`: Learning Kit bill of materials — **category slots**; concrete SKUs come from stock-request `components[]`. Available kit stock is **computed** from category totals (virtual bundle).
 - `stock_requests (1) → (many) stock_request_components`: request-time component specs for Learning Kits (uniform attrs or item name/SKU).
 - `users (1) → (many) stock_movements`: records the responsible authenticated user.
 - `users` also relates to inventory through `created_by` and `updated_by`.

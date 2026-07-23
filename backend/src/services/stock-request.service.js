@@ -203,7 +203,9 @@ export async function createStockRequestsFromPsms(input) {
     if (isLearningKit && !failureReason && row.inventory_id) {
       const componentSpecs = Array.isArray(item.components) ? item.components : [];
       const bom = await inventory.listBundleComponents(row.inventory_id);
-      if (bom.length && !componentSpecs.length) {
+      if (!bom.length) {
+        failureReason = 'Learning Kit has no bill of materials configured';
+      } else if (!componentSpecs.length) {
         failureReason = 'Learning Kit requests must include component specs for every included category (uniform: gender/type/size; non-uniform: itemName)';
       } else {
         for (const slot of bom) {
@@ -325,23 +327,33 @@ export async function approveStockRequest(id, admin) {
         gender: current.gender,
         type: current.item_type,
         size: current.size_label,
+        itemName: current.item_name,
       });
       if (resolved.error) throw new AppError(422, 'ITEM_NOT_MATCHED', resolved.error);
       inventoryId = resolved.item.inventory_id;
       matchedSku = resolved.item.sku;
     }
 
-    const stockCheck = await db.query('SELECT stocks FROM inventory WHERE inventory_id = $1 FOR UPDATE', [inventoryId]);
-    if (!stockCheck.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
-    if (stockCheck.rows[0].stocks < current.quantity) {
-      throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${stockCheck.rows[0].stocks} unit(s) are available`);
-    }
+    const itemMeta = await db.query(
+      `SELECT i.stocks, c.category_name
+       FROM inventory i
+       JOIN categories c ON c.category_id = i.category_id
+       WHERE i.inventory_id = $1
+       FOR UPDATE OF i`,
+      [inventoryId],
+    );
+    if (!itemMeta.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
 
-    const bom = await inventory.listBundleComponents(inventoryId, db);
-    const requestComponents = await listRequestComponents(id, db);
+    const isKit = inventory.isLearningKitCategoryName(itemMeta.rows[0].category_name);
+    const bom = isKit ? await inventory.listBundleComponents(inventoryId, db) : [];
+    const requestComponents = isKit ? await listRequestComponents(id, db) : [];
     const resolvedComponents = [];
 
-    if (bom.length) {
+    if (isKit) {
+      if (!bom.length) {
+        throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Learning Kit has no bill of materials configured');
+      }
+
       for (const slot of bom) {
         const matching = requestComponents.filter(
           (row) => String(row.categoryName || '').toLowerCase() === String(slot.categoryName || '').toLowerCase(),
@@ -350,7 +362,7 @@ export async function approveStockRequest(id, admin) {
           throw new AppError(
             422,
             'KIT_COMPONENT_REQUIRED',
-            `Learning Kit requires component specs for category "${slot.categoryName}"`,
+            `Learning Kit requires component specs for category "${slot.categoryName}" (provided by the requesting system)`,
           );
         }
       }
@@ -390,6 +402,13 @@ export async function approveStockRequest(id, admin) {
           sku: componentSku,
         });
       }
+
+      const available = await inventory.computeAvailableKits(bom, db);
+      if (available < current.quantity) {
+        throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} kit(s) can be assembled from current category stock`);
+      }
+    } else if (itemMeta.rows[0].stocks < current.quantity) {
+      throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${itemMeta.rows[0].stocks} unit(s) are available`);
     }
 
     await db.query(
@@ -409,15 +428,22 @@ export async function approveStockRequest(id, admin) {
       },
       adminId,
       db,
-      { resolvedComponents },
+      isKit ? { resolvedComponents } : {},
     );
 
     const primaryMovement = movement.primary || movement;
+    const firstComponent = (movement.components || [])[0];
+    const movementId = primaryMovement.movementId
+      || primaryMovement.movement_id
+      || firstComponent?.movementId
+      || firstComponent?.movement_id
+      || null;
+
     await db.query(
       `UPDATE stock_requests
        SET status = 'FULFILLED', movement_id = $1, updated_at = NOW()
        WHERE request_id = $2`,
-      [primaryMovement.movementId || primaryMovement.movement_id, id],
+      [movementId, id],
     );
   });
 
@@ -497,8 +523,28 @@ export async function getIntegrationCatalog() {
      ORDER BY c.category_name, i.item_name`,
   );
 
-  return camelize({
-    categories: categories.rows,
-    items: inventoryRows.rows,
-  });
+  const items = [];
+  for (const row of camelize(inventoryRows.rows)) {
+    if (inventory.isLearningKitCategoryName(row.categoryName)) {
+      const full = await inventory.getInventory(row.inventoryId);
+      items.push({
+        inventoryId: full.inventoryId,
+        sku: full.sku,
+        itemName: full.itemName,
+        stocks: full.stocks,
+        status: full.status,
+        variation: full.variation,
+        categoryName: full.categoryName,
+        stockMode: full.stockMode,
+        bomComplete: full.bomComplete,
+      });
+    } else {
+      items.push(row);
+    }
+  }
+
+  return {
+    categories: camelize(categories.rows),
+    items,
+  };
 }
