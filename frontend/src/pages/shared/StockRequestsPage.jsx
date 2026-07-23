@@ -262,6 +262,19 @@ export default function StockRequestsPage({ requests, onRefresh }) {
               {selected.processedAt && (
                 <div><span>Processed at</span><strong>{formatDate(selected.processedAt)}</strong></div>
               )}
+              {(selected.status === 'FULFILLED' || selected.status === 'REJECTED') && (
+                <div className="full">
+                  <span>External webhook</span>
+                  <strong className={
+                    selected.webhookLastStatus === 'FAILED' || selected.webhookLastStatus === 'SKIPPED'
+                      ? 'danger-text'
+                      : ''
+                  }>
+                    {selected.webhookLastStatus || '—'}
+                    {selected.webhookLastAttemptAt ? ` · ${formatDate(selected.webhookLastAttemptAt)}` : ''}
+                  </strong>
+                </div>
+              )}
             </div>
 
             {error && <div className="page-error">{error}</div>}
@@ -271,6 +284,12 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                 {stockIssue
                   ? 'Approve is blocked until stock is available or the item is matched. You can reject this request now.'
                   : `Approving will deduct ${selected.quantity} unit(s) from inventory${selected.matchedSku ? ` (${selected.matchedSku})` : ''}.`}
+              </div>
+            ) : selected.webhookLastStatus === 'SKIPPED' || selected.webhookLastStatus === 'FAILED' ? (
+              <div className="integration-note warn">
+                RHET marked this request {formatStatus(selected.status).toLowerCase()}, but the external system may still show Pending
+                because the webhook was {String(selected.webhookLastStatus).toLowerCase()}.
+                Fix webhook URL / CMS reachability, then resend or use CMS sync-inventory repair.
               </div>
             ) : (
               <div className="integration-note">

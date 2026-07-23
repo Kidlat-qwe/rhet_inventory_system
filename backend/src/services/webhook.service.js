@@ -80,13 +80,13 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
   const processedByUserId = processor?.userId || resolveProcessedByUserId(request);
 
   if (TERMINAL_EVENTS.has(event) && !processedByName) {
-    const message = `Cannot send ${event} without processor display name`;
-    console.error('[webhook]', message, {
+    // Last-resort label so CMS still receives fulfill/reject (never a UUID).
+    processedByName = 'Inventory Admin';
+    console.warn('[webhook] Using fallback processedBy display name', {
       requestId: request.request_id || request.requestId,
       externalReference: request.external_reference || request.externalReference,
       processedByUserId,
     });
-    throw new Error(message);
   }
 
   const payload = {

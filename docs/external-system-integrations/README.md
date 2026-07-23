@@ -7,6 +7,9 @@ Guides for any partner system that requests stock from the **RHET Centralized In
 | **[STOCK_REQUEST_INTEGRATION.md](./STOCK_REQUEST_INTEGRATION.md)** | Any external engineering team — auth, catalog, stock requests, Learning Kits, webhooks, checklist |
 | **[CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md](./CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md)** | **PSMS / CMS team** — align existing Merchandise stock-request flow after RHET Inventory page changes |
 | **[CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md)** | **Paste this into CMS/PSMS Cursor** — self-contained (no other RHET docs required); Learning Kits blocked this pass |
+| **[CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md)** | **Paste this next** — redesign Merchandise Request Stock UI to mirror RHET Inventory (catalog category → variant); fixes failures like `LCA Bag` not found |
+| **[CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md)** | **Paste for Superadmin create merchandise** — align local Add Merchandise fields/values with RHET (category, Male/Female, XS–5XL, Polo≠Shirt); no auto-create in RHET |
+| **[CMS_PSMS_WEBHOOK_UPDATED_AT_FIX_PROMPT.md](./CMS_PSMS_WEBHOOK_UPDATED_AT_FIX_PROMPT.md)** | **Paste to fix stuck Pending** — CMS webhook 500 `column "updated_at" does not exist` after RHET FULFILLED (e.g. PSMS-33) |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
 Related (implementation notes inside this repo):
@@ -35,8 +38,8 @@ Related (implementation notes inside this repo):
 
 ### Existing CMS / PSMS (already connected)
 
-1. Open [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md).
-2. Copy the fenced markdown block into the **CMS/PSMS** Cursor chat (self-contained).
-3. This pass: **block Learning Kits**; harden uniform mapping (Polo ≠ Shirt); keep webhooks / Approved By / idempotent fulfill.
-4. Optional: read [CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md](./CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md) for CMS touchpoint detail.
-5. Re-run the verification plan before production deploy.
+1. Open [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
+2. Open [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form = RHET catalog concept.
+3. Open [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Superadmin Create Merchandise fields = RHET vocabulary (local stock only).
+4. Optional: [CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md](./CMS_PSMS_STOCK_REQUEST_ALIGNMENT.md) for touchpoint detail.
+5. Re-run verification before production deploy.

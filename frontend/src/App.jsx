@@ -120,6 +120,24 @@ function AppShell() {
     }
   }, [])
 
+  // After approve/reject: refresh requests + warehouse stock + movements (approve deducts stock).
+  const refreshAfterStockDecision = useCallback(async () => {
+    try {
+      const [requests, inv, mov, dash] = await Promise.all([
+        fetchStockRequests({ limit: 100 }),
+        fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
+        fetchMovements({ limit: 50 }),
+        fetchDashboard(),
+      ])
+      setStockRequests(requests.data)
+      setInventory(inv.data)
+      setMovements(mov.data)
+      setDashboard(dash)
+    } catch (err) {
+      setError(err.message)
+    }
+  }, [])
+
   useEffect(() => (firebaseConfigured ? observeAuth(setUser) : undefined), [])
 
   useEffect(() => {
@@ -207,7 +225,7 @@ function AppShell() {
         case 'Inventory':
           return <AdminInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} onExport={handleExport} />
         case 'Stock Requests':
-          return <AdminStockRequests requests={stockRequests} onRefresh={refreshStockRequests} />
+          return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
         case 'Online Orders':
           return <AdminOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
         case 'Release Logs':
@@ -235,7 +253,7 @@ function AppShell() {
       case 'Inventory':
         return <UserInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} onExport={handleExport} />
       case 'Stock Requests':
-        return <UserStockRequests requests={stockRequests} onRefresh={refreshStockRequests} />
+        return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
       case 'Online Orders':
         return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} />
       case 'Release Logs':

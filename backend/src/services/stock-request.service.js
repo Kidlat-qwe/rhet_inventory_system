@@ -133,11 +133,26 @@ async function recordWebhookAttempt(requestId, status, errorMessage) {
 
 async function notify(request, event, processor = null) {
   try {
-    await dispatchStockRequestWebhook(request, event, processor);
+    const result = await dispatchStockRequestWebhook(request, event, processor);
+    if (result?.skipped) {
+      await recordWebhookAttempt(
+        request.request_id,
+        'SKIPPED',
+        'No webhookUrl on request and PSMS_WEBHOOK_URL is not configured',
+      );
+      console.warn(
+        'Stock request webhook skipped (no URL)',
+        request.request_id,
+        request.external_reference || request.externalReference,
+      );
+      return result;
+    }
     await recordWebhookAttempt(request.request_id, 'DELIVERED');
+    return result;
   } catch (error) {
     await recordWebhookAttempt(request.request_id, 'FAILED', error.message);
     console.error('Stock request webhook failed', request.request_id, error.message);
+    return { failed: true, error: error.message };
   }
 }
 
