@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
+import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { usePagination } from '../../hooks/usePagination'
 import { createUser, updateUserRole } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
 
@@ -17,6 +19,7 @@ export default function AdminUsers({ users, currentAdmin, onRefresh }) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [creating, setCreating] = useState(false)
+  const { page, setPage, pageItems, total } = usePagination(users, 15)
 
   function openAddModal() {
     setError('')
@@ -95,7 +98,7 @@ export default function AdminUsers({ users, currentAdmin, onRefresh }) {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {pageItems.map((user) => (
                   <tr key={user.userId}>
                     <td><strong>{user.fullName}</strong></td>
                     <td>{user.email}</td>
@@ -117,6 +120,7 @@ export default function AdminUsers({ users, currentAdmin, onRefresh }) {
                 ))}
               </tbody>
             </table>
+            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="users" />
           </div>
         ) : (
           <EmptyState title="No users yet" message="Click Add user to create the first account." />

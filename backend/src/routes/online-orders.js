@@ -3,6 +3,7 @@ import * as controller from '../controllers/online-order.controller.js';
 import { requireAdminRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import {
+  confirmReturnSchema,
   importOnlineOrdersSchema,
   manualOnlineOrderSchema,
   mappingListSchema,
@@ -10,6 +11,7 @@ import {
   onlineOrderItemIdParams,
   onlineOrderListSchema,
   resolveOnlineOrderItemSchema,
+  updateFulfillmentStatusSchema,
 } from '../validation/online-order.schemas.js';
 
 export const onlineOrders = Router();
@@ -22,3 +24,5 @@ onlineOrders.post('/manual', requireAdminRole, validate(manualOnlineOrderSchema)
 onlineOrders.post('/items/:id/resolve', requireAdminRole, validate(resolveOnlineOrderItemSchema), controller.resolveItem);
 onlineOrders.post('/items/:id/cancel', requireAdminRole, validate(onlineOrderItemIdParams), controller.cancelItem);
 onlineOrders.post('/:id/cancel', requireAdminRole, validate(onlineOrderIdParams), controller.cancel);
+onlineOrders.post('/:id/fulfillment-status', requireAdminRole, validate(updateFulfillmentStatusSchema), controller.updateFulfillmentStatus);
+onlineOrders.post('/:id/confirm-return', requireAdminRole, validate(confirmReturnSchema), controller.confirmReturn);

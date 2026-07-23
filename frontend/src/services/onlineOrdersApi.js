@@ -48,3 +48,15 @@ export const cancelOnlineOrder = (orderId) =>
 
 export const fetchChannelMappings = (params = {}) =>
   api(`/online-orders/mappings${queryString(params)}`).then((response) => response.data)
+
+export const updateOnlineOrderFulfillmentStatus = (orderId, status) =>
+  api(`/online-orders/${orderId}/fulfillment-status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  }).then((response) => response.data)
+
+export const confirmOnlineOrderReturn = (orderId, reusable, notes) =>
+  api(`/online-orders/${orderId}/confirm-return`, {
+    method: 'POST',
+    body: JSON.stringify({ reusable, notes }),
+  }).then((response) => response.data)

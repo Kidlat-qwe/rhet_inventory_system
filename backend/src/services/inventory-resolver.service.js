@@ -2,14 +2,27 @@ export function buildUniformVariation(gender, type, size) {
   return `${gender} · ${type} · ${size}`;
 }
 
+// Categories whose items are identified by gender/type/size. Kept in sync with
+// the frontend category-type presets (see constants/uniformOptions.js).
+const UNIFORM_LIKE_CATEGORY_NAMES = new Set([
+  'uniform',
+  'school uniform',
+  'pe uniform',
+  'lca shirt',
+  'lca t-shirt',
+  'lca tshirt',
+]);
+
 export function isUniformLikeCategory(categoryName = '') {
   const normalized = categoryName.toLowerCase().trim();
   if (!normalized) return false;
-  return normalized === 'uniform' || normalized.endsWith(' uniform');
+  return UNIFORM_LIKE_CATEGORY_NAMES.has(normalized)
+    || normalized.endsWith(' uniform')
+    || (normalized.includes('lca') && normalized.includes('shirt'));
 }
 
 export async function resolveInventoryItem(db, input) {
-  const { categoryName, gender, type, size, itemName } = input;
+  const { categoryName, gender, type, size, itemName, sku } = input;
 
   const categoryResult = await db.query(
     'SELECT category_id, category_name FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
@@ -27,13 +40,25 @@ export async function resolveInventoryItem(db, input) {
     if (!gender || !type || !size) {
       return { error: 'Gender, type, and size are required for uniform items' };
     }
-    values.push(buildUniformVariation(gender, type, size));
-    where.push(`i.variation = $${values.length}`);
-  } else if (itemName?.trim()) {
-    values.push(itemName.trim());
-    where.push(`LOWER(i.item_name) = LOWER($${values.length})`);
+    // Match on the structured columns (case-insensitive) rather than parsing the
+    // display `variation` string.
+    values.push(gender);
+    where.push(`LOWER(i.uniform_gender) = LOWER($${values.length})`);
+    values.push(type);
+    where.push(`LOWER(i.uniform_type) = LOWER($${values.length})`);
+    values.push(size);
+    where.push(`UPPER(i.uniform_size) = UPPER($${values.length})`);
+  } else if (sku?.trim() || itemName?.trim()) {
+    if (sku?.trim()) {
+      values.push(sku.trim());
+      where.push(`UPPER(i.sku) = UPPER($${values.length})`);
+    }
+    if (itemName?.trim()) {
+      values.push(itemName.trim());
+      where.push(`LOWER(i.item_name) = LOWER($${values.length})`);
+    }
   } else {
-    return { error: 'Item name is required for non-uniform categories' };
+    return { error: 'Item name or SKU is required for non-uniform categories' };
   }
 
   const result = await db.query(
@@ -49,7 +74,7 @@ export async function resolveInventoryItem(db, input) {
   if (!result.rowCount) {
     const hint = isUniformLikeCategory(category.category_name)
       ? `${gender} · ${type} · ${size}`
-      : itemName;
+      : (sku || itemName);
     return { error: `No inventory item matched ${category.category_name} (${hint})` };
   }
 

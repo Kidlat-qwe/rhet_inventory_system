@@ -42,6 +42,7 @@ import {
   fetchStockRequests,
   fetchIntegrationClients,
 } from './services/inventoryApi'
+import { fetchChannelAllocations } from './services/channelAllocationApi'
 import { fetchOnlineOrders } from './services/onlineOrdersApi'
 
 function AppShell() {
@@ -56,6 +57,7 @@ function AppShell() {
   const [movements, setMovements] = useState([])
   const [stockRequests, setStockRequests] = useState([])
   const [onlineOrders, setOnlineOrders] = useState([])
+  const [channelAllocations, setChannelAllocations] = useState([])
   const [integrationClients, setIntegrationClients] = useState([])
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
@@ -72,13 +74,14 @@ function AppShell() {
     try {
       const me = await fetchMe()
       const roleIsAdmin = String(me?.role || 'ADMIN').toUpperCase() === 'ADMIN'
-      const [dash, cats, inv, mov, requests, online, adminList, clients] = await Promise.all([
+      const [dash, cats, inv, mov, requests, online, allocations, adminList, clients] = await Promise.all([
         fetchDashboard(),
         fetchCategories(),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
         fetchMovements({ limit: 50 }),
         fetchStockRequests({ limit: 100 }),
         fetchOnlineOrders({ limit: 100 }),
+        fetchChannelAllocations(),
         roleIsAdmin ? fetchUsers() : Promise.resolve([]),
         roleIsAdmin ? fetchIntegrationClients() : Promise.resolve([]),
       ])
@@ -89,6 +92,7 @@ function AppShell() {
       setMovements(mov.data)
       setStockRequests(requests.data)
       setOnlineOrders(online.data)
+      setChannelAllocations(allocations)
       setIntegrationClients(clients)
       setAdmins(adminList)
     } catch (err) {
@@ -201,7 +205,7 @@ function AppShell() {
         case 'Dashboard':
           return <AdminDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
         case 'Inventory':
-          return <AdminInventory items={inventory} categories={categories} onRefresh={refreshQuietly} onExport={handleExport} />
+          return <AdminInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} onExport={handleExport} />
         case 'Stock Requests':
           return <AdminStockRequests requests={stockRequests} onRefresh={refreshStockRequests} />
         case 'Online Orders':
@@ -211,7 +215,7 @@ function AppShell() {
         case 'Stock Movements':
           return <AdminStockMovements movements={movements} />
         case 'Categories':
-          return <AdminCategories categories={categories} onRefresh={refreshQuietly} />
+          return <AdminCategories categories={categories} items={inventory} onRefresh={refreshQuietly} />
         case 'Users':
           return <AdminUsers users={admins} currentAdmin={admin} onRefresh={refreshQuietly} />
         case 'API Keys':
@@ -229,7 +233,7 @@ function AppShell() {
       case 'Dashboard':
         return <UserDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
       case 'Inventory':
-        return <UserInventory items={inventory} categories={categories} onRefresh={refreshQuietly} onExport={handleExport} />
+        return <UserInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} onExport={handleExport} />
       case 'Stock Requests':
         return <UserStockRequests requests={stockRequests} onRefresh={refreshStockRequests} />
       case 'Online Orders':
@@ -253,7 +257,6 @@ function AppShell() {
         open={menu}
         close={() => setMenu(false)}
         admin={admin}
-        itemCount={inventory.length}
         pendingRequests={stockRequests.filter((request) => request.status === 'PENDING').length}
         attentionOrders={onlineOrders.filter((order) => order.orderStatus === 'NEEDS_ATTENTION').length}
       />

@@ -8,8 +8,10 @@ import { requireAuth } from './middleware/auth.js';
 import { requireIntegrationAuth } from './middleware/integrationAuth.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import { api } from './routes/api.js';
+import { channelAllocations } from './routes/channel-allocations.js';
 import { integrations } from './routes/integrations.js';
 import { onlineOrders } from './routes/online-orders.js';
+import { stockRequests } from './routes/stock-requests.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -21,6 +23,7 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: 'draf
 app.get('/health', (_req, res) => res.json({ success: true, data: { status: 'ok' } }));
 app.use('/api/v1/integrations', requireIntegrationAuth, integrations);
 app.use('/api/v1/online-orders', requireAuth, onlineOrders);
+app.use('/api/v1/channel-allocations', requireAuth, channelAllocations);
 app.use('/api/v1/stock-requests', requireAuth, stockRequests);
 app.use('/api/v1', requireAuth, api);
 app.use(notFound);

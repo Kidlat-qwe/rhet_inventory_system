@@ -9,7 +9,30 @@ npm install
 npm run dev
 ```
 
+| Script | URL |
+|---|---|
+| `npm run dev` | `http://localhost:5173` (falls through to the next free port if busy, often 5174) |
+| `npm run dev:5173` | `http://localhost:5173` only (`strictPort`) |
+| `npm run dev:5174` | `http://localhost:5174` only (`strictPort`) |
+
+Backend CORS must allow both origins. In `backend/.env`:
+
+```env
+FRONTEND_URL=http://localhost:5173,http://localhost:5174
+```
+
 Copy `.env.example` to `.env` and set `VITE_API_URL` + Firebase web keys.
+
+## Routes
+
+URLs update as you navigate (admin and user):
+
+| Role | Paths |
+|------|--------|
+| Admin | `/admin/dashboard`, `/admin/inventory`, `/admin/stock-requests`, … |
+| User | `/user/dashboard`, `/user/inventory`, `/user/stock-requests`, … |
+
+Login is `/login`. Production example: `https://inventory.lca-app.com/admin/dashboard`.
 
 ## Coolify (Nixpacks)
 

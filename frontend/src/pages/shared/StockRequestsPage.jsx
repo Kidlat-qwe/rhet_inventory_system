@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
+import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { usePagination } from '../../hooks/usePagination'
 import { approveStockRequest, rejectStockRequest } from '../../services/inventoryApi'
 import { formatDate, formatStatus } from '../../utils/format'
 
@@ -71,6 +73,8 @@ export default function StockRequestsPage({ requests, onRefresh }) {
     () => (filter ? requests.filter((request) => request.status === filter) : requests),
     [requests, filter],
   )
+
+  const { page, setPage, pageItems, total } = usePagination(shown, 15)
 
   const stockIssue = useMemo(() => getStockIssue(selected), [selected])
   const variation = selected
@@ -168,7 +172,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((request) => (
+                {pageItems.map((request) => (
                   <tr key={request.requestId}>
                     <td>
                       <strong>{request.requestedBy}</strong>
@@ -201,6 +205,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                 ))}
               </tbody>
             </table>
+            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="requests" />
           </div>
         ) : (
           <EmptyState title={`No ${formatStatus(filter).toLowerCase()} requests`} message="External merchandise requests will appear here for review." />

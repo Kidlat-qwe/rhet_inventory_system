@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "lint": "powershell -NoProfile -Command \"Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }\"",
     "test": "node --test",
-    "db:migrate": "node src/database/migrate.js"
+    "db:migrate": "node src/database/migrate.js",
+    "db:reset-inventory": "node scripts/reset-inventory.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

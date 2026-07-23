@@ -1,56 +1,67 @@
 # External System ↔ RHET Inventory Integration Guide
 
-Generic guide for connecting **any** external system (PSMS, HR, vendor portal, another school app, etc.) to the **RHET Centralized Inventory Management System**.
+Use this guide to connect **any** external system (PSMS/CMS, HR, vendor portal, another school app) to the **RHET Centralized Inventory Management System**.
 
-For a PSMS-specific walkthrough, see [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md).
+**Paste into another project:** [EXTERNAL_SYSTEM_PASTE_PROMPT.md](./EXTERNAL_SYSTEM_PASTE_PROMPT.md)  
+**PSMS example:** [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md)
 
 ---
 
-## 1. How the integration works
+## 1. Overview
 
 ```text
-┌─────────────────────┐         ┌──────────────────────────┐         ┌─────────────────────┐
-│  External Frontend  │         │  External Backend        │         │  RHET Inventory API │
-│  (request form)     │ ──────► │  (proxies + local save)  │ ──────► │  /integrations/...  │
-└─────────────────────┘         └──────────────────────────┘         └─────────────────────┘
-                                           ▲                                      │
-                                           │         webhook (optional)          │
-                                           └──────────────────────────────────────┘
-
-1. User submits a stock/merchandise request in the external system UI
-2. External backend saves locally (optional) and calls RHET Inventory
-3. RHET admin/user reviews the request under Stock Requests
-4. On approve, RHET deducts inventory stock
-5. RHET notifies the external system via webhook (optional)
+External UI (form)
+  → External backend (your API)
+      → RHET Inventory  POST /api/v1/integrations/stock-requests
+          → RHET admin/user approves in Stock Requests
+              → RHET warehouse stock decreases
+              → RHET webhook POST → External backend
+                  → External branch/local stock increases (your code)
 ```
+
+| Layer | Who owns stock? |
+|---|---|
+| RHET Inventory | Central warehouse stock (source of truth) |
+| External system | Branch / local stock (updated via webhook after approve) |
 
 **Rules**
 
-- Call RHET from the **external system backend only** (never from the browser).
-- The external system does **not** need SKUs for uniforms.
-- The external system does **not** use Firebase login for this API.
-- Stock is deducted only after someone approves the request in RHET Inventory.
-- Each external system gets its **own API key** in RHET → **API Keys**.
+- Call RHET from the **external backend only** (never browser / `VITE_*` / `NEXT_PUBLIC_*`).
+- No Firebase login for integration API.
+- No SKU required for uniforms — match by category + gender + type + size.
+- Each external system gets its **own API key** (RHET → **API Keys**).
+- Setting env vars alone is **not enough** — your backend must **call** RHET in code.
 
 ---
 
-## 2. What to configure on RHET Inventory (one-time per system)
+## 2. Production URLs (LCA / Coolify)
 
-1. Sign in to RHET Inventory as Admin.
-2. Open **Management → API Keys**.
-3. Click **Generate API key**.
-4. Enter a system name (e.g. `PSMS`, `HR`, `VENDOR`).
-5. Choose expiration (`7 days`, `1 month`, or `No expiration`).
-6. Copy the modal values immediately:
+| App | URL |
+|---|---|
+| RHET Inventory UI | `https://inventory.lca-app.com` |
+| RHET Inventory API | `https://api-inventory.lca-app.com/api/v1/integrations` |
+| Example external CMS API | `https://api-cms.lca-app.com` |
 
-```env
-INVENTORY_API_URL=https://api-inventory.lca-app.com/api/v1/integrations
-INVENTORY_API_KEY=rhet_<system>_<secret>
-```
+| Environment | `INVENTORY_API_URL` |
+|---|---|
+| Local | `http://localhost:3000/api/v1/integrations` |
+| Production | `https://api-inventory.lca-app.com/api/v1/integrations` |
 
-7. Paste them into the **external system backend** environment (Coolify / `.env`).
+---
 
-Every request from that system must send:
+## 3. RHET Inventory setup (one-time per external system)
+
+1. Sign in as **Admin** → `https://inventory.lca-app.com/admin/dashboard`
+2. Open **Management → API Keys**
+3. Click **Generate API key**
+4. Enter system name (e.g. `PSMS`, `HR`, `VENDOR`) — becomes `systemCode`
+5. Choose expiration: 7 days / 1 month / No expiration
+6. Copy the modal immediately (shown once):
+   - `INVENTORY_API_URL`
+   - `INVENTORY_API_KEY`
+   - Full `.env` block via **Copy .env configuration**
+
+Every request from that system:
 
 ```http
 X-Integration-Key: rhet_<system>_<secret>
@@ -62,120 +73,99 @@ or
 Authorization: Bearer rhet_<system>_<secret>
 ```
 
-**Inventory base URL**
+### Optional RHET backend fallback webhook
 
-| Environment | URL |
-|---|---|
-| Local | `http://localhost:3000/api/v1/integrations` |
-| Production (LCA Coolify) | `https://api-inventory.lca-app.com/api/v1/integrations` |
+On RHET Inventory **backend** Coolify env (fallback if request has no `webhookUrl`):
+
+```env
+PSMS_WEBHOOK_URL=https://api-cms.lca-app.com/api/webhooks/inventory
+```
+
+Use a generic name per client in the future; today this env is the default webhook when `webhookUrl` is omitted on the request.
+
+**Do not** put the external system's API key in RHET env — that key is for **incoming** calls **to** RHET and lives on the **external** backend only.
 
 ---
 
-## 3. What to configure on the external system
+## 4. External system setup
 
-### 3.1 Backend environment variables
+### 4.1 Backend `.env` (required)
 
 ```env
-# RHET Inventory integration (backend only — never VITE_* / NEXT_PUBLIC_*)
 INVENTORY_API_URL=https://api-inventory.lca-app.com/api/v1/integrations
-INVENTORY_INTEGRATION_KEY=rhet_xxxx_paste-key-from-inventory-api-keys-page
-INVENTORY_WEBHOOK_URL=https://your-external-api-domain.com/api/webhooks/inventory
+INVENTORY_INTEGRATION_KEY=rhet_psms_paste-from-api-keys-modal
+INVENTORY_WEBHOOK_URL=https://api-cms.lca-app.com/api/webhooks/inventory
 ```
 
-| Variable | Description |
+| Variable | Required | Description |
+|---|---|---|
+| `INVENTORY_API_URL` | Yes | RHET integration base URL |
+| `INVENTORY_INTEGRATION_KEY` | Yes | From RHET → API Keys (alias: `INVENTORY_API_KEY`) |
+| `INVENTORY_WEBHOOK_URL` | Recommended | Your endpoint for approve/reject callbacks |
+
+Redeploy external backend after changing env.
+
+### 4.2 Backend code (required)
+
+| # | Task |
 |---|---|
-| `INVENTORY_API_URL` | RHET Inventory integration base URL |
-| `INVENTORY_INTEGRATION_KEY` | API key generated in RHET → API Keys |
-| `INVENTORY_WEBHOOK_URL` | This system's endpoint that receives approve/reject callbacks |
+| 1 | `inventoryClient` service — `getCatalog`, `submitStockRequests`, `getStockRequest` |
+| 2 | On local request create → `POST /stock-requests` to RHET |
+| 3 | `POST /api/webhooks/inventory` — handle fulfilled/rejected |
+| 4 | On `stock_request.fulfilled` → increase **local/branch** stock |
+| 5 | Map UI labels to RHET values **exactly** (see §6) |
+| 6 | Never expose API key to frontend |
 
-Optional fallback alias:
-
-```env
-INVENTORY_API_KEY=<same value as INVENTORY_INTEGRATION_KEY>
-```
-
-### 3.2 Recommended backend routes (proxy pattern)
-
-| External route | Purpose |
-|---|---|
-| `GET /.../catalog` | Proxy to RHET `/catalog` for dropdowns |
-| `GET /.../availability` | Proxy to RHET `/availability` |
-| `POST /.../stock-requests` | Save locally (optional) + submit to RHET |
-| `GET /.../stock-requests/:id` | Check request status |
-| `POST /api/webhooks/inventory` | Receive RHET status webhooks |
-
-### 3.3 Recommended local tracking columns / table
-
-Store enough to reconcile with RHET:
+### 4.3 Recommended local DB columns
 
 ```sql
--- Example columns on your local request table
-inventory_request_id UUID NULL,          -- RHET request UUID
-external_reference VARCHAR(100) UNIQUE,  -- e.g. PSMS-123 / HR-45
-inventory_sync_status VARCHAR(20),       -- PENDING / SYNCED / FAILED
+inventory_request_id UUID NULL,
+external_reference VARCHAR(100) UNIQUE,
+inventory_sync_status VARCHAR(20),   -- SYNCED | FAILED
 inventory_sync_error VARCHAR(500)
 ```
 
----
-
-## 4. Authentication
-
-Every call to RHET must include **one** of:
-
-```http
-X-Integration-Key: <INVENTORY_INTEGRATION_KEY>
-```
-
-```http
-Authorization: Bearer <INVENTORY_INTEGRATION_KEY>
-```
+Use `externalReference` = `<SYSTEM_CODE>-<local_id>` (e.g. `PSMS-19`).
 
 ---
 
-## 5. API endpoints
+## 5. API reference
 
-Base path: `{INVENTORY_API_URL}`
+Base: `{INVENTORY_API_URL}`  
+Auth: `X-Integration-Key: <key>`
 
-### 5.1 Catalog
+### GET `/catalog`
 
-```http
-GET /catalog
-X-Integration-Key: <key>
+Load categories and items for dropdowns.
+
+```bash
+curl https://api-inventory.lca-app.com/api/v1/integrations/catalog \
+  -H "X-Integration-Key: YOUR_KEY"
 ```
 
-Returns active categories and inventory rows for building forms.
-
-### 5.2 Availability
+### GET `/availability`
 
 ```http
-GET /availability?categoryName=School%20Uniform&gender=Male&type=Shirt&size=M
-X-Integration-Key: <key>
+GET /availability?categoryName=School%20Uniform&gender=Male&type=Polo&size=S
 ```
 
-### 5.3 Submit stock request(s)
-
-```http
-POST /stock-requests
-Content-Type: application/json
-X-Integration-Key: <key>
-```
+### POST `/stock-requests`
 
 ```json
 {
   "requestDate": "2026-07-17",
-  "requestedBy": "Requester Name",
-  "reason": "Why stock is needed",
-  "webhookUrl": "https://your-external-api-domain.com/api/webhooks/inventory",
-  "batchReference": "OPTIONAL-BATCH-ID",
+  "requestedBy": "Branch Admin Name",
+  "reason": "Restock branch display",
+  "webhookUrl": "https://api-cms.lca-app.com/api/webhooks/inventory",
+  "batchReference": "OPTIONAL-BATCH",
   "items": [
     {
       "categoryName": "School Uniform",
       "gender": "Male",
-      "type": "Shirt",
-      "size": "XS",
-      "quantity": 10,
-      "itemName": "Optional for non-uniform items",
-      "externalReference": "PSMS-123"
+      "type": "Polo",
+      "size": "S",
+      "quantity": 2,
+      "externalReference": "PSMS-19"
     }
   ]
 }
@@ -183,82 +173,90 @@ X-Integration-Key: <key>
 
 | Field | Notes |
 |---|---|
-| `categoryName` | Must match RHET category (e.g. `School Uniform`, `PE Uniform`) |
-| `gender` / `type` / `size` | Required for uniform-like matching |
-| `itemName` | Useful for non-uniform items |
-| `externalReference` | Unique per row; use `<SYSTEM_CODE>-<local-id>` |
-| `webhookUrl` | Optional if a default webhook is configured for the client |
+| `categoryName` | Must match RHET category exactly |
+| `gender`, `type`, `size` | Required for uniform categories |
+| `type` | Must match inventory item type **exactly** (`Polo` ≠ `Shirt`) |
+| `size` | Use `XS`, `S`, `M`, `L`, `XL`, `2XL`, `3XL` |
+| `externalReference` | Unique per row: `<SYSTEM>-<localId>` |
+| `webhookUrl` | Optional if RHET `PSMS_WEBHOOK_URL` fallback is set |
+| `components` | **Learning Kit only** — array of concrete component choices (see below) |
 
-### 5.4 Get request by id
+#### Learning Kit requests
 
-```http
-GET /stock-requests/{requestId}
-X-Integration-Key: <key>
+Kit BOM in RHET stores **categories only**. The external system must send the concrete item for every included category:
+
+- Uniform → `gender` + `type` + `size`
+- Non-uniform → `itemName` and/or `sku`
+
+```json
+{
+  "categoryName": "Learning Kit",
+  "itemName": "grade-1-learning-kit",
+  "quantity": 2,
+  "externalReference": "PSMS-KIT-1",
+  "components": [
+    { "categoryName": "LCA T-Shirt", "gender": "Unisex", "type": "Shirt", "size": "M", "quantity": 2 },
+    { "categoryName": "School Uniform", "gender": "Male", "type": "Polo", "size": "S", "quantity": 2 },
+    { "categoryName": "School Uniform", "gender": "Male", "type": "Short", "size": "S", "quantity": 2 },
+    { "categoryName": "Backpack", "itemName": "school-backpack", "sku": "BAG-SCHOOL-BACKPACK", "quantity": 2 }
+  ]
+}
 ```
+
+On approve, RHET deducts kit stock + each resolved component using the **requested quantities**.  
+Shopee allocate moves **kit stock only** (component SKUs are not known until a stock request).
+
+Response (201): array of created requests with `requestId`, `status: PENDING`.
+
+### GET `/stock-requests/{requestId}`
+
+Poll status by RHET UUID. Learning Kit responses include a `components` array.
 
 ---
 
-## 6. Matching rules (no SKU required)
+## 6. Matching rules (critical)
 
-Uniform-like categories (`School Uniform`, `PE Uniform`, etc.) match by:
-
-```text
-categoryName + gender + type + size
-```
-
-Example RHET variation:
+Uniform categories (`School Uniform`, `PE Uniform`, …) match:
 
 ```text
-Male · Shirt · XS
+categoryName + gender + type + size  →  variation "Male · Polo · S"
 ```
 
-Map UI labels before calling RHET:
+### UI → RHET mapping
 
-| External UI | RHET value |
+| External UI | Send to RHET |
 |---|---|
 | Men / Male | `Male` |
 | Women / Female | `Female` |
 | Unisex | `Unisex` |
-| Top / Shirt / Polo | `Shirt` or `Polo` |
-| Pants / Short | `Pants` / `Short` |
-| Full Set | `Full Set` |
-| Extra Small | `XS` |
-| Small / Medium / Large | `S` / `M` / `L` |
+| Polo | **`Polo`** (not Shirt) |
+| Shirt | `Shirt` |
+| Top | Map to actual item: Polo → `Polo`, shirt → `Shirt` |
+| Pants / Short / Full Set | `Pants` / `Short` / `Full Set` |
+| Extra Small / Small / Medium / Large | `XS` / `S` / `M` / `L` |
 | Extra Large / 2XL / 3XL | `XL` / `2XL` / `3XL` |
 
----
+### Common mismatch (real example)
 
-## 7. Implementation checklist
+| Request sent | Inventory has | Result |
+|---|---|---|
+| `Male · Shirt · S` | `Male · Polo · S` (50 pcs) | **No match** |
+| `Male · Polo · S` | `Male · Polo · S` | **Match** ✅ |
 
-1. **Create** `services/inventoryClient.js` (or equivalent):
-   - Read `INVENTORY_API_URL`, `INVENTORY_INTEGRATION_KEY` (or `INVENTORY_API_KEY`), `INVENTORY_WEBHOOK_URL`
-   - Expose `getCatalog()`, `checkAvailability()`, `submitStockRequests()`, `getStockRequest()`
-   - Throw clear errors if env is missing or RHET returns non-2xx
+**Tip:** Call `GET /catalog` and use RHET `variation` values in your form or mapping layer.
 
-2. **On local request create**:
-   - Call RHET `POST /stock-requests`
-   - Set `externalReference` = `<SYSTEM_CODE>-<local_id>`
-   - Store returned RHET `requestId`
-   - If RHET fails: do **not** silently succeed — mark sync failed or roll back
-
-3. **Add webhook receiver**:
-   - `POST /api/webhooks/inventory`
-   - Handle `stock_request.created`, `stock_request.fulfilled`, `stock_request.rejected`
-   - Match by `externalReference` or stored `inventory_request_id`
-   - Update local status; do not invent RHET stock into local stock unless that is explicit business logic
-
-4. **Optional proxy routes** for the frontend (frontend never holds the API key)
-
-5. **Update** external `.env.example` with the three inventory variables
+Non-uniform categories: send `categoryName` + `itemName`.
 
 ---
 
-## 8. Webhook events
+## 7. Webhooks
+
+RHET POSTs to `webhookUrl` on the request (or `PSMS_WEBHOOK_URL` fallback).
 
 | Event | When |
 |---|---|
-| `stock_request.created` | Request stored in RHET |
-| `stock_request.fulfilled` | Approved and stock deducted |
+| `stock_request.created` | Stored in RHET |
+| `stock_request.fulfilled` | Approved; RHET stock deducted |
 | `stock_request.rejected` | Rejected in RHET |
 
 Example payload:
@@ -267,18 +265,48 @@ Example payload:
 {
   "event": "stock_request.fulfilled",
   "requestId": "uuid",
-  "externalReference": "PSMS-123",
+  "externalReference": "PSMS-19",
+  "sourceSystem": "PSMS",
   "status": "FULFILLED",
-  "requestedBy": "Requester Name",
+  "requestedBy": "Paul Camus",
   "categoryName": "School Uniform",
   "gender": "Male",
-  "type": "Shirt",
-  "size": "XS",
-  "quantity": 10,
-  "matchedSku": "SCH-M-SHIRT-XS",
+  "type": "Polo",
+  "size": "S",
+  "quantity": 2,
+  "matchedSku": "SCH-M-POLO-S",
+  "processedBy": "Abby",
+  "approvedBy": "Abby",
+  "processedByName": "Abby",
+  "processedByUserId": "e16bb708-1396-40aa-95e0-7235e20d7f60",
   "processedAt": "2026-07-17T08:00:00.000Z"
 }
 ```
+
+**`processedBy` / `approvedBy` / `processedByName`** are always the RHET admin **display name** (`users.full_name`, or email if name is empty). They are never a UUID. The user id is only in **`processedByUserId`**.
+
+**External webhook handler must:**
+
+1. Find local row by `externalReference` or `requestId`
+2. Update local status → Approved/Fulfilled or Rejected
+3. On **fulfilled** → **increase branch merchandise stock** (if that is your business rule)
+4. Respond `200` quickly
+
+RHET does **not** increase external stock — only your webhook code does.
+
+---
+
+## 8. RHET internal actions (Firebase auth)
+
+These are for RHET UI users, not external systems:
+
+| Action | Path |
+|---|---|
+| List requests | `GET /api/v1/stock-requests` |
+| Approve | `POST /api/v1/stock-requests/:id/approve` |
+| Reject | `POST /api/v1/stock-requests/:id/reject` |
+
+Approve opens a **details modal** and blocks if out of stock or unmatched.
 
 ---
 
@@ -286,110 +314,94 @@ Example payload:
 
 ```javascript
 const BASE_URL = process.env.INVENTORY_API_URL
-const INTEGRATION_KEY =
-  process.env.INVENTORY_INTEGRATION_KEY || process.env.INVENTORY_API_KEY
+const KEY = process.env.INVENTORY_INTEGRATION_KEY || process.env.INVENTORY_API_KEY
 
-async function submitStockRequest(form) {
-  const response = await fetch(`${BASE_URL}/stock-requests`, {
+async function submitToInventory(form) {
+  const res = await fetch(`${BASE_URL}/stock-requests`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Integration-Key': INTEGRATION_KEY,
+      'X-Integration-Key': KEY,
     },
     body: JSON.stringify({
       requestDate: form.requestDate,
       requestedBy: form.requestedBy,
       reason: form.reason,
       webhookUrl: process.env.INVENTORY_WEBHOOK_URL,
-      items: form.items.map((row, index) => ({
+      items: form.items.map((row) => ({
         categoryName: row.categoryName,
         gender: row.gender,
         type: row.type,
         size: row.size,
         quantity: Number(row.quantity),
-        externalReference:
-          row.externalReference || `${form.systemCode}-${form.localId || index + 1}`,
+        externalReference: `${form.systemCode}-${row.localId}`,
       })),
     }),
   })
-
-  const payload = await response.json()
-  if (!response.ok) {
-    throw new Error(payload.error?.message || 'Inventory request failed')
-  }
-  return payload.data
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error?.message || 'Inventory request failed')
+  return body.data
 }
 ```
 
 ---
 
-## 10. RHET admin actions (inventory UI / authenticated API)
+## 10. Test checklist
 
-| Action | Where |
-|---|---|
-| List requests | RHET UI → **Stock Requests**, or `GET /api/v1/stock-requests` (Firebase auth) |
-| Approve | Approves and deducts stock |
-| Reject | Rejects and sends webhook only |
+1. **Catalog** — `GET /catalog` returns JSON with your key
+2. **Submit** — request appears in RHET → **Stock Requests** as `PENDING`
+3. **Match** — details modal shows Matched SKU and current stock (not `—`)
+4. **Approve** — RHET inventory quantity decreases
+5. **Webhook** — external system status updates and branch stock increases
+6. **Reject path** — webhook `stock_request.rejected` updates external status
+
+### PowerShell test (submit)
+
+```powershell
+$headers = @{
+  "X-Integration-Key" = "YOUR_KEY"
+  "Content-Type" = "application/json"
+}
+$body = @{
+  requestDate = "2026-07-17"
+  requestedBy = "Test"
+  reason = "Smoke test"
+  webhookUrl = "https://api-cms.lca-app.com/api/webhooks/inventory"
+  items = @(
+    @{
+      categoryName = "School Uniform"
+      gender = "Male"
+      type = "Polo"
+      size = "S"
+      quantity = 1
+      externalReference = "TEST-001"
+    }
+  )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Method POST `
+  -Uri "https://api-inventory.lca-app.com/api/v1/integrations/stock-requests" `
+  -Headers $headers -Body $body
+```
 
 ---
 
-## 11. Acceptance test
+## 11. Troubleshooting
 
-1. Generate an API key in RHET for this system (`PSMS`, `HR`, `VENDOR`, …).
-2. Set backend env and redeploy the external system.
-3. `GET {INVENTORY_API_URL}/catalog` with the key returns data.
-4. Submit a request from the external system UI.
-5. Request appears in RHET → **Stock Requests** as `PENDING`.
-6. Approve in RHET → stock deducts; webhook updates the external system.
+| Symptom | Cause | Fix |
+|---|---|---|
+| External Pending, RHET empty | Backend never calls RHET | Implement `POST /stock-requests` on submit |
+| `No inventory item matched` | Wrong `type`/`size`/gender | Use catalog values; Polo ≠ Shirt |
+| Approve blocked, 0 stock | RHET warehouse empty | Restock RHET inventory first |
+| RHET deducts, CMS unchanged | No webhook handler | Implement `POST /api/webhooks/inventory` |
+| 401 on catalog | Wrong/revoked key | Regenerate in API Keys, update external env |
+| Webhook never fires | Missing `webhookUrl` and no RHET fallback | Set `INVENTORY_WEBHOOK_URL` + RHET `PSMS_WEBHOOK_URL` |
 
 ---
 
 ## 12. Do not
 
-- Put the API key in frontend env (`VITE_*`, `NEXT_PUBLIC_*`).
-- Approve or deduct stock only inside the external system — RHET is the stock authority.
-- Hardcode one system name only — use a configurable system code / `externalReference` prefix.
-- Assume env vars alone are enough — the external system must **call** RHET from code.
-
----
-
-## 13. Prompt template (paste into another project)
-
-Use this when asking Cursor (or another team) to wire a new external system:
-
-```markdown
-## Task: Connect this external system to RHET Inventory (generic integration)
-
-### Context
-RHET Inventory API:
-`https://api-inventory.lca-app.com/api/v1/integrations`
-
-Call RHET from the **backend only**. Each system uses its own API key from RHET → API Keys.
-
-### Backend env
-INVENTORY_API_URL=https://api-inventory.lca-app.com/api/v1/integrations
-INVENTORY_INTEGRATION_KEY=<from RHET API Keys>
-INVENTORY_WEBHOOK_URL=https://<this-system-api-domain>/api/webhooks/inventory
-
-Support INVENTORY_API_KEY as alias for INVENTORY_INTEGRATION_KEY.
-
-### Auth
-X-Integration-Key: <INVENTORY_INTEGRATION_KEY>
-
-### Endpoints
-GET /catalog
-GET /availability
-POST /stock-requests
-GET /stock-requests/:id
-
-### Implement
-1. inventoryClient service
-2. On local request create → POST /stock-requests with externalReference = <SYSTEM_CODE>-<local-id>
-3. Webhook POST /api/webhooks/inventory for fulfilled/rejected
-4. Map UI labels (Men→Male, Top→Shirt, Extra Small→XS)
-5. Update .env.example
-6. Never expose the key to the frontend
-
-### Accept
-UI submit → RHET Stock Requests Pending → Approve → stock deducts → webhook updates this system
-```
+- Put integration key in frontend env
+- Map all “Top” items to `Shirt` — use correct `Polo` / `Shirt`
+- Approve stock in external system only — RHET must approve first
+- Assume env vars replace code changes

@@ -10,11 +10,14 @@ const orderItemSchema = z.object({
   unitPrice: z.coerce.number().min(0).default(0),
 });
 
+export const FULFILLMENT_STATUSES = ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED', 'RECEIVED', 'RETURN', 'RETURN_CONFIRMED'];
+
 export const onlineOrderListSchema = z.object({
   body: z.any(),
   params: z.any(),
   query: z.object({
     status: z.enum(['RECEIVED', 'NEEDS_ATTENTION', 'FULFILLED', 'CANCELLED']).optional(),
+    fulfillmentStatus: z.enum(FULFILLMENT_STATUSES).optional(),
     channel: z.string().trim().max(50).optional(),
     search: z.string().trim().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
@@ -71,4 +74,21 @@ export const mappingListSchema = z.object({
   query: z.object({
     channel: z.string().trim().max(50).optional(),
   }),
+});
+
+export const updateFulfillmentStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(['READY_TO_SHIP', 'SHIPPED', 'RECEIVED', 'RETURN']),
+  }),
+  query: z.any(),
+  params: z.object({ id: z.string().uuid() }),
+});
+
+export const confirmReturnSchema = z.object({
+  body: z.object({
+    reusable: z.coerce.boolean(),
+    notes: optionalText(500),
+  }),
+  query: z.any(),
+  params: z.object({ id: z.string().uuid() }),
 });

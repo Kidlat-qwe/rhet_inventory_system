@@ -67,6 +67,10 @@ function normalizeVariation(value) {
   return text || '';
 }
 
+// Matching status only. Orders no longer deduct RHET stock directly (see
+// channel-allocation.service.js for the allocation-based stock model).
+// MATCHED/DEDUCTED are treated the same for status purposes so historical
+// Phase 1 orders (deducted via ONLINE_SALE) still compute correctly.
 export function computeOrderStatus(lines = []) {
   if (!lines.length) return 'RECEIVED';
   if (lines.every((line) => line.line_status === 'CANCELLED' || line.lineStatus === 'CANCELLED')) {
@@ -76,24 +80,27 @@ export function computeOrderStatus(lines = []) {
   if (statuses.some((status) => status === 'UNMATCHED' || status === 'OVERSOLD')) {
     return 'NEEDS_ATTENTION';
   }
-  if (statuses.every((status) => status === 'DEDUCTED' || status === 'CANCELLED')) {
-    return statuses.some((status) => status === 'DEDUCTED') ? 'FULFILLED' : 'CANCELLED';
+  if (statuses.every((status) => ['MATCHED', 'DEDUCTED', 'CANCELLED'].includes(status))) {
+    return statuses.some((status) => status === 'MATCHED' || status === 'DEDUCTED') ? 'FULFILLED' : 'CANCELLED';
   }
   return 'NEEDS_ATTENTION';
 }
 
-export function decideLineOutcome({ hasMapping, availableStock, quantity }) {
+export function decideLineOutcome({ hasMapping }) {
   if (!hasMapping) {
     return { lineStatus: 'UNMATCHED', failureReason: 'No SKU mapping found for this channel item' };
   }
-  if (!Number.isFinite(availableStock) || availableStock < quantity) {
-    return {
-      lineStatus: 'OVERSOLD',
-      failureReason: `Only ${availableStock ?? 0} unit(s) available, but ${quantity} requested`,
-    };
-  }
-  return { lineStatus: 'DEDUCTED', failureReason: null };
+  return { lineStatus: 'MATCHED', failureReason: null };
 }
+
+export const FULFILLMENT_TRANSITIONS = {
+  PROCESSING: ['READY_TO_SHIP'],
+  READY_TO_SHIP: ['SHIPPED'],
+  SHIPPED: ['RECEIVED', 'RETURN'],
+  RECEIVED: ['RETURN'],
+  RETURN: [],
+  RETURN_CONFIRMED: [],
+};
 
 export function parseShopeeCsv(csvText, channel = DEFAULT_CHANNEL) {
   const rows = parse(String(csvText || ''), {
@@ -192,27 +199,20 @@ async function findSkuMapping(db, channel, externalSku) {
   return result.rowCount ? result.rows[0] : null;
 }
 
-export async function matchAndDeductLine(db, itemRow, actorId, orderMeta = {}) {
-  if (itemRow.line_status === 'DEDUCTED' || itemRow.line_status === 'CANCELLED') {
+// Matches a Shopee line item to an inventory SKU for visibility/reporting only.
+// Stock is no longer deducted here: RHET stock leaves the warehouse when the
+// admin allocates it to the channel (channel-allocation.service.js), not when
+// a Shopee order is imported. This avoids double-counting the same units.
+export async function matchOrderLine(db, itemRow, orderMeta = {}) {
+  if (itemRow.line_status === 'CANCELLED') {
     return itemRow;
   }
 
   const mapping = await findSkuMapping(db, orderMeta.channel || DEFAULT_CHANNEL, itemRow.external_sku);
-  if (!mapping) {
-    await db.query(
-      `UPDATE online_order_items
-       SET line_status = 'UNMATCHED',
-           matched_inventory_id = NULL,
-           matched_sku = NULL,
-           failure_reason = $1,
-           updated_at = NOW()
-       WHERE order_item_id = $2`,
-      ['No SKU mapping found for this channel item', itemRow.order_item_id],
-    );
-    return { ...itemRow, line_status: 'UNMATCHED', failure_reason: 'No SKU mapping found for this channel item' };
-  }
-
-  if (mapping.lifecycle_status !== 'ACTIVE') {
+  if (!mapping || mapping.lifecycle_status !== 'ACTIVE') {
+    const failureReason = mapping
+      ? 'Mapped inventory item is inactive'
+      : 'No SKU mapping found for this channel item';
     await db.query(
       `UPDATE online_order_items
        SET line_status = 'UNMATCHED',
@@ -221,78 +221,33 @@ export async function matchAndDeductLine(db, itemRow, actorId, orderMeta = {}) {
            failure_reason = $3,
            updated_at = NOW()
        WHERE order_item_id = $4`,
-      [mapping.inventory_id, mapping.sku, 'Mapped inventory item is inactive', itemRow.order_item_id],
+      [mapping?.inventory_id || null, mapping?.sku || null, failureReason, itemRow.order_item_id],
     );
     return {
       ...itemRow,
       line_status: 'UNMATCHED',
-      matched_inventory_id: mapping.inventory_id,
-      matched_sku: mapping.sku,
-      failure_reason: 'Mapped inventory item is inactive',
+      matched_inventory_id: mapping?.inventory_id || null,
+      matched_sku: mapping?.sku || null,
+      failure_reason: failureReason,
     };
   }
-
-  const stockResult = await db.query(
-    'SELECT stocks FROM inventory WHERE inventory_id = $1 FOR UPDATE',
-    [mapping.inventory_id],
-  );
-  const availableStock = stockResult.rows[0]?.stocks ?? 0;
-  const outcome = decideLineOutcome({
-    hasMapping: true,
-    availableStock,
-    quantity: itemRow.quantity,
-  });
-
-  if (outcome.lineStatus !== 'DEDUCTED') {
-    await db.query(
-      `UPDATE online_order_items
-       SET line_status = $1,
-           matched_inventory_id = $2,
-           matched_sku = $3,
-           failure_reason = $4,
-           updated_at = NOW()
-       WHERE order_item_id = $5`,
-      [outcome.lineStatus, mapping.inventory_id, mapping.sku, outcome.failureReason, itemRow.order_item_id],
-    );
-    return {
-      ...itemRow,
-      line_status: outcome.lineStatus,
-      matched_inventory_id: mapping.inventory_id,
-      matched_sku: mapping.sku,
-      failure_reason: outcome.failureReason,
-    };
-  }
-
-  const movement = await inventory.createMovement(
-    mapping.inventory_id,
-    {
-      movementType: 'ONLINE_SALE',
-      quantity: itemRow.quantity,
-      referenceNumber: orderMeta.externalOrderId || orderMeta.external_order_id || null,
-      remarks: `Shopee order ${orderMeta.externalOrderId || orderMeta.external_order_id || ''}: ${itemRow.external_item_name || itemRow.external_sku}`,
-    },
-    actorId,
-    db,
-  );
 
   await db.query(
     `UPDATE online_order_items
-     SET line_status = 'DEDUCTED',
+     SET line_status = 'MATCHED',
          matched_inventory_id = $1,
          matched_sku = $2,
-         movement_id = $3,
          failure_reason = NULL,
          updated_at = NOW()
-     WHERE order_item_id = $4`,
-    [mapping.inventory_id, mapping.sku, movement.movementId || movement.movement_id, itemRow.order_item_id],
+     WHERE order_item_id = $3`,
+    [mapping.inventory_id, mapping.sku, itemRow.order_item_id],
   );
 
   return {
     ...itemRow,
-    line_status: 'DEDUCTED',
+    line_status: 'MATCHED',
     matched_inventory_id: mapping.inventory_id,
     matched_sku: mapping.sku,
-    movement_id: movement.movementId || movement.movement_id,
     failure_reason: null,
   };
 }
@@ -348,7 +303,7 @@ async function upsertOrderWithItems(db, orderInput, source, importedBy) {
   }
 
   for (const itemRow of itemRows) {
-    await matchAndDeductLine(db, itemRow, importedBy, order);
+    await matchOrderLine(db, itemRow, order);
   }
 
   await refreshOrderStatus(order.order_id, db);
@@ -379,6 +334,7 @@ export async function listOrders(query) {
   const add = (value) => { values.push(value); return `$${values.length}`; };
 
   if (query.status) where.push(`o.order_status = ${add(query.status)}`);
+  if (query.fulfillmentStatus) where.push(`o.fulfillment_status = ${add(query.fulfillmentStatus)}`);
   if (query.channel) where.push(`o.channel = ${add(query.channel)}`);
   if (query.search) {
     const p = add(`%${query.search}%`);
@@ -439,9 +395,6 @@ export async function resolveOrderItem(itemId, inventoryId, admin) {
     if (!itemResult.rowCount) throw new AppError(404, 'ORDER_ITEM_NOT_FOUND', 'Online order item was not found');
 
     const item = itemResult.rows[0];
-    if (item.line_status === 'DEDUCTED') {
-      throw new AppError(409, 'ITEM_ALREADY_DEDUCTED', 'This line item has already been deducted');
-    }
     if (item.line_status === 'CANCELLED') {
       throw new AppError(409, 'ITEM_CANCELLED', 'This line item has been cancelled');
     }
@@ -465,7 +418,7 @@ export async function resolveOrderItem(itemId, inventoryId, admin) {
       [item.channel, item.external_sku, item.external_item_name, inventoryId, adminId],
     );
 
-    await matchAndDeductLine(db, item, adminId, {
+    await matchOrderLine(db, item, {
       channel: item.channel,
       externalOrderId: item.external_order_id,
     });
@@ -546,6 +499,82 @@ export async function cancelOrder(orderId, admin) {
     await db.query(
       `UPDATE online_orders SET order_status = 'CANCELLED', updated_at = NOW() WHERE order_id = $1`,
       [orderId],
+    );
+    return loadOrderRow(orderId, db);
+  });
+}
+
+export async function updateFulfillmentStatus(orderId, targetStatus, admin) {
+  return withTransaction(async (db) => {
+    const orderResult = await db.query('SELECT * FROM online_orders WHERE order_id = $1 FOR UPDATE', [orderId]);
+    if (!orderResult.rowCount) throw new AppError(404, 'ORDER_NOT_FOUND', 'Online order was not found');
+
+    const order = orderResult.rows[0];
+    if (order.order_status === 'CANCELLED') {
+      throw new AppError(409, 'ORDER_CANCELLED', 'A cancelled order cannot move through fulfillment');
+    }
+
+    const allowed = FULFILLMENT_TRANSITIONS[order.fulfillment_status] || [];
+    if (!allowed.includes(targetStatus)) {
+      throw new AppError(
+        409,
+        'INVALID_FULFILLMENT_TRANSITION',
+        `Cannot move from ${order.fulfillment_status} to ${targetStatus}`,
+      );
+    }
+
+    await db.query(
+      `UPDATE online_orders SET fulfillment_status = $1, updated_at = NOW() WHERE order_id = $2`,
+      [targetStatus, orderId],
+    );
+    return loadOrderRow(orderId, db);
+  });
+}
+
+// Only lines already matched to an inventory item can be restored, since a
+// physical return can only be credited back to a known SKU. Not-reusable
+// returns intentionally create no stock movement: the unit was already
+// allocated out to the channel, so there is nothing in the warehouse to
+// "damage" — it simply never comes back.
+export async function confirmReturn(orderId, { reusable, notes }, admin) {
+  const adminId = typeof admin === 'object' ? admin.user_id : admin;
+
+  return withTransaction(async (db) => {
+    const orderResult = await db.query('SELECT * FROM online_orders WHERE order_id = $1 FOR UPDATE', [orderId]);
+    if (!orderResult.rowCount) throw new AppError(404, 'ORDER_NOT_FOUND', 'Online order was not found');
+
+    const order = orderResult.rows[0];
+    if (order.fulfillment_status !== 'RETURN') {
+      throw new AppError(409, 'ORDER_NOT_IN_RETURN', 'This order is not currently in the return column');
+    }
+
+    const items = await loadOrderItems(orderId, db);
+    const restorable = items.filter((item) => item.line_status !== 'CANCELLED' && item.matched_inventory_id);
+
+    if (reusable) {
+      for (const item of restorable) {
+        await inventory.createMovement(
+          item.matched_inventory_id,
+          {
+            movementType: 'RETURN',
+            quantity: item.quantity,
+            referenceNumber: order.external_order_id,
+            remarks: `Reusable return confirmed for ${order.channel} order ${order.external_order_id}`,
+          },
+          adminId,
+          db,
+        );
+      }
+    }
+
+    await db.query(
+      `UPDATE online_orders
+       SET fulfillment_status = 'RETURN_CONFIRMED',
+           return_reusable = $1,
+           return_notes = $2,
+           updated_at = NOW()
+       WHERE order_id = $3`,
+      [reusable, notes || null, orderId],
     );
     return loadOrderRow(orderId, db);
   });

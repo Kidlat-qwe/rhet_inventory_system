@@ -3,7 +3,7 @@ import { pathForPage } from '../routes/paths'
 import { formatStatus, initials } from '../utils/format'
 import { Icon } from './Icon'
 
-export function Sidebar({ open, close, admin, itemCount, pendingRequests, attentionOrders = 0 }) {
+export function Sidebar({ open, close, admin, pendingRequests, attentionOrders = 0 }) {
   const isAdmin = String(admin?.role || 'ADMIN').toUpperCase() === 'ADMIN'
   const workspaceLinks = [
     ['Dashboard', 'grid'],
@@ -39,7 +39,6 @@ export function Sidebar({ open, close, admin, itemCount, pendingRequests, attent
             onClick={close}
           >
             <Icon name={icon} />{label}
-            {label === 'Inventory' && itemCount > 0 && <span className="nav-count">{itemCount}</span>}
             {label === 'Stock Requests' && pendingRequests > 0 && <span className="nav-count">{pendingRequests}</span>}
             {label === 'Online Orders' && attentionOrders > 0 && <span className="nav-count">{attentionOrders}</span>}
           </NavLink>

@@ -46,3 +46,15 @@ export const cancel = asyncHandler(async (req, res) => {
 export const mappings = asyncHandler(async (req, res) => {
   success(res, await service.listMappings(req.validated.query));
 });
+
+export const updateFulfillmentStatus = asyncHandler(async (req, res) => {
+  success(res, await service.updateFulfillmentStatus(
+    req.validated.params.id,
+    req.validated.body.status,
+    req.admin,
+  ));
+});
+
+export const confirmReturn = asyncHandler(async (req, res) => {
+  success(res, await service.confirmReturn(req.validated.params.id, req.validated.body, req.admin));
+});

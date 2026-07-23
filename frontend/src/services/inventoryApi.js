@@ -60,6 +60,9 @@ export const rejectStockRequest = (id, rejectionReason) =>
 export const createInventoryItem = (body) =>
   api('/inventory', { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 
+export const batchCreateInventory = (items) =>
+  api('/inventory/batch', { method: 'POST', body: JSON.stringify({ items }) }).then((response) => response.data)
+
 export const updateInventoryItem = (id, body) =>
   api(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
 
@@ -68,3 +71,9 @@ export const createStockMovement = (id, body) =>
 
 export const createCategory = (categoryName) =>
   api('/categories', { method: 'POST', body: JSON.stringify({ categoryName }) }).then((response) => response.data)
+
+export const updateCategory = (categoryId, categoryName) =>
+  api(`/categories/${categoryId}`, { method: 'PATCH', body: JSON.stringify({ categoryName }) }).then((response) => response.data)
+
+export const deleteCategory = (categoryId) =>
+  api(`/categories/${categoryId}`, { method: 'DELETE' }).then((response) => response.data)

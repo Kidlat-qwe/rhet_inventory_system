@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  FULFILLMENT_TRANSITIONS,
   computeOrderStatus,
   decideLineOutcome,
   parseShopeeCsv,
@@ -22,20 +23,23 @@ test('parseShopeeCsv groups rows by order id', () => {
   assert.equal(orders[1].items[0].quantity, 1);
 });
 
-test('computeOrderStatus returns FULFILLED when all lines are deducted', () => {
+test('computeOrderStatus returns FULFILLED when all lines are matched', () => {
   assert.equal(
-    computeOrderStatus([{ line_status: 'DEDUCTED' }, { line_status: 'DEDUCTED' }]),
+    computeOrderStatus([{ line_status: 'MATCHED' }, { line_status: 'MATCHED' }]),
     'FULFILLED',
   );
 });
 
-test('computeOrderStatus returns NEEDS_ATTENTION when a line is unmatched or oversold', () => {
+test('computeOrderStatus still treats legacy DEDUCTED lines (Phase 1 data) as fulfilled', () => {
   assert.equal(
-    computeOrderStatus([{ line_status: 'DEDUCTED' }, { line_status: 'UNMATCHED' }]),
-    'NEEDS_ATTENTION',
+    computeOrderStatus([{ line_status: 'DEDUCTED' }, { line_status: 'MATCHED' }]),
+    'FULFILLED',
   );
+});
+
+test('computeOrderStatus returns NEEDS_ATTENTION when a line is unmatched', () => {
   assert.equal(
-    computeOrderStatus([{ line_status: 'OVERSOLD' }]),
+    computeOrderStatus([{ line_status: 'MATCHED' }, { line_status: 'UNMATCHED' }]),
     'NEEDS_ATTENTION',
   );
 });
@@ -48,27 +52,53 @@ test('computeOrderStatus returns CANCELLED when all lines are cancelled', () => 
 });
 
 test('decideLineOutcome marks unmatched items', () => {
-  assert.deepEqual(decideLineOutcome({ hasMapping: false, availableStock: 10, quantity: 1 }), {
+  assert.deepEqual(decideLineOutcome({ hasMapping: false }), {
     lineStatus: 'UNMATCHED',
     failureReason: 'No SKU mapping found for this channel item',
   });
 });
 
-test('decideLineOutcome marks oversold items', () => {
-  assert.deepEqual(decideLineOutcome({ hasMapping: true, availableStock: 1, quantity: 3 }), {
-    lineStatus: 'OVERSOLD',
-    failureReason: 'Only 1 unit(s) available, but 3 requested',
-  });
-});
-
-test('decideLineOutcome allows deduction when stock is sufficient', () => {
-  assert.deepEqual(decideLineOutcome({ hasMapping: true, availableStock: 5, quantity: 3 }), {
-    lineStatus: 'DEDUCTED',
+test('decideLineOutcome marks matched items (no stock deduction — allocation model)', () => {
+  assert.deepEqual(decideLineOutcome({ hasMapping: true }), {
+    lineStatus: 'MATCHED',
     failureReason: null,
   });
 });
 
-test('online sale deducts units through stock rules', async () => {
+test('fulfillment transitions only allow the documented forward moves', () => {
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.PROCESSING, ['READY_TO_SHIP']);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.READY_TO_SHIP, ['SHIPPED']);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.SHIPPED, ['RECEIVED', 'RETURN']);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.RECEIVED, ['RETURN']);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.RETURN, []);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.RETURN_CONFIRMED, []);
+});
+
+test('legacy ONLINE_SALE movements still deduct units through stock rules', async () => {
   const { calculateStockChange } = await import('../src/services/stock-rules.js');
   assert.deepEqual(calculateStockChange(10, { movementType: 'ONLINE_SALE', quantity: 4 }), { delta: -4, next: 6 });
+});
+
+test('CHANNEL_ALLOCATION deducts RHET stock when allocating to a channel', async () => {
+  const { calculateStockChange } = await import('../src/services/stock-rules.js');
+  assert.deepEqual(
+    calculateStockChange(100, { movementType: 'CHANNEL_ALLOCATION', quantity: 20, direction: 'DEDUCT' }),
+    { delta: -20, next: 80 },
+  );
+});
+
+test('CHANNEL_ALLOCATION restores RHET stock when deallocating from a channel', async () => {
+  const { calculateStockChange } = await import('../src/services/stock-rules.js');
+  assert.deepEqual(
+    calculateStockChange(80, { movementType: 'CHANNEL_ALLOCATION', quantity: 5, direction: 'ADD' }),
+    { delta: 5, next: 85 },
+  );
+});
+
+test('RETURN movement restores RHET stock for a reusable return', async () => {
+  const { calculateStockChange } = await import('../src/services/stock-rules.js');
+  assert.deepEqual(
+    calculateStockChange(80, { movementType: 'RETURN', quantity: 1 }),
+    { delta: 1, next: 81 },
+  );
 });

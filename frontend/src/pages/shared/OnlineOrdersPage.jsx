@@ -1,12 +1,16 @@
 import { useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
+import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { usePagination } from '../../hooks/usePagination'
 import {
   cancelOnlineOrder,
+  confirmOnlineOrderReturn,
   createManualOnlineOrder,
   fetchOnlineOrder,
   importOnlineOrdersCsv,
   resolveOnlineOrderItem,
+  updateOnlineOrderFulfillmentStatus,
 } from '../../services/onlineOrdersApi'
 import { formatCurrency, formatDate, formatStatus } from '../../utils/format'
 
@@ -16,6 +20,17 @@ const EMPTY_MANUAL_ITEM = {
   externalVariation: '',
   quantity: 1,
   unitPrice: 0,
+}
+
+// Delivery/fulfillment tracking columns, separate from order_status (SKU
+// matching). Mirrors FULFILLMENT_TRANSITIONS in the backend online-order
+// service — keep the two in sync if the workflow changes.
+const FULFILLMENT_COLUMNS = ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED', 'RECEIVED', 'RETURN', 'RETURN_CONFIRMED']
+
+const NEXT_FULFILLMENT_ACTION = {
+  PROCESSING: { status: 'READY_TO_SHIP', label: 'Mark ready to ship' },
+  READY_TO_SHIP: { status: 'SHIPPED', label: 'Mark shipped' },
+  SHIPPED: { status: 'RECEIVED', label: 'Mark received by customer' },
 }
 
 function detailValue(value) {
@@ -28,13 +43,15 @@ function canResolveLine(line) {
 }
 
 export default function OnlineOrdersPage({ orders, inventory, onRefresh, canManage = false }) {
-  const [filter, setFilter] = useState('NEEDS_ATTENTION')
+  const [filter, setFilter] = useState('PROCESSING')
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(null)
   const [mode, setMode] = useState('details')
   const [resolveInventoryId, setResolveInventoryId] = useState('')
   const [resolveItemId, setResolveItemId] = useState('')
+  const [returnReusable, setReturnReusable] = useState('true')
+  const [returnNotes, setReturnNotes] = useState('')
   const [manualForm, setManualForm] = useState({
     externalOrderId: '',
     buyerName: '',
@@ -45,8 +62,10 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
 
   const shown = useMemo(() => {
     if (!filter) return orders
-    return orders.filter((order) => order.orderStatus === filter)
+    return orders.filter((order) => order.fulfillmentStatus === filter)
   }, [orders, filter])
+
+  const { page, setPage, pageItems, total } = usePagination(shown, 15)
 
   const attentionCount = useMemo(
     () => orders.filter((order) => order.orderStatus === 'NEEDS_ATTENTION').length,
@@ -58,6 +77,8 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
     setMode('details')
     setResolveInventoryId('')
     setResolveItemId('')
+    setReturnReusable('true')
+    setReturnNotes('')
     setBusyId(order.orderId)
     try {
       setSelected(await fetchOnlineOrder(order.orderId))
@@ -178,12 +199,45 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
     }
   }
 
+  async function moveFulfillment(status) {
+    if (!selected?.orderId) return
+    setBusyId(`fulfillment-${status}`)
+    setError('')
+    try {
+      const updated = await updateOnlineOrderFulfillmentStatus(selected.orderId, status)
+      setSelected(updated)
+      await onRefresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  async function submitReturnConfirmation() {
+    if (!selected?.orderId) return
+    setBusyId('confirm-return')
+    setError('')
+    try {
+      const updated = await confirmOnlineOrderReturn(selected.orderId, returnReusable === 'true', returnNotes.trim() || null)
+      setSelected(updated)
+      await onRefresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  const nextAction = selected ? NEXT_FULFILLMENT_ACTION[selected.fulfillmentStatus] : null
+  const canMarkReturn = selected && ['SHIPPED', 'RECEIVED'].includes(selected.fulfillmentStatus)
+
   return (
     <>
       <div className="page-title">
         <div>
           <h1>Online orders</h1>
-          <p>Track Shopee checkout orders, map channel SKUs to inventory, and auto-deduct stock when items match.</p>
+          <p>Fulfillment tracking board for Shopee orders. RHET stock is deducted through channel allocation, not order checkout — see the Inventory page.</p>
         </div>
         {canManage && (
           <div className="page-actions">
@@ -205,14 +259,14 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
       </div>
 
       <div className="quick-filters">
-        {['NEEDS_ATTENTION', 'FULFILLED', 'RECEIVED', 'CANCELLED'].map((status) => (
+        {FULFILLMENT_COLUMNS.map((status) => (
           <button key={status} type="button" className={filter === status ? 'selected' : ''} onClick={() => setFilter(status)}>
-            <span>{orders.filter((order) => order.orderStatus === status).length}</span>
+            <span>{orders.filter((order) => order.fulfillmentStatus === status).length}</span>
             {formatStatus(status)}
           </button>
         ))}
-        {attentionCount > 0 && filter !== 'NEEDS_ATTENTION' && (
-          <span className="muted">{attentionCount} order(s) need attention</span>
+        {attentionCount > 0 && (
+          <span className="muted">{attentionCount} order(s) need SKU mapping</span>
         )}
       </div>
 
@@ -221,7 +275,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
       <section className="panel recent">
         {shown.length ? (
           <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', minWidth: '1100px' }}>
+            <table style={{ width: '100%', minWidth: '1150px' }}>
               <thead>
                 <tr>
                   <th>Order #</th>
@@ -229,13 +283,14 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                   <th>Buyer</th>
                   <th>Items</th>
                   <th>Total</th>
-                  <th>Status</th>
+                  <th>Delivery status</th>
+                  <th>Match status</th>
                   <th>Placed</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {shown.map((order) => (
+                {pageItems.map((order) => (
                   <tr key={order.orderId}>
                     <td>
                       <strong>{order.externalOrderId}</strong>
@@ -248,6 +303,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                       {order.attentionCount > 0 && <small>{order.attentionCount} need attention</small>}
                     </td>
                     <td>{formatCurrency(order.totalAmount)}</td>
+                    <td><StatusBadge status={order.fulfillmentStatus} /></td>
                     <td><StatusBadge status={order.orderStatus} /></td>
                     <td className="muted">{formatDate(order.orderPlacedAt || order.createdAt)}</td>
                     <td>
@@ -264,11 +320,12 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                 ))}
               </tbody>
             </table>
+            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="orders" />
           </div>
         ) : (
           <EmptyState
-            title={`No ${formatStatus(filter).toLowerCase()} online orders`}
-            message={canManage ? 'Import a Shopee CSV export or add an order manually to start tracking online sales.' : 'Online orders will appear here once they are imported.'}
+            title={`No orders in ${formatStatus(filter).toLowerCase()}`}
+            message={canManage ? 'Import a Shopee CSV export or add an order manually to start tracking fulfillment.' : 'Online orders will appear here once they are imported.'}
           />
         )}
       </section>
@@ -352,6 +409,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
             </div>
 
             <div className="request-detail-status">
+              <StatusBadge status={selected.fulfillmentStatus} />
               <StatusBadge status={selected.orderStatus} />
               <span className="muted">Placed {formatDate(selected.orderPlacedAt || selected.createdAt)}</span>
             </div>
@@ -362,6 +420,12 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
               <div><span>Source</span><strong>{formatStatus(selected.source)}</strong></div>
               <div><span>Imported by</span><strong>{detailValue(selected.importedByName)}</strong></div>
               {selected.notes && <div className="full"><span>Notes</span><strong>{selected.notes}</strong></div>}
+              {selected.fulfillmentStatus === 'RETURN_CONFIRMED' && (
+                <div className="full">
+                  <span>Return outcome</span>
+                  <strong>{selected.returnReusable ? 'Reusable — stock restored to RHET' : 'Not reusable — stock not restored'}</strong>
+                </div>
+              )}
             </div>
 
             <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
@@ -371,7 +435,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                     <th>Shopee SKU</th>
                     <th>Item</th>
                     <th>Qty</th>
-                    <th>Status</th>
+                    <th>Match status</th>
                     <th>Matched SKU</th>
                     {canManage && <th>Actions</th>}
                   </tr>
@@ -404,7 +468,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                                   ))}
                                 </select>
                                 <button type="button" className="primary small-btn" disabled={busyId === line.orderItemId} onClick={() => confirmResolve(line.orderItemId)}>
-                                  {busyId === line.orderItemId ? 'Saving…' : 'Map & deduct'}
+                                  {busyId === line.orderItemId ? 'Saving…' : 'Map item'}
                                 </button>
                                 <button type="button" className="secondary small-btn" onClick={() => { setResolveItemId(''); setResolveInventoryId('') }}>
                                   Cancel
@@ -424,10 +488,45 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
               </table>
             </div>
 
+            {canManage && selected.fulfillmentStatus === 'RETURN' && (
+              <div className="request-detail-grid" style={{ marginTop: '1rem' }}>
+                <div className="full">
+                  <span>Return inspection</span>
+                  <p className="field-hint">Choose whether the returned item(s) can be resold. Reusable returns restore RHET stock; the Shopee channel quantity is not affected either way.</p>
+                </div>
+                <label>
+                  <span>Outcome</span>
+                  <select value={returnReusable} onChange={(e) => setReturnReusable(e.target.value)}>
+                    <option value="true">Reusable — restore RHET stock</option>
+                    <option value="false">Not reusable — do not restore stock</option>
+                  </select>
+                </label>
+                <label className="full">
+                  <span>Notes</span>
+                  <textarea value={returnNotes} onChange={(e) => setReturnNotes(e.target.value)} placeholder="Inspection notes (optional)" />
+                </label>
+                <div className="full">
+                  <button type="button" className="primary" disabled={busyId === 'confirm-return'} onClick={submitReturnConfirmation}>
+                    {busyId === 'confirm-return' ? 'Confirming…' : 'Confirm return'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {error && <div className="page-error">{error}</div>}
 
             <div className="modal-actions">
               <button type="button" className="secondary" onClick={closeModal} disabled={Boolean(busyId)}>Close</button>
+              {canManage && nextAction && (
+                <button type="button" className="primary" disabled={busyId === `fulfillment-${nextAction.status}`} onClick={() => moveFulfillment(nextAction.status)}>
+                  {busyId === `fulfillment-${nextAction.status}` ? 'Updating…' : nextAction.label}
+                </button>
+              )}
+              {canManage && canMarkReturn && (
+                <button type="button" className="secondary" disabled={busyId === 'fulfillment-RETURN'} onClick={() => moveFulfillment('RETURN')}>
+                  {busyId === 'fulfillment-RETURN' ? 'Updating…' : 'Mark as return'}
+                </button>
+              )}
               {canManage && selected.orderStatus !== 'CANCELLED' && (
                 <button type="button" className="secondary" disabled={busyId === selected.orderId} onClick={confirmCancelOrder}>
                   {busyId === selected.orderId ? 'Cancelling…' : 'Cancel order'}

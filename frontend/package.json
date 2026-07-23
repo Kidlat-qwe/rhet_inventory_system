@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5173",
+    "dev:5173": "vite --port 5173 --strictPort",
+    "dev:5174": "vite --port 5174 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "start": "serve -s dist"
@@ -13,6 +15,7 @@
     "firebase": "^12.7.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
     "serve": "^14.2.6"
   },
   "devDependencies": {

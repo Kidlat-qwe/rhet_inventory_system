@@ -51,6 +51,8 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
 
 - `categories (1) → (many) inventory`: every item belongs to a controlled category.
 - `inventory (1) → (many) stock_movements`: the immutable transaction history for an item.
+- `inventory (1) → (many) inventory_bundle_components`: Learning Kit bill of materials (category slots only; concrete SKUs come from stock-request components).
+- `stock_requests (1) → (many) stock_request_components`: request-time component specs for Learning Kits (uniform attrs or item name/SKU).
 - `users (1) → (many) stock_movements`: records the responsible authenticated user.
 - `users` also relates to inventory through `created_by` and `updated_by`.
 
@@ -72,11 +74,16 @@ All paths except health require `Authorization: Bearer <Firebase ID token>`. Res
 | GET/PATCH | `/api/v1/inventory/:id` | Read/edit/archive item metadata |
 | POST | `/api/v1/inventory/:id/movements` | Add, deduct, adjust, return, damage, release, or cancel stock |
 | GET | `/api/v1/stock-movements` | Paginated audit history and date filters |
-| GET | `/api/v1/online-orders` | List Shopee/marketplace online orders |
+| GET | `/api/v1/online-orders` | List Shopee/marketplace fulfillment orders |
 | GET | `/api/v1/online-orders/:id` | Online order detail with line items |
 | POST | `/api/v1/online-orders/import` | Import Shopee CSV export (admin) |
 | POST | `/api/v1/online-orders/manual` | Create manual online order (admin) |
-| POST | `/api/v1/online-orders/items/:id/resolve` | Map Shopee SKU to inventory and deduct (admin) |
+| POST | `/api/v1/online-orders/items/:id/resolve` | Map Shopee SKU to inventory (visibility only, no deduction) (admin) |
+| POST | `/api/v1/online-orders/:id/fulfillment-status` | Move an order to the next fulfillment column (admin) |
+| POST | `/api/v1/online-orders/:id/confirm-return` | Confirm a return as reusable/not reusable (admin) |
+| GET | `/api/v1/channel-allocations` | List per-item RHET vs Shopee allocated quantities |
+| POST | `/api/v1/channel-allocations/allocate` | Allocate RHET stock to a sales channel (admin) |
+| POST | `/api/v1/channel-allocations/deallocate` | Pull unsold allocated stock back into RHET (admin) |
 | GET | `/api/v1/reports/inventory.csv` | Current stock/valuation/category/status CSV |
 
 Inventory query parameters: `search`, `categoryId`, `variation`, `status`, `sortBy`, `order`, `page`, `limit`. Movement parameters: `inventoryId`, `type`, `from`, `to`, `page`, `limit`. Low-stock and out-of-stock reports are inventory requests with the corresponding `status`; category reports use `categoryId`; valuation is included in the CSV. The movement endpoint supplies date-range transaction reports and can be exported client-side or extended with the same CSV serializer.
@@ -183,10 +190,18 @@ npm run dev
 
 For API-only local development, set `AUTH_BYPASS=true`. Do not use it in a deployed environment.
 
+## External system integrations
+
+Partner systems that request warehouse stock should follow:
+
+- **[docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md](docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md)** — full guide (auth, catalog, stock requests, Learning Kits, webhooks)
+- **[docs/external-system-integrations/README.md](docs/external-system-integrations/README.md)** — index
+
 ## 16. Deployment recommendations
 
 Build the frontend with `npm run build` and serve `frontend/dist` from Firebase Hosting, Cloudflare Pages, Vercel, or a static CDN. Deploy the stateless API as a container to Cloud Run, Azure Container Apps, Render, Railway, or ECS. Use managed PostgreSQL (Cloud SQL, Azure Database for PostgreSQL, RDS, Neon, or Supabase database-only), private networking where available, automated point-in-time backups, and a connection pooler for autoscaling workloads.
 
 Run migrations as a one-off release job before API rollout—not from every application replica. Configure health checks on `/health`, centralized logs and alerts, error monitoring, uptime checks, database metrics, and secret rotation. Use separate development/staging/production resources and a CI pipeline that installs locked dependencies, checks syntax/lint, runs tests, builds the UI, scans dependencies/images, applies staging migrations, and deploys with rollback support.
-#   r h e t _ i n v e n t o r y _ s y s t e m  
+#   r h e t _ i n v e n t o r y _ s y s t e m 
+ 
  

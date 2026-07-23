@@ -1,5 +1,8 @@
 import { useState } from 'react'
+import { ActionsMenu } from '../../components/ActionsMenu'
+import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { usePagination } from '../../hooks/usePagination'
 import { baseUrl } from '../../services/api'
 import { createIntegrationClient, regenerateIntegrationApiKey, revokeIntegrationApiKey } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
@@ -14,7 +17,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
   const [error, setError] = useState('')
   const [revealed, setRevealed] = useState(null)
   const [copiedField, setCopiedField] = useState('')
-  const [menuOpenFor, setMenuOpenFor] = useState(null)
+  const { page, setPage, pageItems, total } = usePagination(clients, 15)
 
   function deriveSystemCode(name) {
     return name
@@ -34,7 +37,6 @@ export default function AdminApiKeys({ clients, onRefresh }) {
     setSystemName('')
     setExpiration('none')
     setError('')
-    setMenuOpenFor(null)
     setShowGenerateModal(true)
   }
 
@@ -72,7 +74,6 @@ export default function AdminApiKeys({ clients, onRefresh }) {
     setExpiration('none')
     setCopiedField('')
     setError('')
-    setMenuOpenFor(null)
     setRevealed({
       systemCode: result.client?.systemCode || fallback.systemCode || '',
       displayName: result.client?.displayName || fallback.displayName || '',
@@ -120,14 +121,10 @@ export default function AdminApiKeys({ clients, onRefresh }) {
     const confirmed = window.confirm(
       `Regenerate API key for ${client.displayName || client.systemCode}? The previous key will stop working immediately.`,
     )
-    if (!confirmed) {
-      setMenuOpenFor(null)
-      return
-    }
+    if (!confirmed) return
 
     setBusy(true)
     setError('')
-    setMenuOpenFor(null)
     try {
       const result = await regenerateIntegrationApiKey(client.systemCode)
       openRevealFromResult(result, {
@@ -147,14 +144,10 @@ export default function AdminApiKeys({ clients, onRefresh }) {
     const confirmed = window.confirm(
       `Revoke API key for ${client.displayName || client.systemCode}? External systems using this key will stop working immediately.`,
     )
-    if (!confirmed) {
-      setMenuOpenFor(null)
-      return
-    }
+    if (!confirmed) return
 
     setBusy(true)
     setError('')
-    setMenuOpenFor(null)
     try {
       await revokeIntegrationApiKey(client.systemCode)
       await onRefresh?.()
@@ -199,7 +192,7 @@ export default function AdminApiKeys({ clients, onRefresh }) {
               </tr>
             </thead>
             <tbody>
-              {clients.length ? clients.map((client) => (
+              {clients.length ? pageItems.map((client) => (
                 <tr key={client.clientId || client.systemCode}>
                   <td><strong>{client.systemCode}</strong></td>
                   <td>{client.displayName}</td>
@@ -209,32 +202,14 @@ export default function AdminApiKeys({ clients, onRefresh }) {
                   <td><StatusBadge status={client.isExpired ? 'EXPIRED' : client.status} /></td>
                   <td className="muted">{formatDate(client.createdAt)}</td>
                   <td>
-                    <div className="actions-menu">
-                      <button
-                        type="button"
-                        className="dots"
-                        aria-label={`Actions for ${client.systemCode}`}
-                        disabled={busy}
-                        onClick={() => setMenuOpenFor((current) => (current === client.systemCode ? null : client.systemCode))}
-                      >
-                        •••
-                      </button>
-                      {menuOpenFor === client.systemCode && (
-                        <div className="actions-dropdown">
-                          <button type="button" disabled={busy} onClick={() => regenerateKey(client)}>
-                            Regenerate API key
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-action"
-                            disabled={!client.hasApiKey || busy}
-                            onClick={() => revokeKey(client)}
-                          >
-                            Revoke API key
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <ActionsMenu
+                      label={`Actions for ${client.systemCode}`}
+                      disabled={busy}
+                      items={[
+                        { key: 'regenerate', label: 'Regenerate API key', onClick: () => regenerateKey(client) },
+                        { key: 'revoke', label: 'Revoke API key', danger: true, disabled: !client.hasApiKey, onClick: () => revokeKey(client) },
+                      ]}
+                    />
                   </td>
                 </tr>
               )) : (
@@ -247,11 +222,8 @@ export default function AdminApiKeys({ clients, onRefresh }) {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="systems" />
       </section>
-
-      {menuOpenFor && (
-        <button type="button" className="actions-menu-overlay" aria-label="Close actions menu" onClick={() => setMenuOpenFor(null)} />
-      )}
 
       {showGenerateModal && (
         <div className="modal-backdrop">

@@ -17,13 +17,13 @@ export async function get(req, res) {
 }
 
 export async function approve(req, res) {
-  success(res, await service.approveStockRequest(req.validated.params.id, req.admin.user_id));
+  success(res, await service.approveStockRequest(req.validated.params.id, req.admin));
 }
 
 export async function reject(req, res) {
   success(res, await service.rejectStockRequest(
     req.validated.params.id,
-    req.admin.user_id,
+    req.admin,
     req.validated.body.rejectionReason,
   ));
 }

@@ -2,6 +2,16 @@ import { z } from 'zod';
 
 const optionalText = (max) => z.string().trim().max(max).optional().nullable();
 
+const kitComponentSpec = z.object({
+  categoryName: z.string().trim().min(2).max(100),
+  gender: optionalText(20),
+  type: optionalText(50),
+  size: optionalText(20),
+  itemName: optionalText(180),
+  sku: optionalText(64),
+  quantity: z.coerce.number().int().positive(),
+});
+
 export const psmsStockRequestSchema = z.object({
   body: z.object({
     requestDate: z.coerce.date().optional(),
@@ -17,6 +27,8 @@ export const psmsStockRequestSchema = z.object({
       itemName: optionalText(180),
       quantity: z.coerce.number().int().positive(),
       externalReference: optionalText(100),
+      // Learning Kit only: concrete component choices (uniforms need gender/type/size).
+      components: z.array(kitComponentSpec).max(50).optional(),
     })).min(1).max(50),
   }),
   query: z.any(),

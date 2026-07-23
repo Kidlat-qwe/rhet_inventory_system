@@ -2,12 +2,122 @@ import { pool, withTransaction } from '../database/pool.js';
 import { AppError, camelize } from '../utils/api.js';
 import * as inventory from './inventory.service.js';
 import { resolveInventoryItem } from './inventory-resolver.service.js';
-import { dispatchStockRequestWebhook } from './webhook.service.js';
+import {
+  dispatchStockRequestWebhook,
+  looksLikeUuid,
+  processorFromAdmin,
+  resolveProcessedByDisplayName,
+  resolveProcessedByUserId,
+} from './webhook.service.js';
 
-const requestSelect = `SELECT sr.*, i.item_name, i.stocks AS current_stocks, a.full_name AS processed_by_name
+const requestSelect = `SELECT sr.*,
+    i.item_name,
+    i.stocks AS current_stocks,
+    a.full_name AS processed_by_name,
+    a.email AS processed_by_email
   FROM stock_requests sr
   LEFT JOIN inventory i ON i.inventory_id = sr.inventory_id
   LEFT JOIN users a ON a.user_id = sr.processed_by`;
+
+function displayNameFromUser(user) {
+  if (!user) return null;
+  const fullName = String(user.full_name || '').trim();
+  if (fullName && !looksLikeUuid(fullName)) return fullName;
+  const email = String(user.email || '').trim();
+  if (email && !looksLikeUuid(email)) return email;
+  return null;
+}
+
+async function listRequestComponents(requestId, db = pool) {
+  const result = await db.query(
+    `SELECT * FROM stock_request_components WHERE request_id = $1 ORDER BY created_at ASC`,
+    [requestId],
+  );
+  return camelize(result.rows);
+}
+
+async function attachRequestComponents(rows, db = pool) {
+  if (!rows.length) return rows;
+  const ids = rows.map((row) => row.request_id || row.requestId).filter(Boolean);
+  if (!ids.length) return rows.map((row) => ({ ...row, components: [] }));
+  const result = await db.query(
+    `SELECT * FROM stock_request_components WHERE request_id = ANY($1::uuid[]) ORDER BY created_at ASC`,
+    [ids],
+  );
+  const byRequest = new Map();
+  for (const row of camelize(result.rows)) {
+    const list = byRequest.get(row.requestId) || [];
+    list.push(row);
+    byRequest.set(row.requestId, list);
+  }
+  return rows.map((row) => {
+    const id = row.request_id || row.requestId;
+    return { ...row, components: byRequest.get(id) || [] };
+  });
+}
+
+/** Shape DB row for API/webhook consumers: processedBy is always a display name. */
+function shapeStockRequest(row) {
+  const data = camelize(row);
+  const processedByUserId = resolveProcessedByUserId(row) || resolveProcessedByUserId(data);
+  let processedByName = resolveProcessedByDisplayName(row) || resolveProcessedByDisplayName(data);
+
+  // Guard: never expose a UUID through name fields
+  if (processedByName && looksLikeUuid(processedByName)) {
+    processedByName = null;
+  }
+
+  return {
+    ...data,
+    components: data.components || row.components || [],
+    processedByUserId,
+    processedById: processedByUserId,
+    processedBy: processedByName,
+    approvedBy: processedByName,
+    processedByName,
+  };
+}
+
+async function loadRequestRow(id) {
+  const result = await pool.query(`${requestSelect} WHERE sr.request_id = $1`, [id]);
+  if (!result.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
+  return result.rows[0];
+}
+
+/** Ensure fulfill/reject webhooks always carry a human display name when a processor exists. */
+async function enrichProcessorIdentity(row, preferredUserId = null) {
+  if (!row) return row;
+
+  let displayName = resolveProcessedByDisplayName(row);
+  let userId = resolveProcessedByUserId(row) || preferredUserId || null;
+
+  if (displayName && !looksLikeUuid(displayName)) {
+    return {
+      ...row,
+      processed_by_name: displayName,
+      processed_by: userId || row.processed_by || null,
+    };
+  }
+
+  if (!userId && row.processed_by && looksLikeUuid(String(row.processed_by))) {
+    userId = String(row.processed_by);
+  }
+
+  if (userId) {
+    const user = await pool.query(
+      'SELECT user_id, full_name, email FROM users WHERE user_id = $1',
+      [userId],
+    );
+    displayName = displayNameFromUser(user.rows[0]);
+  }
+
+  return {
+    ...row,
+    processed_by: userId || row.processed_by || null,
+    processed_by_name: displayName || null,
+    processed_by_email: row.processed_by_email || null,
+  };
+}
 
 async function recordWebhookAttempt(requestId, status, errorMessage) {
   await pool.query(
@@ -21,9 +131,9 @@ async function recordWebhookAttempt(requestId, status, errorMessage) {
   );
 }
 
-async function notify(request, event) {
+async function notify(request, event, processor = null) {
   try {
-    await dispatchStockRequestWebhook(request, event);
+    await dispatchStockRequestWebhook(request, event, processor);
     await recordWebhookAttempt(request.request_id, 'DELIVERED');
   } catch (error) {
     await recordWebhookAttempt(request.request_id, 'FAILED', error.message);
@@ -39,6 +149,7 @@ export async function createStockRequestsFromPsms(input) {
     const externalReference = item.externalReference
       || `${input.batchReference || sourceSystem}-${Date.now()}-${index + 1}`;
 
+    const isLearningKit = inventory.isLearningKitCategoryName(item.categoryName);
     const resolved = await resolveInventoryItem(pool, {
       categoryName: item.categoryName,
       gender: item.gender,
@@ -72,14 +183,75 @@ export async function createStockRequestsFromPsms(input) {
     );
 
     const row = result.rows[0];
-    if (resolved.error) {
+    let failureReason = resolved.error || null;
+
+    if (isLearningKit && !failureReason && row.inventory_id) {
+      const componentSpecs = Array.isArray(item.components) ? item.components : [];
+      const bom = await inventory.listBundleComponents(row.inventory_id);
+      if (bom.length && !componentSpecs.length) {
+        failureReason = 'Learning Kit requests must include component specs for every included category (uniform: gender/type/size; non-uniform: itemName)';
+      } else {
+        for (const slot of bom) {
+          const matching = componentSpecs.some(
+            (spec) => String(spec.categoryName || '').toLowerCase() === String(slot.categoryName || '').toLowerCase(),
+          );
+          if (!matching) {
+            failureReason = `Learning Kit requires component specs for category "${slot.categoryName}"`;
+            break;
+          }
+        }
+        for (const spec of componentSpecs) {
+          if (failureReason) break;
+          const allowed = bom.some(
+            (slot) => String(slot.categoryName || '').toLowerCase() === String(spec.categoryName || '').toLowerCase(),
+          );
+          if (!allowed) {
+            failureReason = `Component category "${spec.categoryName}" is not part of this Learning Kit`;
+            break;
+          }
+          const componentResolved = await resolveInventoryItem(pool, {
+            categoryName: spec.categoryName,
+            gender: spec.gender,
+            type: spec.type,
+            size: spec.size,
+            itemName: spec.itemName,
+            sku: spec.sku,
+          });
+          await pool.query(
+            `INSERT INTO stock_request_components (
+              request_id, category_name, gender, item_type, size_label, item_name,
+              quantity, inventory_id, matched_sku, failure_reason
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            [
+              row.request_id,
+              spec.categoryName,
+              spec.gender || null,
+              spec.type || null,
+              spec.size || null,
+              spec.itemName || null,
+              spec.quantity,
+              componentResolved.item?.inventory_id || null,
+              componentResolved.item?.sku || null,
+              componentResolved.error || null,
+            ],
+          );
+          if (componentResolved.error && !failureReason) {
+            failureReason = componentResolved.error;
+          }
+        }
+      }
+    } else if (Array.isArray(item.components) && item.components.length) {
+      // Ignore components on non-kit items but store nothing.
+    }
+
+    if (failureReason) {
       await pool.query(
         `UPDATE stock_requests
          SET failure_reason = $1, updated_at = NOW()
          WHERE request_id = $2`,
-        [resolved.error, row.request_id],
+        [failureReason, row.request_id],
       );
-      row.failure_reason = resolved.error;
+      row.failure_reason = failureReason;
     }
 
     created.push(row);
@@ -107,17 +279,20 @@ export async function listStockRequests(query) {
     values,
   );
 
-  return { data: camelize(result.rows), total: Number(count.rows[0].count) };
+  const withComponents = await attachRequestComponents(result.rows);
+  return { data: withComponents.map(shapeStockRequest), total: Number(count.rows[0].count) };
 }
 
 export async function getStockRequest(id) {
-  const result = await pool.query(`${requestSelect} WHERE sr.request_id = $1`, [id]);
-  if (!result.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
-  return camelize(result.rows[0]);
+  const [withComponents] = await attachRequestComponents([await enrichProcessorIdentity(await loadRequestRow(id))]);
+  return shapeStockRequest(withComponents);
 }
 
-export async function approveStockRequest(id, adminId) {
-  const request = await withTransaction(async (db) => {
+export async function approveStockRequest(id, admin) {
+  const adminId = typeof admin === 'object' ? admin.user_id : admin;
+  const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
+
+  await withTransaction(async (db) => {
     const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
     if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
 
@@ -147,6 +322,61 @@ export async function approveStockRequest(id, adminId) {
       throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${stockCheck.rows[0].stocks} unit(s) are available`);
     }
 
+    const bom = await inventory.listBundleComponents(inventoryId, db);
+    const requestComponents = await listRequestComponents(id, db);
+    const resolvedComponents = [];
+
+    if (bom.length) {
+      for (const slot of bom) {
+        const matching = requestComponents.filter(
+          (row) => String(row.categoryName || '').toLowerCase() === String(slot.categoryName || '').toLowerCase(),
+        );
+        if (!matching.length) {
+          throw new AppError(
+            422,
+            'KIT_COMPONENT_REQUIRED',
+            `Learning Kit requires component specs for category "${slot.categoryName}"`,
+          );
+        }
+      }
+
+      for (const spec of requestComponents) {
+        const allowed = bom.some(
+          (slot) => String(slot.categoryName || '').toLowerCase() === String(spec.categoryName || '').toLowerCase(),
+        );
+        if (!allowed) {
+          throw new AppError(422, 'KIT_COMPONENT_INVALID', `Component category "${spec.categoryName}" is not part of this Learning Kit`);
+        }
+
+        let componentId = spec.inventoryId;
+        let componentSku = spec.matchedSku;
+        if (!componentId) {
+          const resolved = await resolveInventoryItem(db, {
+            categoryName: spec.categoryName,
+            gender: spec.gender,
+            type: spec.itemType,
+            size: spec.sizeLabel,
+            itemName: spec.itemName,
+          });
+          if (resolved.error) throw new AppError(422, 'ITEM_NOT_MATCHED', resolved.error);
+          componentId = resolved.item.inventory_id;
+          componentSku = resolved.item.sku;
+          await db.query(
+            `UPDATE stock_request_components
+             SET inventory_id = $1, matched_sku = $2, failure_reason = NULL
+             WHERE request_component_id = $3`,
+            [componentId, componentSku, spec.requestComponentId],
+          );
+        }
+
+        resolvedComponents.push({
+          inventoryId: componentId,
+          quantity: Number(spec.quantity),
+          sku: componentSku,
+        });
+      }
+    }
+
     await db.query(
       `UPDATE stock_requests
        SET status = 'APPROVED', inventory_id = $1, matched_sku = $2, processed_by = $3, processed_at = NOW(), updated_at = NOW()
@@ -154,7 +384,7 @@ export async function approveStockRequest(id, adminId) {
       [inventoryId, matchedSku, adminId, id],
     );
 
-    const movement = await inventory.createMovement(
+    const movement = await inventory.createBundleAwareMovement(
       inventoryId,
       {
         movementType: 'RELEASED',
@@ -164,24 +394,31 @@ export async function approveStockRequest(id, adminId) {
       },
       adminId,
       db,
+      { resolvedComponents },
     );
 
-    const fulfilled = await db.query(
+    const primaryMovement = movement.primary || movement;
+    await db.query(
       `UPDATE stock_requests
        SET status = 'FULFILLED', movement_id = $1, updated_at = NOW()
-       WHERE request_id = $2
-       RETURNING *`,
-      [movement.movementId || movement.movement_id, id],
+       WHERE request_id = $2`,
+      [primaryMovement.movementId || primaryMovement.movement_id, id],
     );
-
-    return fulfilled.rows[0];
   });
 
-  await notify(request, 'stock_request.fulfilled');
-  return camelize(await getStockRequest(id));
+  const enriched = await enrichProcessorIdentity(await loadRequestRow(id), adminId);
+  const [withComponents] = await attachRequestComponents([enriched]);
+  const resolvedProcessor = processor?.displayName
+    ? processor
+    : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email });
+  await notify(withComponents, 'stock_request.fulfilled', resolvedProcessor);
+  return shapeStockRequest(withComponents);
 }
 
-export async function rejectStockRequest(id, adminId, rejectionReason) {
+export async function rejectStockRequest(id, admin, rejectionReason) {
+  const adminId = typeof admin === 'object' ? admin.user_id : admin;
+  const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
+
   const result = await pool.query(
     `UPDATE stock_requests
      SET status = 'REJECTED',
@@ -199,8 +436,12 @@ export async function rejectStockRequest(id, adminId, rejectionReason) {
     throw new AppError(409, 'REQUEST_NOT_PENDING', `Request is already ${existing.status.toLowerCase()}`);
   }
 
-  await notify(result.rows[0], 'stock_request.rejected');
-  return getStockRequest(id);
+  const enriched = await enrichProcessorIdentity(await loadRequestRow(id), adminId);
+  const resolvedProcessor = processor?.displayName
+    ? processor
+    : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email });
+  await notify(enriched, 'stock_request.rejected', resolvedProcessor);
+  return shapeStockRequest(enriched);
 }
 
 export async function getStockRequestByReference(reference, sourceSystem = 'PSMS') {
@@ -209,7 +450,7 @@ export async function getStockRequestByReference(reference, sourceSystem = 'PSMS
     [reference, sourceSystem],
   );
   if (!result.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
-  return camelize(result.rows[0]);
+  return shapeStockRequest(result.rows[0]);
 }
 
 export async function getAvailability(input) {

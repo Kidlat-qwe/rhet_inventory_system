@@ -9,6 +9,7 @@ const statusLabels = {
   FULFILLED: 'Fulfilled',
   RECEIVED: 'Received',
   NEEDS_ATTENTION: 'Needs attention',
+  MATCHED: 'Matched',
   DEDUCTED: 'Deducted',
   UNMATCHED: 'Unmatched',
   OVERSOLD: 'Oversold',
@@ -20,6 +21,11 @@ const statusLabels = {
   EXPIRED: 'Expired',
   ADMIN: 'Admin',
   USER: 'User',
+  PROCESSING: 'Processing',
+  READY_TO_SHIP: 'Ready to Ship',
+  SHIPPED: 'Shipped',
+  RETURN: 'Return',
+  RETURN_CONFIRMED: 'Return Confirmed',
 }
 
 const movementLabels = {
@@ -31,6 +37,7 @@ const movementLabels = {
   RELEASED: 'Released',
   CANCELLED: 'Cancelled',
   ONLINE_SALE: 'Online sale',
+  CHANNEL_ALLOCATION: 'Channel allocation',
 }
 
 export function formatStatus(status) {
@@ -76,6 +83,15 @@ export function initials(name) {
 export function greetingName(name) {
   if (!name) return 'there'
   return name.split(/\s+/)[0]
+}
+
+// Normalize free-text inventory labels (item name / variation): lowercase and
+// turn spaces into hyphens so values stay consistent for SKUs and matching.
+export function normalizeInventoryText(value = '') {
+  return String(value)
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
 }
 
 export function statusClass(status) {

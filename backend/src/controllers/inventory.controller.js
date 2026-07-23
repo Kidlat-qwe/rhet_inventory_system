@@ -8,6 +8,7 @@ export async function list(req, res) {
 }
 export async function get(req, res) { success(res, await inventory.getInventory(req.validated.params.id)); }
 export async function create(req, res) { success(res, await inventory.createInventory(req.validated.body, req.admin.user_id), null, 201); }
+export async function createBatch(req, res) { success(res, await inventory.createInventoryBatch(req.validated.body.items, req.admin.user_id), null, 201); }
 export async function update(req, res) { success(res, await inventory.updateInventory(req.validated.params.id, req.validated.body, req.admin.user_id)); }
 export async function move(req, res) { success(res, await inventory.createMovement(req.validated.params.id, req.validated.body, req.admin.user_id), null, 201); }
 export async function movements(req, res) {

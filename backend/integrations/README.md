@@ -2,15 +2,22 @@
 
 Machine-to-machine API for any external app to request stock from RHET Inventory.
 
-## Documentation
+## Canonical documentation (share with partners)
 
 | Document | Use when |
 |---|---|
-| **[EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md)** | Full reference (URLs, API, matching, webhooks, troubleshooting) |
-| **[EXTERNAL_SYSTEM_PASTE_PROMPT.md](./EXTERNAL_SYSTEM_PASTE_PROMPT.md)** | Copy-paste into Cursor / another repo to implement integration |
-| **[PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md)** | PSMS/CMS-specific notes and field mapping |
-| **[SHOPEE_ONLINE_ORDERS.md](./SHOPEE_ONLINE_ORDERS.md)** | Shopee online orders (CSV/manual now, live API later) |
-| **[CMS_PROCESSED_BY_FIX.md](./CMS_PROCESSED_BY_FIX.md)** | CMS still shows "RHET Inventory" in Approved By — map `processedBy` |
+| **[docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md](../../docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md)** | Full partner guide — auth, catalog, stock requests, **Learning Kits**, webhooks, checklists |
+| **[docs/external-system-integrations/README.md](../../docs/external-system-integrations/README.md)** | Index |
+
+## Repo notes (internal)
+
+| Document | Use when |
+|---|---|
+| [EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md) | Earlier in-repo reference (prefer the docs/ guide for partners) |
+| [EXTERNAL_SYSTEM_PASTE_PROMPT.md](./EXTERNAL_SYSTEM_PASTE_PROMPT.md) | Copy-paste into Cursor / another repo to implement integration |
+| [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md) | PSMS/CMS-specific notes and field mapping |
+| [SHOPEE_ONLINE_ORDERS.md](./SHOPEE_ONLINE_ORDERS.md) | Shopee allocation stock model + fulfillment tracking board |
+| [CMS_PROCESSED_BY_FIX.md](./CMS_PROCESSED_BY_FIX.md) | CMS still shows "RHET Inventory" in Approved By — map `processedBy` |
 
 ## Quick start
 
@@ -41,14 +48,14 @@ curl https://api-inventory.lca-app.com/api/v1/integrations/catalog \
 X-Integration-Key: rhet_<system>_<secret>
 ```
 
-Keys are generated in RHET → **API Keys** (hashed in DB). Legacy shared `PSMS_INTEGRATION_KEY` for **incoming** auth is not used.
+Keys are generated in RHET → **API Keys** (hashed in DB).
 
 ## Workflow
 
 1. External backend → `POST /stock-requests` → RHET **Pending**
 2. RHET user → **Stock Requests** → Review → Approve
-3. RHET warehouse stock **decreases**
-4. Webhook → external system → local/branch stock **increases** (your code)
+3. RHET warehouse stock **decreases** (kits also deduct resolved components)
+4. Webhook → external system → local/branch stock **increases** (partner code)
 
 ## API summary
 
@@ -56,20 +63,7 @@ Keys are generated in RHET → **API Keys** (hashed in DB). Legacy shared `PSMS_
 |---|---|---|
 | GET | `/catalog` | Categories + items |
 | GET | `/availability` | Stock check |
-| POST | `/stock-requests` | Submit request |
-| GET | `/stock-requests/:id` | Poll status (`processedBy` = approver display name) |
+| POST | `/stock-requests` | Submit request (Learning Kits need `items[].components`) |
+| GET | `/stock-requests/:id` | Poll status |
 
 Base URL: `https://api-inventory.lca-app.com/api/v1/integrations` (production)
-
-## Webhook `processedBy`
-
-On `stock_request.fulfilled` / `stock_request.rejected`, payload includes:
-
-```json
-"processedBy": "Abby",
-"approvedBy": "Abby",
-"processedByName": "Abby",
-"processedByUserId": "e16bb708-1396-40aa-95e0-7235e20d7f60"
-```
-
-`processedBy` (and aliases) are always a **display name**, never a UUID. Use `processedByUserId` if you need the user id.

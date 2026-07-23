@@ -4,7 +4,16 @@ export function StockModal({ item, busy, close, adjust }) {
   const [kind, setKind] = useState('add')
   const [qty, setQty] = useState(1)
   const [remarks, setRemarks] = useState('')
-  const nextStock = Math.max(0, item.stocks + (kind === 'add' ? Number(qty) : -Number(qty)))
+
+  const numericQty = Number(qty) || 0
+  const nextStock = kind === 'adjust'
+    ? Math.max(0, numericQty)
+    : Math.max(0, item.stocks + (kind === 'add' ? numericQty : -numericQty))
+
+  function selectKind(next) {
+    setKind(next)
+    setQty(next === 'adjust' ? item.stocks : 1)
+  }
 
   return (
     <div className="modal-backdrop">
@@ -14,10 +23,21 @@ export function StockModal({ item, busy, close, adjust }) {
           <button type="button" onClick={close}>×</button>
         </div>
         <div className="toggle">
-          <button type="button" className={kind === 'add' ? 'selected' : ''} onClick={() => setKind('add')}>＋ Add stock</button>
-          <button type="button" className={kind === 'deduct' ? 'selected' : ''} onClick={() => setKind('deduct')}>− Deduct stock</button>
+          <button type="button" className={kind === 'add' ? 'selected' : ''} onClick={() => selectKind('add')}>＋ Add stock</button>
+          <button type="button" className={kind === 'deduct' ? 'selected' : ''} onClick={() => selectKind('deduct')}>− Deduct stock</button>
+          <button type="button" className={kind === 'adjust' ? 'selected' : ''} onClick={() => selectKind('adjust')}>⇄ Adjust</button>
         </div>
-        <label>Quantity<input type="number" min="1" max={kind === 'deduct' ? item.stocks : 999999} value={qty} onChange={(e) => setQty(e.target.value)} required /></label>
+        <label>
+          {kind === 'adjust' ? 'New stock quantity' : 'Quantity'}
+          <input
+            type="number"
+            min={kind === 'adjust' ? 0 : 1}
+            max={kind === 'deduct' ? item.stocks : 999999}
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            required
+          />
+        </label>
         <label>Remarks<textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Add transaction notes (optional)" /></label>
         <div className="stock-preview"><span>New stock quantity</span><strong>{nextStock}</strong></div>
         <div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save transaction'}</button></div>

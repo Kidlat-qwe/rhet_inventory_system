@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
+import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { usePagination } from '../../hooks/usePagination'
 import { formatDate } from '../../utils/format'
 
 export default function ReleaseLogsPage({ requests }) {
@@ -35,6 +37,8 @@ export default function ReleaseLogsPage({ requests }) {
       return haystack.includes(query)
     })
   }, [requests, search])
+
+  const { page, setPage, pageItems, total } = usePagination(releaseLogs, 15)
 
   return (
     <>
@@ -77,7 +81,7 @@ export default function ReleaseLogsPage({ requests }) {
                 </tr>
               </thead>
               <tbody>
-                {releaseLogs.map((request) => (
+                {pageItems.map((request) => (
                   <tr key={request.requestId}>
                     <td className="muted">{formatDate(request.processedAt || request.updatedAt || request.createdAt)}</td>
                     <td>
@@ -103,6 +107,7 @@ export default function ReleaseLogsPage({ requests }) {
                 ))}
               </tbody>
             </table>
+            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="releases" />
           </div>
         ) : (
           <EmptyState
