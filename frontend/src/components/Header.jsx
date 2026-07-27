@@ -4,6 +4,7 @@ import { firebaseConfigured, sendPasswordResetForCurrentUser } from '../services
 import { Icon } from './Icon'
 
 const SEEN_STORAGE_KEY = 'rhet_seen_stock_request_ids'
+const TOAST_MS = 6500
 
 function readSeenIds() {
   try {
@@ -34,6 +35,11 @@ function requestLabel(request) {
   return parts.join(' · ') || request.externalReference || 'Stock request'
 }
 
+function formatBadgeCount(count) {
+  if (count > 99) return '99+'
+  return String(count)
+}
+
 export function Header({ page, menu, logout, admin, pendingRequests = [], onOpenStockRequests }) {
   const roleLabel = String(admin?.role || '').toUpperCase() === 'USER' ? 'User' : 'Admin'
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -43,8 +49,11 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
   const [resetError, setResetError] = useState('')
   const [resetSent, setResetSent] = useState(false)
   const [seenIds, setSeenIds] = useState(() => readSeenIds())
+  const [toast, setToast] = useState(null)
   const notificationsRef = useRef(null)
   const accountRef = useRef(null)
+  const toastPrimedRef = useRef(false)
+  const knownUnreadIdsRef = useRef(new Set())
 
   const accountEmail = admin?.email || ''
 
@@ -55,10 +64,45 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
     [pendingRequests],
   )
 
-  const unreadCount = useMemo(
-    () => pending.filter((request) => !seenIds.has(String(request.requestId))).length,
+  const unread = useMemo(
+    () => pending.filter((request) => !seenIds.has(String(request.requestId))),
     [pending, seenIds],
   )
+
+  const unreadCount = unread.length
+
+  useEffect(() => {
+    const unreadIds = unread.map((request) => String(request.requestId))
+
+    if (!toastPrimedRef.current) {
+      toastPrimedRef.current = true
+      knownUnreadIdsRef.current = new Set(unreadIds)
+      return
+    }
+
+    const freshIds = unreadIds.filter((id) => !knownUnreadIdsRef.current.has(id))
+    knownUnreadIdsRef.current = new Set(unreadIds)
+
+    if (freshIds.length === 0) return
+
+    const newest = pending.find((request) => String(request.requestId) === freshIds[0])
+    setToast({
+      key: `${Date.now()}-${freshIds[0]}`,
+      count: freshIds.length,
+      title: freshIds.length === 1
+        ? `${newest?.sourceSystem || 'External'} requested stock`
+        : `${freshIds.length} new stock requests`,
+      detail: freshIds.length === 1
+        ? `${requestLabel(newest)} · qty ${newest?.quantity ?? '—'}`
+        : 'Open notifications to review pending requests.',
+    })
+  }, [pending, unread])
+
+  useEffect(() => {
+    if (!toast) return undefined
+    const timer = window.setTimeout(() => setToast(null), TOAST_MS)
+    return () => window.clearTimeout(timer)
+  }, [toast])
 
   useEffect(() => {
     if (!notificationsOpen && !accountOpen) return undefined
@@ -87,8 +131,12 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
     }
   }, [notificationsOpen, accountOpen])
 
-  function markPendingSeen() {
-    if (!pending.length) return
+  function markAllAsRead() {
+    if (!pending.length) {
+      setSeenIds((prev) => prev)
+      knownUnreadIdsRef.current = new Set()
+      return
+    }
     setSeenIds((prev) => {
       const next = new Set(prev)
       pending.forEach((request) => next.add(String(request.requestId)))
@@ -96,15 +144,13 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
       writeSeenIds(trimmed)
       return new Set(trimmed)
     })
+    knownUnreadIdsRef.current = new Set()
+    setToast(null)
   }
 
   function toggleNotifications() {
     setAccountOpen(false)
-    setNotificationsOpen((wasOpen) => {
-      const next = !wasOpen
-      if (next) markPendingSeen()
-      return next
-    })
+    setNotificationsOpen((wasOpen) => !wasOpen)
   }
 
   function toggleAccount() {
@@ -114,7 +160,7 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
 
   function openRequests() {
     setNotificationsOpen(false)
-    markPendingSeen()
+    setToast(null)
     onOpenStockRequests?.()
   }
 
@@ -171,7 +217,11 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
               aria-haspopup="true"
             >
               <Icon name="bell" size={18} />
-              {unreadCount > 0 && <i aria-hidden="true" />}
+              {unreadCount > 0 && (
+                <span className="notification-badge" aria-hidden="true">
+                  {formatBadgeCount(unreadCount)}
+                </span>
+              )}
             </button>
             {notificationsOpen && (
               <div className="notification-panel" role="menu">
@@ -180,41 +230,51 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
                     <strong>Notifications</strong>
                     <p>
                       {pending.length
-                        ? `${pending.length} pending stock request${pending.length === 1 ? '' : 's'}`
+                        ? `${pending.length} pending · ${unreadCount} unread`
                         : 'No pending stock requests'}
                     </p>
                   </div>
-                  {pending.length > 0 && (
-                    <button type="button" className="notification-link" onClick={openRequests}>
-                      View all
-                    </button>
-                  )}
+                  <div className="notification-panel-actions">
+                    {unreadCount > 0 && (
+                      <button type="button" className="notification-link" onClick={markAllAsRead}>
+                        Mark all as Read
+                      </button>
+                    )}
+                    {pending.length > 0 && (
+                      <button type="button" className="notification-link" onClick={openRequests}>
+                        View all
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="notification-list">
                   {pending.length === 0 ? (
                     <div className="notification-empty">You are caught up. New requests from external systems will appear here.</div>
                   ) : (
-                    pending.slice(0, 8).map((request) => (
-                      <button
-                        key={request.requestId}
-                        type="button"
-                        className="notification-item"
-                        onClick={openRequests}
-                      >
-                        <span className="notification-dot" aria-hidden="true" />
-                        <span className="notification-item-body">
-                          <strong>
-                            {request.sourceSystem || 'External'} requested stock
-                          </strong>
-                          <span>{requestLabel(request)} · qty {request.quantity}</span>
-                          <small>
-                            {request.externalReference ? `${request.externalReference} · ` : ''}
-                            {formatDate(request.createdAt || request.requestDate)}
-                            {request.requestedBy ? ` · ${request.requestedBy}` : ''}
-                          </small>
-                        </span>
-                      </button>
-                    ))
+                    pending.slice(0, 8).map((request) => {
+                      const isUnread = !seenIds.has(String(request.requestId))
+                      return (
+                        <button
+                          key={request.requestId}
+                          type="button"
+                          className={`notification-item${isUnread ? ' is-unread' : ''}`}
+                          onClick={openRequests}
+                        >
+                          <span className={`notification-dot${isUnread ? '' : ' is-read'}`} aria-hidden="true" />
+                          <span className="notification-item-body">
+                            <strong>
+                              {request.sourceSystem || 'External'} requested stock
+                            </strong>
+                            <span>{requestLabel(request)} · qty {request.quantity}</span>
+                            <small>
+                              {request.externalReference ? `${request.externalReference} · ` : ''}
+                              {formatDate(request.createdAt || request.requestDate)}
+                              {request.requestedBy ? ` · ${request.requestedBy}` : ''}
+                            </small>
+                          </span>
+                        </button>
+                      )
+                    })
                   )}
                 </div>
               </div>
@@ -250,6 +310,36 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
           </div>
         </div>
       </header>
+
+      {toast && (
+        <div className="notification-toast-stack" aria-live="polite">
+          <div className="notification-toast" role="status">
+            <span className="notification-toast-icon" aria-hidden="true">
+              <Icon name="bell" size={16} />
+            </span>
+            <button
+              type="button"
+              className="notification-toast-body"
+              onClick={() => {
+                setToast(null)
+                setNotificationsOpen(true)
+                setAccountOpen(false)
+              }}
+            >
+              <strong>{toast.title}</strong>
+              <span>{toast.detail}</span>
+            </button>
+            <button
+              type="button"
+              className="notification-toast-close"
+              aria-label="Dismiss notification"
+              onClick={() => setToast(null)}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {forgotOpen && (
         <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeForgotPassword()}>
