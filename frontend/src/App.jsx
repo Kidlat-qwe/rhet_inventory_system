@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import './App.css'
 import { EmptyState } from './components/EmptyState'
 import { Header } from './components/Header'
+// Re-enable after redeploy by setting ENABLE_HELP_ASSISTANT = true below.
+import { HelpAssistant } from './components/HelpAssistant'
 import { PageLoading } from './components/PageLoading'
 import { Sidebar } from './components/Sidebar'
 import {
@@ -40,6 +42,9 @@ import {
 } from './services/inventoryApi'
 import { fetchChannelAllocations } from './services/channelAllocationApi'
 import { fetchOnlineOrders } from './services/onlineOrdersApi'
+
+/** Set to true after redeploy to show the floating Help Assistant again. */
+const ENABLE_HELP_ASSISTANT = false
 
 function AppShell() {
   const location = useLocation()
@@ -274,6 +279,7 @@ function AppShell() {
         />
         <div className="content">{content}</div>
       </main>
+      {ENABLE_HELP_ASSISTANT && <HelpAssistant admin={admin} />}
     </div>
   )
 }

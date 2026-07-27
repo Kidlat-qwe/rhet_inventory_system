@@ -14,6 +14,7 @@ Reusable presentational and modal components used across admin and user pages.
 | `CategoryModal.jsx` | Create / edit category. **Type** (behavior) can be reused; **name** must stay unique. Stores `categoryKind`. |
 | `ItemModal.jsx` | Create / edit a single inventory item. For **Learning Kit**, BOM rows are **category-only**; the external stock request fills concrete items. Available kit stock is computed from category totals. |
 | `UniformItemModal.jsx` | Add / edit a uniform set: creates or updates both type rows (Polo+Short / Blouse+Skirt / Shirt+Pants) together, sharing gender and size |
+| `HelpAssistant.jsx` | Floating help button (bottom-right). Rule-based FAQ chatbot: role-based topics (Admin vs User). **Currently hidden** — set `ENABLE_HELP_ASSISTANT = true` in `App.jsx` to re-enable after redeploy. |
 | `ActionsMenu.jsx` | Floating ellipsis (•••) actions menu rendered in a portal |
 | `Pagination.jsx` | Presentational pager (pairs with the `usePagination` hook) |
 | `StockModal.jsx` | Add / deduct / adjust stock form |

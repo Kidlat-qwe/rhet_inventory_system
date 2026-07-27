@@ -34,3 +34,9 @@ export async function sendPasswordResetForCurrentUser() {
   await sendPasswordResetEmail(auth, email)
   return email
 }
+
+/** Send Firebase password-reset email for any given address (login page). */
+export async function sendPasswordResetByEmail(email) {
+  if (!auth) throw new Error('Firebase is not configured in this environment.')
+  await sendPasswordResetEmail(auth, email)
+}
