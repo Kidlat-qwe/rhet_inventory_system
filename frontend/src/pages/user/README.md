@@ -10,10 +10,9 @@ User role entry points. Each file wraps a shared page and forwards all props unc
 | `userOnlineOrders.jsx` | `OnlineOrdersPage` |
 | `userReleaseLogs.jsx` | `ReleaseLogsPage` |
 | `userStockMovements.jsx` | `StockMovementsPage` |
-| `userReports.jsx` | `ReportsPage` |
 | `userCategories.jsx` | `CategoriesPage` |
 
-Users do not receive API Keys, Users, or Settings routes (those remain admin-only).
+Users do not receive API Keys or Users routes (those remain admin-only).
 
 Import via the barrel:
 

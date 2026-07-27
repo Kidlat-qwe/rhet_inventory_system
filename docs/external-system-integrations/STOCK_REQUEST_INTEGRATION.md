@@ -136,8 +136,8 @@ Typical `data` shape:
 ```json
 {
   "categories": [
-    { "categoryId": "uuid", "categoryName": "School Uniform" },
-    { "categoryId": "uuid", "categoryName": "Learning Kit" }
+    { "categoryId": "uuid", "categoryName": "School Uniform", "categoryKind": "SCHOOL_UNIFORM" },
+    { "categoryId": "uuid", "categoryName": "Learning Kit", "categoryKind": "LEARNING_KIT" }
   ],
   "items": [
     {
@@ -147,17 +147,20 @@ Typical `data` shape:
       "stocks": 40,
       "status": "ACTIVE",
       "variation": "Male · Polo · S",
-      "categoryName": "School Uniform"
+      "categoryName": "School Uniform",
+      "categoryKind": "SCHOOL_UNIFORM"
     }
   ]
 }
 ```
 
+**Important:** Categories may include `categoryKind` (`SCHOOL_UNIFORM`, `PE_UNIFORM`, `LCA_SHIRT`, `LEARNING_KIT`, `OTHER`). Prefer kind for form behavior; always send the exact `categoryName` for matching. Names are unique; the same kind may be reused under different names.
+
 **How to use it**
 
-- Uniform dropdowns: filter items by `categoryName`, then expose unique `gender` / `type` / `size` from catalog (or parse `variation` as `Gender · Type · Size`).
+- Uniform dropdowns: filter items by `categoryName` (or `categoryKind`), then expose unique `gender` / `type` / `size` from catalog (or parse `variation` as `Gender · Type · Size`).
 - Non-uniform: pick `itemName` / `sku` from items in that category.
-- Learning Kit **parent** lines: pick kit by `categoryName = "Learning Kit"` + `itemName` (and optionally confirm `sku`).
+- Learning Kit **parent** lines: pick kit by Learning Kit category + `itemName` (and optionally confirm `sku`).
 
 **Important limitation today:** `/catalog` lists Learning Kit **items**, but does **not** yet return each kit’s bill of materials (which categories the kit includes).  
 Until that is exposed, coordinate with RHET admins on each kit’s included categories, and keep that recipe in your config or UI. If you omit a required category in `components`, RHET stores a `failureReason` and approve will fail.

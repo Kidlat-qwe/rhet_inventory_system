@@ -12,10 +12,9 @@ export function Sidebar({ open, close, admin, pendingRequests, attentionOrders =
     ['Online Orders', 'cart'],
     ['Release Logs', 'list'],
     ['Stock Movements', 'swap'],
-    ['Reports', 'report'],
   ]
   const managementLinks = isAdmin
-    ? [['Categories', 'tag'], ['API Keys', 'link'], ['Users', 'users'], ['Settings', 'settings']]
+    ? [['Categories', 'tag'], ['API Keys', 'link'], ['Users', 'users']]
     : [['Categories', 'tag']]
 
   function linkClass({ isActive }) {
@@ -55,11 +54,9 @@ export function Sidebar({ open, close, admin, pendingRequests, attentionOrders =
           </NavLink>
         ))}
       </nav>
-      <div className="help-card"><span>?</span><strong>Need some help?</strong><p>View the system guide and learn the inventory workflow.</p><button type="button">Open guide</button></div>
       <div className="sidebar-user">
         <div className="avatar">{initials(admin?.fullName)}</div>
         <div><strong>{admin?.fullName || 'User'}</strong><span>{formatStatus(admin?.role || 'USER')}</span></div>
-        <button type="button">•••</button>
       </div>
     </aside>
   )

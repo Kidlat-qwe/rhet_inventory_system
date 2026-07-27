@@ -8,10 +8,8 @@ export const PE_UNIFORM_TYPES = ['Shirt', 'Pants']
 
 export const LCA_SHIRT_TYPES = ['Shirt']
 
-// Category-type presets shown when creating a category. The chosen preset's
-// canonical name encodes the "kind" (no schema change): uniform-like presets
-// drive the gender/type/size inputs on the inventory modal, while OTHER uses a
-// free-text variation and a custom name.
+// Category-type presets shown when creating a category.
+// category_kind is stored separately so the same type can be reused with unique names.
 export const CATEGORY_TYPE_OPTIONS = [
   { value: 'SCHOOL_UNIFORM', label: 'School Uniform', categoryName: 'School Uniform' },
   { value: 'PE_UNIFORM', label: 'PE Uniform', categoryName: 'PE Uniform' },
@@ -19,6 +17,8 @@ export const CATEGORY_TYPE_OPTIONS = [
   { value: 'LEARNING_KIT', label: 'Learning Kit', categoryName: 'Learning Kit' },
   { value: 'OTHER', label: 'Others', categoryName: '' },
 ]
+
+const UNIFORM_KINDS = new Set(['SCHOOL_UNIFORM', 'PE_UNIFORM', 'LCA_SHIRT'])
 
 // Type dropdown options keyed by the normalized (lowercased) category name.
 const UNIFORM_TYPE_LISTS = {
@@ -79,6 +79,10 @@ const CATEGORY_FIELD_PLACEHOLDERS = {
   'learning kit': { itemName: 'e.g. grade-1-learning-kit', variation: 'e.g. grade-1, sy-2026' },
 }
 
+export function categoryKindOf(category) {
+  return String(category?.categoryKind || '').trim().toUpperCase()
+}
+
 export function isLcaShirtCategoryName(categoryName = '') {
   const normalized = categoryName.toLowerCase().trim()
   if (!normalized) return false
@@ -92,7 +96,11 @@ export function isLearningKitCategoryName(categoryName = '') {
 
 export function isLearningKitCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
-  return isLearningKitCategoryName(category?.categoryName)
+  if (!category) return false
+  const kind = categoryKindOf(category)
+  if (kind === 'LEARNING_KIT') return true
+  if (kind && kind !== 'OTHER') return false
+  return isLearningKitCategoryName(category.categoryName)
 }
 
 export function isUniformCategoryName(categoryName = '') {
@@ -103,9 +111,21 @@ export function isUniformCategoryName(categoryName = '') {
     || isLcaShirtCategoryName(normalized)
 }
 
+export function isUniformCategory(categoryId, categories = []) {
+  const category = categories.find((entry) => entry.categoryId === categoryId)
+  if (!category) return false
+  const kind = categoryKindOf(category)
+  if (UNIFORM_KINDS.has(kind)) return true
+  if (kind === 'LEARNING_KIT' || kind === 'OTHER') return false
+  return isUniformCategoryName(category.categoryName)
+}
+
 export function isSchoolUniformCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
-  return category?.categoryName?.toLowerCase().trim() === 'school uniform'
+  if (!category) return false
+  if (categoryKindOf(category) === 'SCHOOL_UNIFORM') return true
+  if (categoryKindOf(category)) return false
+  return category.categoryName?.toLowerCase().trim() === 'school uniform'
 }
 
 // Gender options available for a category. School Uniform is Male/Female only
@@ -117,13 +137,14 @@ export function getUniformGendersForCategory(categoryId, categories = []) {
   return UNIFORM_GENDERS
 }
 
-export function isUniformCategory(categoryId, categories = []) {
-  const category = categories.find((entry) => entry.categoryId === categoryId)
-  return isUniformCategoryName(category?.categoryName)
-}
-
 export function getFieldPlaceholders(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
+  const kind = categoryKindOf(category)
+  if (kind === 'SCHOOL_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['school uniform']
+  if (kind === 'PE_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['pe uniform']
+  if (kind === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS['lca t-shirt']
+  if (kind === 'LEARNING_KIT') return CATEGORY_FIELD_PLACEHOLDERS['learning kit']
+
   const normalized = category?.categoryName?.toLowerCase().trim() || ''
   if (!normalized) return DEFAULT_FIELD_PLACEHOLDERS
   if (CATEGORY_FIELD_PLACEHOLDERS[normalized]) return CATEGORY_FIELD_PLACEHOLDERS[normalized]
@@ -138,17 +159,18 @@ export function getFieldPlaceholders(categoryId, categories = []) {
 
 export function getUniformTypesForCategory(categoryId, categories = [], gender = '') {
   const category = categories.find((entry) => entry.categoryId === categoryId)
-  if (!isUniformCategoryName(category?.categoryName)) return []
-  const normalized = category.categoryName.toLowerCase().trim()
+  if (!isUniformCategory(categoryId, categories)) return []
+  const kind = categoryKindOf(category)
 
-  // School Uniform types depend on gender: Female → Blouse + Skirt,
-  // Male / Unisex → Polo + Short.
-  if (normalized === 'school uniform') {
+  if (kind === 'SCHOOL_UNIFORM' || (!kind && category?.categoryName?.toLowerCase().trim() === 'school uniform')) {
     return gender === 'Female' ? SCHOOL_UNIFORM_FEMALE_TYPES : SCHOOL_UNIFORM_TYPES
   }
+  if (kind === 'LCA_SHIRT' || (!kind && isLcaShirtCategoryName(category?.categoryName))) {
+    return LCA_SHIRT_TYPES
+  }
+  if (kind === 'PE_UNIFORM') return PE_UNIFORM_TYPES
 
-  if (isLcaShirtCategoryName(normalized)) return LCA_SHIRT_TYPES
-
+  const normalized = category?.categoryName?.toLowerCase().trim() || ''
   return UNIFORM_TYPE_LISTS[normalized] || PE_UNIFORM_TYPES
 }
 

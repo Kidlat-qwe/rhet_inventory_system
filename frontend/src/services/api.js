@@ -24,26 +24,3 @@ export async function api(path, options = {}) {
   if (!response.ok) throw new Error(payload.error?.message || 'Request failed')
   return payload
 }
-
-export async function downloadCsv(path, filename) {
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: await authHeaders(),
-  })
-  if (!response.ok) {
-    let message = 'Export failed'
-    try {
-      const payload = await response.json()
-      message = payload.error?.message || message
-    } catch {
-      // CSV errors may not be JSON.
-    }
-    throw new Error(message)
-  }
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}

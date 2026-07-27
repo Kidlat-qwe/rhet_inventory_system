@@ -2,6 +2,8 @@ export function buildUniformVariation(gender, type, size) {
   return `${gender} · ${type} · ${size}`;
 }
 
+const UNIFORM_KINDS = new Set(['SCHOOL_UNIFORM', 'PE_UNIFORM', 'LCA_SHIRT']);
+
 // Categories whose items are identified by gender/type/size. Kept in sync with
 // the frontend category-type presets (see constants/uniformOptions.js).
 const UNIFORM_LIKE_CATEGORY_NAMES = new Set([
@@ -13,7 +15,7 @@ const UNIFORM_LIKE_CATEGORY_NAMES = new Set([
   'lca tshirt',
 ]);
 
-export function isUniformLikeCategory(categoryName = '') {
+export function isUniformLikeCategoryName(categoryName = '') {
   const normalized = categoryName.toLowerCase().trim();
   if (!normalized) return false;
   return UNIFORM_LIKE_CATEGORY_NAMES.has(normalized)
@@ -21,11 +23,22 @@ export function isUniformLikeCategory(categoryName = '') {
     || (normalized.includes('lca') && normalized.includes('shirt'));
 }
 
+/** Accepts a category row ({ category_kind }) or a plain name string. */
+export function isUniformLikeCategory(categoryOrName = '') {
+  if (categoryOrName && typeof categoryOrName === 'object') {
+    const kind = categoryOrName.categoryKind || categoryOrName.category_kind;
+    if (UNIFORM_KINDS.has(kind)) return true;
+    if (kind === 'LEARNING_KIT' || kind === 'OTHER') return false;
+    return isUniformLikeCategoryName(categoryOrName.categoryName || categoryOrName.category_name || '');
+  }
+  return isUniformLikeCategoryName(categoryOrName);
+}
+
 export async function resolveInventoryItem(db, input) {
   const { categoryName, gender, type, size, itemName, sku } = input;
 
   const categoryResult = await db.query(
-    'SELECT category_id, category_name FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
+    'SELECT category_id, category_name, category_kind FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
     [categoryName, 'ACTIVE'],
   );
   if (!categoryResult.rowCount) {
@@ -36,7 +49,7 @@ export async function resolveInventoryItem(db, input) {
   const values = [category.category_id];
   const where = ['i.category_id = $1', "i.lifecycle_status = 'ACTIVE'"];
 
-  if (isUniformLikeCategory(category.category_name)) {
+  if (isUniformLikeCategory(category)) {
     if (!gender || !type || !size) {
       return { error: 'Gender, type, and size are required for uniform items' };
     }
@@ -62,7 +75,7 @@ export async function resolveInventoryItem(db, input) {
   }
 
   const result = await db.query(
-    `SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.status, i.variation, c.category_name
+    `SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.status, i.variation, c.category_name, c.category_kind
      FROM inventory i
      JOIN categories c ON c.category_id = i.category_id
      WHERE ${where.join(' AND ')}
@@ -72,7 +85,7 @@ export async function resolveInventoryItem(db, input) {
   );
 
   if (!result.rowCount) {
-    const hint = isUniformLikeCategory(category.category_name)
+    const hint = isUniformLikeCategory(category)
       ? `${gender} · ${type} · ${size}`
       : (sku || itemName);
     return { error: `No inventory item matched ${category.category_name} (${hint})` };

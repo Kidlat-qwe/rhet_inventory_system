@@ -1,6 +1,6 @@
 # Admin Pages
 
-Admin role entry points. Workspace pages re-export shared implementations; API Keys, Users, and Settings contain full admin-only UI.
+Admin role entry points. Workspace pages re-export shared implementations; API Keys and Users contain full admin-only UI.
 
 | File | Type |
 |------|------|
@@ -10,11 +10,9 @@ Admin role entry points. Workspace pages re-export shared implementations; API K
 | `adminOnlineOrders.jsx` | Wrapper → `OnlineOrdersPage` |
 | `adminReleaseLogs.jsx` | Wrapper → `ReleaseLogsPage` |
 | `adminStockMovements.jsx` | Wrapper → `StockMovementsPage` |
-| `adminReports.jsx` | Wrapper → `ReportsPage` |
 | `adminCategories.jsx` | Wrapper → `CategoriesPage` |
 | `adminApiKeys.jsx` | Full implementation |
-| `adminUsers.jsx` | Full implementation (list, role change, **Add user**) |
-| `adminSettings.jsx` | Full implementation |
+| `adminUsers.jsx` | Full implementation (add, edit name, change role, activate/deactivate) |
 
 Import via the barrel:
 

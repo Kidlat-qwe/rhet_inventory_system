@@ -1,5 +1,10 @@
 import { formatStatus, statusClass } from '../utils/format'
 
-export function StatusBadge({ status }) {
-  return <span className={`status ${statusClass(status)}`}><i />{formatStatus(status)}</span>
+export function StatusBadge({ status, title }) {
+  return (
+    <span className={`status ${statusClass(status)}`} title={title}>
+      <i />
+      {formatStatus(status)}
+    </span>
+  )
 }

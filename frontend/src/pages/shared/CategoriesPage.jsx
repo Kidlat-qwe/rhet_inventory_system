@@ -4,9 +4,14 @@ import { CategoryModal } from '../../components/CategoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { CATEGORY_TYPE_OPTIONS } from '../../constants/uniformOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { createCategory, deleteCategory, updateCategory } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
+
+function kindLabel(kind) {
+  return CATEGORY_TYPE_OPTIONS.find((option) => option.value === kind)?.label || kind || 'Others'
+}
 
 export default function CategoriesPage({ categories, items = [], canManage = false, onRefresh }) {
   const [modal, setModal] = useState(null) // { mode: 'create' } | { mode: 'edit', category }
@@ -21,12 +26,15 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
 
   const { page, setPage, pageItems, total } = usePagination(categories, 15)
 
-  async function saveCategory(name) {
+  async function saveCategory({ categoryName, categoryKind }) {
     setBusy(true)
     setError('')
     try {
-      if (modal?.mode === 'edit') await updateCategory(modal.category.categoryId, name.trim())
-      else await createCategory(name.trim())
+      if (modal?.mode === 'edit') {
+        await updateCategory(modal.category.categoryId, { categoryName, categoryKind })
+      } else {
+        await createCategory({ categoryName, categoryKind })
+      }
       setModal(null)
       await onRefresh()
     } catch (err) {
@@ -63,10 +71,11 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
         <div className="panel-head"><div><h2>All categories</h2><p>{categories.length} categories available</p></div></div>
         {categories.length ? (
           <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', minWidth: canManage ? '640px' : '520px' }}>
+            <table style={{ width: '100%', minWidth: canManage ? '720px' : '600px' }}>
               <thead>
                 <tr>
                   <th>Category</th>
+                  <th>Type</th>
                   <th>Items</th>
                   <th>Status</th>
                   <th>Created</th>
@@ -79,6 +88,7 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
                   return (
                     <tr key={category.categoryId}>
                       <td><strong>{category.categoryName}</strong></td>
+                      <td className="muted">{kindLabel(category.categoryKind)}</td>
                       <td className="muted">{itemCountByCategory.get(category.categoryId) || 0}</td>
                       <td><StatusBadge status={category.status} /></td>
                       <td className="muted">{formatDate(category.createdAt)}</td>

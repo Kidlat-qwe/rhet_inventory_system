@@ -11,8 +11,6 @@ import {
   AdminDashboard,
   AdminInventory,
   AdminReleaseLogs,
-  AdminReports,
-  AdminSettings,
   AdminStockMovements,
   AdminStockRequests,
   AdminUsers,
@@ -24,13 +22,11 @@ import {
   UserDashboard,
   UserInventory,
   UserReleaseLogs,
-  UserReports,
   UserStockMovements,
   UserStockRequests,
   UserOnlineOrders,
 } from './pages/user'
 import { ADMIN_PAGES, USER_PAGES, pageFromPath, pathForPage, roleBasePath } from './routes/paths'
-import { downloadCsv } from './services/api'
 import { firebaseConfigured, observeAuth, signOutAdmin } from './services/firebase'
 import {
   fetchUsers,
@@ -147,8 +143,8 @@ function AppShell() {
   }, [user, reload])
 
   useEffect(() => {
-    if (!firebaseConfigured || !user || loading) return
-    if (page !== 'Stock Requests') return
+    if (loading) return
+    if (firebaseConfigured && !user) return
 
     let cancelled = false
 
@@ -158,8 +154,10 @@ function AppShell() {
       await refreshStockRequests()
     }
 
+    // Poll on every page so the header notification badge updates when
+    // an external system submits a new stock request.
     poll()
-    const intervalId = setInterval(poll, 10000)
+    const intervalId = setInterval(poll, page === 'Stock Requests' ? 10000 : 20000)
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') poll()
@@ -197,14 +195,6 @@ function AppShell() {
     }
   }, [user, admin, loading, location.pathname, isAdmin, allowedPages, navigate])
 
-  async function handleExport() {
-    try {
-      await downloadCsv('/reports/inventory.csv', 'inventory-report.csv')
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
   function goTo(pageName) {
     navigate(pathForPage(isAdmin, pageName))
   }
@@ -223,7 +213,7 @@ function AppShell() {
         case 'Dashboard':
           return <AdminDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
         case 'Inventory':
-          return <AdminInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} onExport={handleExport} />
+          return <AdminInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} />
         case 'Stock Requests':
           return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
         case 'Online Orders':
@@ -238,10 +228,6 @@ function AppShell() {
           return <AdminUsers users={admins} currentAdmin={admin} onRefresh={refreshQuietly} />
         case 'API Keys':
           return <AdminApiKeys clients={integrationClients} onRefresh={refreshQuietly} />
-        case 'Reports':
-          return <AdminReports dashboard={dashboard} onExport={handleExport} />
-        case 'Settings':
-          return <AdminSettings admin={admin} />
         default:
           return <EmptyState title={page} message="This page is not available." />
       }
@@ -251,7 +237,7 @@ function AppShell() {
       case 'Dashboard':
         return <UserDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
       case 'Inventory':
-        return <UserInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} onExport={handleExport} />
+        return <UserInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} />
       case 'Stock Requests':
         return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
       case 'Online Orders':
@@ -262,8 +248,6 @@ function AppShell() {
         return <UserStockMovements movements={movements} />
       case 'Categories':
         return <UserCategories categories={categories} onRefresh={refreshQuietly} />
-      case 'Reports':
-        return <UserReports dashboard={dashboard} onExport={handleExport} />
       default:
         return <EmptyState title="Access restricted" message="You do not have access to this page." />
     }
@@ -280,7 +264,14 @@ function AppShell() {
       />
       {menu && <div className="mobile-overlay" onClick={() => setMenu(false)} />}
       <main>
-        <Header page={page} menu={() => setMenu(true)} logout={firebaseConfigured ? signOutAdmin : undefined} admin={admin} />
+        <Header
+          page={page}
+          menu={() => setMenu(true)}
+          logout={firebaseConfigured ? signOutAdmin : undefined}
+          admin={admin}
+          pendingRequests={stockRequests.filter((request) => request.status === 'PENDING')}
+          onOpenStockRequests={() => goTo('Stock Requests')}
+        />
         <div className="content">{content}</div>
       </main>
     </div>

@@ -24,6 +24,19 @@ import {
 } from '../../services/inventoryApi'
 import { formatCurrency, formatDate, normalizeInventoryText } from '../../utils/format'
 
+/** Prefer virtual kit availability when deciding stock health badges. */
+function effectiveItemStatus(item) {
+  if (item?.stockMode === 'VIRTUAL_BUNDLE') {
+    if (String(item.lifecycleStatus || '').toUpperCase() === 'INACTIVE') return 'INACTIVE'
+    const qty = Number(item.stocks) || 0
+    const threshold = Number(item.lowStockThreshold) || 0
+    if (qty <= 0) return 'OUT_OF_STOCK'
+    if (qty <= threshold) return 'LOW_STOCK'
+    return 'ACTIVE'
+  }
+  return item?.status
+}
+
 function CategoryStatus({ row }) {
   if (!row.itemCount) return <span className="muted">No items</span>
   if (!row.out && !row.low && !row.inactive) {
@@ -38,7 +51,7 @@ function CategoryStatus({ row }) {
   )
 }
 
-export default function InventoryPage({ items, categories, allocations = [], canManage = false, onRefresh, onExport }) {
+export default function InventoryPage({ items, categories, allocations = [], canManage = false, onRefresh }) {
   const [activeCategoryId, setActiveCategoryId] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -65,11 +78,12 @@ export default function InventoryPage({ items, categories, allocations = [], can
     let inactive = 0
     let lastUpdated = null
     catItems.forEach((item) => {
+      const status = effectiveItemStatus(item)
       totalStocks += item.stocks
       totalShopee += allocatedByItem.get(item.inventoryId) || 0
-      if (item.status === 'LOW_STOCK') low += 1
-      if (item.status === 'OUT_OF_STOCK') out += 1
-      if (item.status === 'INACTIVE') inactive += 1
+      if (status === 'LOW_STOCK') low += 1
+      if (status === 'OUT_OF_STOCK') out += 1
+      if (status === 'INACTIVE') inactive += 1
       if (!lastUpdated || new Date(item.updatedAt) > new Date(lastUpdated)) lastUpdated = item.updatedAt
     })
     return { ...category, itemCount: catItems.length, totalStocks, totalShopee, low, out, inactive, lastUpdated }
@@ -87,14 +101,14 @@ export default function InventoryPage({ items, categories, allocations = [], can
 
   const detailCounts = useMemo(() => ({
     all: detailItems.length,
-    low: detailItems.filter((item) => item.status === 'LOW_STOCK').length,
-    out: detailItems.filter((item) => item.status === 'OUT_OF_STOCK').length,
-    inactive: detailItems.filter((item) => item.status === 'INACTIVE').length,
+    low: detailItems.filter((item) => effectiveItemStatus(item) === 'LOW_STOCK').length,
+    out: detailItems.filter((item) => effectiveItemStatus(item) === 'OUT_OF_STOCK').length,
+    inactive: detailItems.filter((item) => effectiveItemStatus(item) === 'INACTIVE').length,
   }), [detailItems])
 
   const detailShown = useMemo(() => detailItems.filter((item) => {
     const matchesSearch = !search || `${item.itemName} ${item.sku}`.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = !statusFilter || item.status === statusFilter
+    const matchesStatus = !statusFilter || effectiveItemStatus(item) === statusFilter
     return matchesSearch && matchesStatus
   }), [detailItems, search, statusFilter])
 
@@ -283,7 +297,6 @@ export default function InventoryPage({ items, categories, allocations = [], can
             <p>Raw stocks for this category.</p>
           </div>
           <div>
-            <button type="button" className="secondary" onClick={onExport}>⇩ Export CSV</button>
             <button type="button" className="primary" onClick={startAdd}>＋ Add new item</button>
           </div>
         </div>
@@ -321,12 +334,18 @@ export default function InventoryPage({ items, categories, allocations = [], can
                 </tr>
               </thead>
               <tbody>
-                {detailShown.length ? detailPager.pageItems.map((item) => (
+                {detailShown.length ? detailPager.pageItems.map((item) => {
+                  const isVirtualKit = item.stockMode === 'VIRTUAL_BUNDLE' || isLearningKitCategory(item.categoryId, categories)
+                  const status = effectiveItemStatus(item)
+                  return (
                   <tr key={item.inventoryId}>
                     <td>
                       <div className="item-cell">
                         <div className="product-thumb"><Icon name="box" /></div>
-                        <strong>{item.itemName}</strong>
+                        <div>
+                          <strong>{item.itemName}</strong>
+                          {isVirtualKit && <small className="muted">Learning Kit · available kits from BOM</small>}
+                        </div>
                       </div>
                     </td>
                     <td><span className="sku-chip">{item.sku}</span></td>
@@ -336,17 +355,17 @@ export default function InventoryPage({ items, categories, allocations = [], can
                         type="button"
                         className="stock-link"
                         onClick={() => {
-                          if (item.stockMode === 'VIRTUAL_BUNDLE' || isLearningKitCategory(item.categoryId, categories)) {
-                            setError('Learning Kit stock is computed from pinned components. Restock those raw items (or edit the kit BOM) instead of adjusting kit stock directly.')
+                          if (isVirtualKit) {
+                            setError('Learning Kit stock is computed from included category stocks (BOM). Restock those raw items, or edit the kit BOM — do not adjust kit stock directly.')
                             return
                           }
                           setStock(item)
                         }}
-                        title={item.stockMode === 'VIRTUAL_BUNDLE' ? 'Computed from components' : 'Adjust stock'}
+                        title={isVirtualKit ? 'Available kits = limited by included category stocks' : 'Adjust stock'}
                       >
                         <strong className={item.stocks === 0 ? 'zero' : item.stocks <= item.lowStockThreshold ? 'low' : ''}>{item.stocks}</strong>
                         <small>
-                          {item.stockMode === 'VIRTUAL_BUNDLE' ? 'Computed from BOM' : `Threshold: ${item.lowStockThreshold}`}
+                          {isVirtualKit ? 'Available kits (from BOM)' : `Threshold: ${item.lowStockThreshold}`}
                         </small>
                       </button>
                     </td>
@@ -361,7 +380,14 @@ export default function InventoryPage({ items, categories, allocations = [], can
                       )}
                     </td>
                     <td className="metric-cell"><strong>{formatCurrency(item.price)}</strong></td>
-                    <td><StatusBadge status={item.status} /></td>
+                    <td>
+                      <StatusBadge
+                        status={status}
+                        title={isVirtualKit
+                          ? `Based on available kits (${item.stocks}). Learning Kit stock is computed from BOM categories.`
+                          : undefined}
+                      />
+                    </td>
                     <td><span className="muted">{formatDate(item.updatedAt)}</span></td>
                     <td>
                       <ActionsMenu
@@ -373,7 +399,8 @@ export default function InventoryPage({ items, categories, allocations = [], can
                       />
                     </td>
                   </tr>
-                )) : (
+                  )
+                }) : (
                   <tr><td colSpan={9}><EmptyState title="No items in this category yet" message="Add your first item to start tracking stock, pricing, and availability." action={<button type="button" className="primary" onClick={startAdd}>＋ Add new item</button>} /></td></tr>
                 )}
               </tbody>
@@ -391,9 +418,6 @@ export default function InventoryPage({ items, categories, allocations = [], can
     <>
       <div className="page-title inventory-title">
         <div><h1>Inventory</h1><p>Stock levels grouped by category. Open a category to manage its items.</p></div>
-        <div>
-          <button type="button" className="secondary" onClick={onExport}>⇩ Export CSV</button>
-        </div>
       </div>
       {error && <div className="page-error">{error}</div>}
       <section className="panel inventory-panel">

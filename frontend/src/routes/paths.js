@@ -4,12 +4,10 @@ export const PAGE_BY_SLUG = {
   'stock-requests': 'Stock Requests',
   'release-logs': 'Release Logs',
   'stock-movements': 'Stock Movements',
-  reports: 'Reports',
   categories: 'Categories',
   'api-keys': 'API Keys',
   users: 'Users',
   'online-orders': 'Online Orders',
-  settings: 'Settings',
 }
 
 export const SLUG_BY_PAGE = Object.fromEntries(
@@ -23,11 +21,9 @@ export const ADMIN_PAGES = [
   'Online Orders',
   'Release Logs',
   'Stock Movements',
-  'Reports',
   'Categories',
   'API Keys',
   'Users',
-  'Settings',
 ]
 
 export const USER_PAGES = [
@@ -37,7 +33,6 @@ export const USER_PAGES = [
   'Online Orders',
   'Release Logs',
   'Stock Movements',
-  'Reports',
   'Categories',
 ]
 

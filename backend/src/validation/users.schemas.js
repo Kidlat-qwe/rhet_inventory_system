@@ -20,3 +20,27 @@ export const updateUserRoleSchema = z.object({
     id: z.string().uuid(),
   }),
 });
+
+export const updateUserStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(['ACTIVE', 'INACTIVE']),
+  }),
+  query: z.any(),
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+});
+
+export const updateUserSchema = z.object({
+  body: z.object({
+    fullName: z.string().trim().min(2).max(150).optional(),
+    role: z.enum(['ADMIN', 'USER']).optional(),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  }).refine((body) => body.fullName || body.role || body.status, {
+    message: 'Provide fullName, role, and/or status to update',
+  }),
+  query: z.any(),
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+});

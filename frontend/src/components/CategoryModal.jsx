@@ -1,10 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CATEGORY_TYPE_OPTIONS } from '../constants/uniformOptions'
+
+function suggestedNameForType(typeValue, existingNames) {
+  const option = CATEGORY_TYPE_OPTIONS.find((entry) => entry.value === typeValue)
+  if (!option || typeValue === 'OTHER') return ''
+  const base = option.categoryName
+  if (!existingNames.has(base.toLowerCase())) return base
+  let n = 2
+  while (existingNames.has(`${base} ${n}`.toLowerCase())) n += 1
+  return `${base} ${n}`
+}
 
 export function CategoryModal({ category = null, categories = [], busy, onClose, onSave }) {
   const isEdit = Boolean(category)
-  const [type, setType] = useState('OTHER')
+  const [type, setType] = useState(category?.categoryKind || 'OTHER')
   const [name, setName] = useState(category?.categoryName || '')
+  const [nameTouched, setNameTouched] = useState(isEdit)
 
   const existingNames = useMemo(
     () => new Set(
@@ -15,17 +26,41 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
     [categories, category],
   )
 
-  const selected = CATEGORY_TYPE_OPTIONS.find((option) => option.value === type)
-  const isOther = isEdit || type === 'OTHER'
-  const resolvedName = isOther ? name.trim() : selected.categoryName
-  const alreadyExists = existingNames.has(resolvedName.toLowerCase())
-  const canSubmit = !alreadyExists && (isOther ? name.trim().length >= 2 : Boolean(resolvedName))
+  const selected = CATEGORY_TYPE_OPTIONS.find((option) => option.value === type) || CATEGORY_TYPE_OPTIONS.at(-1)
+  const resolvedName = name.trim()
+  const alreadyExists = resolvedName.length >= 2 && existingNames.has(resolvedName.toLowerCase())
+  const canSubmit = !alreadyExists && resolvedName.length >= 2
+
+  useEffect(() => {
+    if (isEdit || nameTouched) return
+    setName(suggestedNameForType(type, existingNames))
+  }, [type, existingNames, isEdit, nameTouched])
+
+  function onTypeChange(value) {
+    setType(value)
+    if (!nameTouched) {
+      setName(suggestedNameForType(value, existingNames))
+    }
+  }
 
   function submit(e) {
     e.preventDefault()
     if (!canSubmit) return
-    onSave(resolvedName)
+    onSave({
+      categoryName: resolvedName,
+      categoryKind: type,
+    })
   }
+
+  const typeHint = (() => {
+    if (type === 'LEARNING_KIT') {
+      return 'Learning Kit behavior: virtual stock from included categories; concrete SKUs chosen on stock request.'
+    }
+    if (type === 'OTHER') {
+      return 'Free-text variation items (bags, books, accessories, etc.).'
+    }
+    return 'Items in this category use Gender, Type, and Size. You can reuse this type with a different unique name.'
+  })()
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -33,53 +68,54 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
         <div className="modal-head">
           <div>
             <h2>{isEdit ? 'Edit category' : 'Add category'}</h2>
-            <p>{isEdit ? 'Rename this merchandise category.' : 'Choose a category type, then name it.'}</p>
+            <p>
+              {isEdit
+                ? 'Rename this merchandise category. Behavior type stays the same unless you change it below.'
+                : 'Category type can be reused. Category name must be unique.'}
+            </p>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </div>
         <div className="form-grid">
-          {!isEdit && (
-            <label>Category type *
-              <select value={type} onChange={(e) => setType(e.target.value)}>
-                {CATEGORY_TYPE_OPTIONS.map((option) => {
-                  const disabled = option.value !== 'OTHER' && existingNames.has(option.categoryName.toLowerCase())
-                  return (
-                    <option key={option.value} value={option.value} disabled={disabled}>
-                      {option.label}{disabled ? ' (already exists)' : ''}
-                    </option>
-                  )
-                })}
-              </select>
-            </label>
-          )}
-          {isOther ? (
-            <label>Category name *
-              <input
-                autoFocus
-                required
-                minLength="2"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Bag, Book, Accessory"
-              />
-              {alreadyExists && <small className="field-hint">This category already exists.</small>}
-            </label>
-          ) : (
-            <label>Category name
-              <input readOnly className="readonly-input" value={resolvedName} />
+          <label>Category type *
+            <select
+              value={type}
+              onChange={(e) => (isEdit ? setType(e.target.value) : onTypeChange(e.target.value))}
+            >
+              {CATEGORY_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <small className="field-hint">{typeHint}</small>
+          </label>
+          <label>Category name *
+            <input
+              autoFocus
+              required
+              minLength="2"
+              maxLength={100}
+              value={name}
+              onChange={(e) => {
+                setNameTouched(true)
+                setName(e.target.value)
+              }}
+              placeholder={selected?.categoryName || 'e.g. Bag, Book, Accessory'}
+            />
+            {alreadyExists && <small className="field-hint">This category name already exists. Choose a unique name.</small>}
+            {!alreadyExists && !isEdit && (
               <small className="field-hint">
-                {alreadyExists
-                  ? 'This category already exists.'
-                  : type === 'LEARNING_KIT'
-                    ? 'Learning Kit items keep their own stock and include a bill of materials.'
-                    : 'Items in this category use Gender, Type, and Size.'}
+                Tip: keep a clear unique label (e.g. “Junior School Uniform”) while reusing the School Uniform type.
               </small>
-            </label>
-          )}
+            )}
+          </label>
         </div>
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
-          <button className="primary" disabled={busy || !canSubmit}>{busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add category'}</button>
+          <button className="primary" disabled={busy || !canSubmit}>
+            {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add category'}
+          </button>
         </div>
       </form>
     </div>

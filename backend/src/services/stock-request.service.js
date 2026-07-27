@@ -164,7 +164,12 @@ export async function createStockRequestsFromPsms(input) {
     const externalReference = item.externalReference
       || `${input.batchReference || sourceSystem}-${Date.now()}-${index + 1}`;
 
-    const isLearningKit = inventory.isLearningKitCategoryName(item.categoryName);
+    const categoryLookup = await pool.query(
+      'SELECT category_id, category_name, category_kind FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
+      [item.categoryName, 'ACTIVE'],
+    );
+    const isLearningKit = inventory.isLearningKitCategory(categoryLookup.rows[0])
+      || inventory.isLearningKitCategoryName(item.categoryName);
     const resolved = await resolveInventoryItem(pool, {
       categoryName: item.categoryName,
       gender: item.gender,
@@ -335,7 +340,7 @@ export async function approveStockRequest(id, admin) {
     }
 
     const itemMeta = await db.query(
-      `SELECT i.stocks, c.category_name
+      `SELECT i.stocks, c.category_name, c.category_kind
        FROM inventory i
        JOIN categories c ON c.category_id = i.category_id
        WHERE i.inventory_id = $1
@@ -344,7 +349,7 @@ export async function approveStockRequest(id, admin) {
     );
     if (!itemMeta.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
 
-    const isKit = inventory.isLearningKitCategoryName(itemMeta.rows[0].category_name);
+    const isKit = inventory.isLearningKitCategory(itemMeta.rows[0]);
     const bom = isKit ? await inventory.listBundleComponents(inventoryId, db) : [];
     const requestComponents = isKit ? await listRequestComponents(id, db) : [];
     const resolvedComponents = [];
@@ -512,11 +517,11 @@ export async function getAvailability(input) {
 
 export async function getIntegrationCatalog() {
   const categories = await pool.query(
-    `SELECT category_id, category_name FROM categories WHERE status = 'ACTIVE' ORDER BY category_name`,
+    `SELECT category_id, category_name, category_kind FROM categories WHERE status = 'ACTIVE' ORDER BY category_name`,
   );
 
   const inventoryRows = await pool.query(
-    `SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.status, i.variation, c.category_name
+    `SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.status, i.variation, c.category_name, c.category_kind
      FROM inventory i
      JOIN categories c ON c.category_id = i.category_id
      WHERE i.lifecycle_status = 'ACTIVE'
@@ -525,7 +530,7 @@ export async function getIntegrationCatalog() {
 
   const items = [];
   for (const row of camelize(inventoryRows.rows)) {
-    if (inventory.isLearningKitCategoryName(row.categoryName)) {
+    if (inventory.isLearningKitCategory(row)) {
       const full = await inventory.getInventory(row.inventoryId);
       items.push({
         inventoryId: full.inventoryId,

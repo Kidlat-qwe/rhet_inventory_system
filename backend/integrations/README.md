@@ -6,15 +6,18 @@ Machine-to-machine API for any external app to request stock from RHET Inventory
 
 | Document | Use when |
 |---|---|
-| **[docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md](../../docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md)** | Full partner guide — auth, catalog, stock requests, **Learning Kits**, webhooks, checklists |
-| **[docs/external-system-integrations/README.md](../../docs/external-system-integrations/README.md)** | Index |
+| **[docs/external-system-integrations/README.md](../../docs/external-system-integrations/README.md)** | Index — new partner vs CMS paths |
+| **[docs/external-system-integrations/NEW_PARTNER_ONBOARDING.md](../../docs/external-system-integrations/NEW_PARTNER_ONBOARDING.md)** | **New** external system — full onboarding |
+| **[docs/external-system-integrations/API_KEY_MANAGEMENT.md](../../docs/external-system-integrations/API_KEY_MANAGEMENT.md)** | Generate / rotate / revoke integration keys |
+| **[docs/external-system-integrations/NEW_PARTNER_PASTE_PROMPT.md](../../docs/external-system-integrations/NEW_PARTNER_PASTE_PROMPT.md)** | Paste into partner Cursor / ticket |
+| **[docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md](../../docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md)** | Full API — auth, catalog, Learning Kits, webhooks |
 
 ## Repo notes (internal)
 
 | Document | Use when |
 |---|---|
-| [EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md) | Earlier in-repo reference (prefer the docs/ guide for partners) |
-| [EXTERNAL_SYSTEM_PASTE_PROMPT.md](./EXTERNAL_SYSTEM_PASTE_PROMPT.md) | Copy-paste into Cursor / another repo to implement integration |
+| [EXTERNAL_SYSTEM_INTEGRATION.md](./EXTERNAL_SYSTEM_INTEGRATION.md) | Earlier in-repo reference (prefer the docs/ guides for partners) |
+| [EXTERNAL_SYSTEM_PASTE_PROMPT.md](./EXTERNAL_SYSTEM_PASTE_PROMPT.md) | Older paste prompt — prefer `NEW_PARTNER_PASTE_PROMPT.md` in docs/ |
 | [PSMS_API_INTEGRATION.md](./PSMS_API_INTEGRATION.md) | PSMS/CMS-specific notes and field mapping |
 | [SHOPEE_ONLINE_ORDERS.md](./SHOPEE_ONLINE_ORDERS.md) | Shopee allocation stock model + fulfillment tracking board |
 | [CMS_PROCESSED_BY_FIX.md](./CMS_PROCESSED_BY_FIX.md) | CMS still shows "RHET Inventory" in Approved By — map `processedBy` |
@@ -23,9 +26,9 @@ Machine-to-machine API for any external app to request stock from RHET Inventory
 
 ### 1. RHET Inventory (admin)
 
-1. **API Keys** → Generate API key (system name e.g. `PSMS`, `HR`)
+1. **API Keys** → Generate API key (system name e.g. `HR`, `VENDOR`) — see [API_KEY_MANAGEMENT.md](../../docs/external-system-integrations/API_KEY_MANAGEMENT.md)
 2. Copy modal → `.env` for external backend
-3. Optional RHET backend fallback: `PSMS_WEBHOOK_URL=https://external-api.../api/webhooks/inventory`
+3. Prefer per-request `webhookUrl`; do not rely on legacy `PSMS_WEBHOOK_URL` for new partners
 
 ### 2. External system (backend)
 

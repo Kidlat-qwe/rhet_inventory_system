@@ -10,7 +10,6 @@ Role-agnostic page implementations used by both admin and user wrappers under `p
 | `OnlineOrdersPage.jsx` | Online Orders — fulfillment tracking board (Shopee CSV/manual import, SKU mapping for visibility only, manual delivery status moves, return confirmation). Stock is no longer deducted on order import; see channel allocation below. |
 | `ReleaseLogsPage.jsx` | Merchandise releasing logs |
 | `StockMovementsPage.jsx` | Stock Movements |
-| `ReportsPage.jsx` | Reports |
 | `CategoriesPage.jsx` | Categories |
 
-Admin-only features (API Keys, Users, Settings) live under `pages/admin/` with full implementations.
+Admin-only features (API Keys, Users) live under `pages/admin/` with full implementations.

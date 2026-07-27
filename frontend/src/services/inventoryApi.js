@@ -19,6 +19,12 @@ export const createUser = (body) =>
 
 export const updateUserRole = (userId, role) =>
   api(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }).then((response) => response.data)
+
+export const updateUserStatus = (userId, status) =>
+  api(`/users/${userId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }).then((response) => response.data)
+
+export const updateUser = (userId, body) =>
+  api(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
 export const fetchIntegrationClients = () => api('/integration-clients').then((response) => response.data)
 
 export const createIntegrationClient = (body) =>
@@ -69,11 +75,17 @@ export const updateInventoryItem = (id, body) =>
 export const createStockMovement = (id, body) =>
   api(`/inventory/${id}/movements`, { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 
-export const createCategory = (categoryName) =>
-  api('/categories', { method: 'POST', body: JSON.stringify({ categoryName }) }).then((response) => response.data)
+export const createCategory = ({ categoryName, categoryKind = 'OTHER' }) =>
+  api('/categories', { method: 'POST', body: JSON.stringify({ categoryName, categoryKind }) }).then((response) => response.data)
 
-export const updateCategory = (categoryId, categoryName) =>
-  api(`/categories/${categoryId}`, { method: 'PATCH', body: JSON.stringify({ categoryName }) }).then((response) => response.data)
+export const updateCategory = (categoryId, { categoryName, categoryKind }) =>
+  api(`/categories/${categoryId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      categoryName,
+      ...(categoryKind ? { categoryKind } : {}),
+    }),
+  }).then((response) => response.data)
 
 export const deleteCategory = (categoryId) =>
   api(`/categories/${categoryId}`, { method: 'DELETE' }).then((response) => response.data)

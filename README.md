@@ -43,7 +43,7 @@ backend/
   .env.example
 ```
 
-For a larger UI, split `App.jsx` into `components`, `features/dashboard`, `features/inventory`, `features/reports`, `hooks`, and `contexts/AuthContext`. The current single entry makes the provided design easy to preview while API/auth concerns are already separate.
+For a larger UI, split `App.jsx` into `components`, `features/dashboard`, `features/inventory`, `hooks`, and `contexts/AuthContext`. The current single entry makes the provided design easy to preview while API/auth concerns are already separate.
 
 ## 3–5. Database schema and relationships
 
@@ -84,9 +84,8 @@ All paths except health require `Authorization: Bearer <Firebase ID token>`. Res
 | GET | `/api/v1/channel-allocations` | List per-item RHET vs Shopee allocated quantities |
 | POST | `/api/v1/channel-allocations/allocate` | Allocate RHET stock to a sales channel (admin) |
 | POST | `/api/v1/channel-allocations/deallocate` | Pull unsold allocated stock back into RHET (admin) |
-| GET | `/api/v1/reports/inventory.csv` | Current stock/valuation/category/status CSV |
 
-Inventory query parameters: `search`, `categoryId`, `variation`, `status`, `sortBy`, `order`, `page`, `limit`. Movement parameters: `inventoryId`, `type`, `from`, `to`, `page`, `limit`. Low-stock and out-of-stock reports are inventory requests with the corresponding `status`; category reports use `categoryId`; valuation is included in the CSV. The movement endpoint supplies date-range transaction reports and can be exported client-side or extended with the same CSV serializer.
+Inventory query parameters: `search`, `categoryId`, `variation`, `status`, `sortBy`, `order`, `page`, `limit`. Movement parameters: `inventoryId`, `type`, `from`, `to`, `page`, `limit`. Low-stock and out-of-stock filters are inventory requests with the corresponding `status`; category filters use `categoryId`.
 
 ## 7–8. Firebase Authentication flow
 
@@ -118,7 +117,7 @@ The provided frontend includes:
 - searchable/filterable inventory table with status badges and responsive overflow;
 - add/edit merchandise form with native validation;
 - add/deduct stock dialog with a new-balance preview;
-- stock movement history and report/module navigation;
+- stock movement history and module navigation;
 - collapsible mobile sidebar and responsive dashboard grids.
 
 It starts with interactive sample records so the design can be reviewed without infrastructure. Replace the state initializer with `api('/inventory')` and submit forms through the service after Firebase configuration; keep all writes server-authoritative and refresh from the returned resource.
@@ -166,7 +165,7 @@ Validation is applied in the React form for feedback, in Zod for API safety, and
 2. Configure Firebase providers, web credentials, Admin credentials, and an initial `admin: true` custom claim.
 3. Start the protected API and test health, token verification, admin provisioning, and inventory transactions.
 4. Connect the provided frontend forms/tables to the API, add an auth context/login screen, loading states, and toasts.
-5. Add category/admin management, full report filters, movement CSV/XLSX generation, and audit events.
+5. Add category/admin management, movement CSV/XLSX generation, and audit events.
 6. Add unit tests for delta rules, integration tests against a disposable PostgreSQL database, and browser tests for critical admin workflows.
 7. Run concurrency, access-control, restore, accessibility, responsive, and user-acceptance testing.
 8. Deploy to staging, migrate, seed controlled categories/admins, validate monitoring, then promote to production.

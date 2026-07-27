@@ -2,19 +2,41 @@ import { pool, withTransaction } from '../database/pool.js';
 import { AppError, camelize } from '../utils/api.js';
 import { calculateStockChange } from './stock-rules.js';
 
-const inventorySelect = `SELECT i.*, c.category_name
+const inventorySelect = `SELECT i.*, c.category_name, c.category_kind
   FROM inventory i JOIN categories c ON c.category_id = i.category_id`;
 
 const componentSelect = `SELECT bc.component_row_id, bc.bundle_inventory_id,
     bc.component_category_id, bc.component_inventory_id, bc.quantity, bc.created_at,
-    cat.category_name,
+    cat.category_name, cat.category_kind,
     i.sku, i.item_name, i.stocks, i.uniform_gender, i.uniform_type, i.uniform_size, i.variation
   FROM inventory_bundle_components bc
   JOIN categories cat ON cat.category_id = bc.component_category_id
   LEFT JOIN inventory i ON i.inventory_id = bc.component_inventory_id`;
 
+export const CATEGORY_KINDS = Object.freeze([
+  'SCHOOL_UNIFORM',
+  'PE_UNIFORM',
+  'LCA_SHIRT',
+  'LEARNING_KIT',
+  'OTHER',
+]);
+
 export function isLearningKitCategoryName(categoryName = '') {
   return String(categoryName || '').trim().toLowerCase() === 'learning kit';
+}
+
+/** Prefer category_kind when present; fall back to exact name for legacy rows. */
+export function isLearningKitCategory(category = {}) {
+  if (!category) return false;
+  const kind = category.categoryKind || category.category_kind;
+  if (kind === 'LEARNING_KIT') return true;
+  if (kind && kind !== 'OTHER') return false;
+  return isLearningKitCategoryName(category.categoryName || category.category_name);
+}
+
+export function normalizeCategoryKind(value) {
+  const kind = String(value || 'OTHER').trim().toUpperCase();
+  return CATEGORY_KINDS.includes(kind) ? kind : null;
 }
 
 /** Sum ACTIVE stocks in a category (used for category-slot kit availability). */
@@ -72,6 +94,15 @@ export async function listBundleComponents(bundleInventoryId, db = pool) {
   return camelize(result.rows).map(shapeComponent);
 }
 
+export function deriveStockStatus({ lifecycleStatus, stocks, lowStockThreshold }) {
+  if (String(lifecycleStatus || '').toUpperCase() === 'INACTIVE') return 'INACTIVE';
+  const qty = Number(stocks) || 0;
+  const threshold = Number(lowStockThreshold) || 0;
+  if (qty <= 0) return 'OUT_OF_STOCK';
+  if (qty <= threshold) return 'LOW_STOCK';
+  return 'ACTIVE';
+}
+
 async function attachComponents(items, db = pool) {
   if (!items.length) return items;
   const ids = items.map((row) => row.inventoryId);
@@ -89,7 +120,7 @@ async function attachComponents(items, db = pool) {
   const attached = [];
   for (const item of items) {
     const components = byBundle.get(item.inventoryId) || [];
-    if (!isLearningKitCategoryName(item.categoryName)) {
+    if (!isLearningKitCategory(item)) {
       attached.push({ ...item, components });
       continue;
     }
@@ -101,6 +132,23 @@ async function attachComponents(items, db = pool) {
       withCategoryTotals.push({ ...row, categoryStocks });
     }
     const computedStocks = await computeAvailableKits(components, db);
+    // Status is a DB generated column from stored stocks. Virtual kits display
+    // computed availability, so status must follow that same number.
+    const status = deriveStockStatus({
+      lifecycleStatus: item.lifecycleStatus,
+      stocks: computedStocks,
+      lowStockThreshold: item.lowStockThreshold,
+    });
+
+    const storedStocks = Number(item.stocks) || 0;
+    if (storedStocks !== computedStocks) {
+      // Keep generated status / dashboard counts aligned without writing a movement.
+      await db.query(
+        'UPDATE inventory SET stocks = $1, updated_at = NOW() WHERE inventory_id = $2',
+        [computedStocks, item.inventoryId],
+      );
+    }
+
     attached.push({
       ...item,
       components: withCategoryTotals,
@@ -108,6 +156,7 @@ async function attachComponents(items, db = pool) {
       bomComplete: components.length > 0,
       stockMode: 'VIRTUAL_BUNDLE',
       stocks: computedStocks,
+      status,
     });
   }
   return attached;
@@ -156,7 +205,7 @@ async function loadKitMeta(db, inventoryId) {
 /** Persist computed kit availability onto inventory.stocks (status column depends on it). */
 export async function syncKitComputedStocks(bundleInventoryId, adminId, db = pool) {
   const meta = await loadKitMeta(db, bundleInventoryId);
-  if (!meta || !isLearningKitCategoryName(meta.categoryName)) return null;
+  if (!meta || !isLearningKitCategory(meta)) return null;
 
   const components = await listBundleComponents(bundleInventoryId, db);
   const computed = await computeAvailableKits(components, db);
@@ -208,14 +257,15 @@ async function replaceBundleComponents(db, bundleInventoryId, components = []) {
     }
 
     const categoryResult = await db.query(
-      'SELECT category_id, category_name FROM categories WHERE category_id = $1',
+      'SELECT category_id, category_name, category_kind FROM categories WHERE category_id = $1',
       [categoryId],
     );
     if (!categoryResult.rowCount) {
       throw new AppError(422, 'COMPONENT_NOT_FOUND', 'One or more component categories were not found');
     }
-    const categoryName = categoryResult.rows[0].category_name;
-    if (isLearningKitCategoryName(categoryName)) {
+    const categoryRow = categoryResult.rows[0];
+    const categoryName = categoryRow.category_name;
+    if (isLearningKitCategory(categoryRow)) {
       throw new AppError(422, 'INVALID_COMPONENT', 'A Learning Kit cannot include another Learning Kit');
     }
     if (seenCategories.has(categoryId)) {
@@ -239,9 +289,12 @@ async function replaceBundleComponents(db, bundleInventoryId, components = []) {
 }
 
 async function insertInventoryRow(db, input, adminId) {
-  const category = await db.query('SELECT category_name FROM categories WHERE category_id = $1', [input.categoryId]);
+  const category = await db.query(
+    'SELECT category_name, category_kind FROM categories WHERE category_id = $1',
+    [input.categoryId],
+  );
   if (!category.rowCount) throw new AppError(422, 'CATEGORY_NOT_FOUND', 'Category was not found');
-  const isKit = isLearningKitCategoryName(category.rows[0].category_name);
+  const isKit = isLearningKitCategory(category.rows[0]);
   const initialStocks = isKit ? 0 : input.stocks;
 
   const result = await db.query(`INSERT INTO inventory
@@ -320,7 +373,7 @@ export async function updateInventory(id, input, adminId) {
     }
 
     const meta = await loadKitMeta(db, id);
-    if (meta && isLearningKitCategoryName(meta.categoryName)) {
+    if (meta && isLearningKitCategory(meta)) {
       await syncKitComputedStocks(id, adminId, db);
     }
 
@@ -330,7 +383,7 @@ export async function updateInventory(id, input, adminId) {
 
 async function createMovementWithClient(db, inventoryId, input, adminId) {
   const locked = await db.query(
-    `SELECT i.stocks, c.category_name
+    `SELECT i.stocks, c.category_name, c.category_kind
      FROM inventory i
      JOIN categories c ON c.category_id = i.category_id
      WHERE i.inventory_id = $1
@@ -339,7 +392,7 @@ async function createMovementWithClient(db, inventoryId, input, adminId) {
   );
   if (!locked.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
 
-  if (isLearningKitCategoryName(locked.rows[0].category_name)) {
+  if (isLearningKitCategory(locked.rows[0])) {
     throw new AppError(
       422,
       'VIRTUAL_KIT_STOCK',
@@ -385,7 +438,7 @@ export async function createBundleAwareMovement(inventoryId, input, adminId, db,
     const meta = await loadKitMeta(client, inventoryId);
     if (!meta) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
 
-    const isKit = isLearningKitCategoryName(meta.categoryName);
+    const isKit = isLearningKitCategory(meta);
     const isChannelAllocation = input.movementType === 'CHANNEL_ALLOCATION';
     const isDeduct = input.movementType === 'RELEASED'
       || input.movementType === 'ONLINE_SALE'
