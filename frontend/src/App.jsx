@@ -40,11 +40,13 @@ import {
   fetchStockRequests,
   fetchIntegrationClients,
 } from './services/inventoryApi'
-import { fetchChannelAllocations } from './services/channelAllocationApi'
 import { fetchOnlineOrders } from './services/onlineOrdersApi'
 
 /** Set to true after redeploy to show the floating Help Assistant again. */
-const ENABLE_HELP_ASSISTANT = false
+const ENABLE_HELP_ASSISTANT = true
+
+/** Movement types owned by Shopee online-order flow (shown on Release Logs → Online orders). */
+const ONLINE_ORDER_MOVEMENT_TYPES = 'ONLINE_SALE,CANCELLED,RETURN,CHANNEL_ALLOCATION'
 
 function AppShell() {
   const location = useLocation()
@@ -56,9 +58,9 @@ function AppShell() {
   const [categories, setCategories] = useState([])
   const [inventory, setInventory] = useState([])
   const [movements, setMovements] = useState([])
+  const [onlineMovements, setOnlineMovements] = useState([])
   const [stockRequests, setStockRequests] = useState([])
   const [onlineOrders, setOnlineOrders] = useState([])
-  const [channelAllocations, setChannelAllocations] = useState([])
   const [integrationClients, setIntegrationClients] = useState([])
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
@@ -75,14 +77,14 @@ function AppShell() {
     try {
       const me = await fetchMe()
       const roleIsAdmin = String(me?.role || 'ADMIN').toUpperCase() === 'ADMIN'
-      const [dash, cats, inv, mov, requests, online, allocations, adminList, clients] = await Promise.all([
+      const [dash, cats, inv, mov, onlineMov, requests, online, adminList, clients] = await Promise.all([
         fetchDashboard(),
         fetchCategories(),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
-        fetchMovements({ limit: 50 }),
+        fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
+        fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),
         fetchStockRequests({ limit: 100 }),
         fetchOnlineOrders({ limit: 100 }),
-        fetchChannelAllocations(),
         roleIsAdmin ? fetchUsers() : Promise.resolve([]),
         roleIsAdmin ? fetchIntegrationClients() : Promise.resolve([]),
       ])
@@ -91,9 +93,9 @@ function AppShell() {
       setCategories(cats)
       setInventory(inv.data)
       setMovements(mov.data)
+      setOnlineMovements(onlineMov.data)
       setStockRequests(requests.data)
       setOnlineOrders(online.data)
-      setChannelAllocations(allocations)
       setIntegrationClients(clients)
       setAdmins(adminList)
     } catch (err) {
@@ -124,15 +126,17 @@ function AppShell() {
   // After approve/reject: refresh requests + warehouse stock + movements (approve deducts stock).
   const refreshAfterStockDecision = useCallback(async () => {
     try {
-      const [requests, inv, mov, dash] = await Promise.all([
+      const [requests, inv, mov, onlineMov, dash] = await Promise.all([
         fetchStockRequests({ limit: 100 }),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
-        fetchMovements({ limit: 50 }),
+        fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
+        fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),
         fetchDashboard(),
       ])
       setStockRequests(requests.data)
       setInventory(inv.data)
       setMovements(mov.data)
+      setOnlineMovements(onlineMov.data)
       setDashboard(dash)
     } catch (err) {
       setError(err.message)
@@ -218,13 +222,13 @@ function AppShell() {
         case 'Dashboard':
           return <AdminDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
         case 'Inventory':
-          return <AdminInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} />
+          return <AdminInventory items={inventory} categories={categories} onRefresh={refreshQuietly} />
         case 'Stock Requests':
           return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
         case 'Online Orders':
           return <AdminOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
         case 'Release Logs':
-          return <AdminReleaseLogs requests={stockRequests} />
+          return <AdminReleaseLogs requests={stockRequests} onlineMovements={onlineMovements} />
         case 'Stock Movements':
           return <AdminStockMovements movements={movements} />
         case 'Categories':
@@ -242,13 +246,13 @@ function AppShell() {
       case 'Dashboard':
         return <UserDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
       case 'Inventory':
-        return <UserInventory items={inventory} categories={categories} allocations={channelAllocations} onRefresh={refreshQuietly} />
+        return <UserInventory items={inventory} categories={categories} onRefresh={refreshQuietly} />
       case 'Stock Requests':
         return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
       case 'Online Orders':
-        return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} />
+        return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
       case 'Release Logs':
-        return <UserReleaseLogs requests={stockRequests} />
+        return <UserReleaseLogs requests={stockRequests} onlineMovements={onlineMovements} />
       case 'Stock Movements':
         return <UserStockMovements movements={movements} />
       case 'Categories':

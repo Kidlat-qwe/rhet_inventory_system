@@ -298,9 +298,22 @@ async function insertInventoryRow(db, input, adminId) {
   const initialStocks = isKit ? 0 : input.stocks;
 
   const result = await db.query(`INSERT INTO inventory
-    (sku, item_name, stocks, category_id, variation, price, uniform_gender, uniform_type, uniform_size, low_stock_threshold, created_by, updated_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) RETURNING inventory_id`,
-    [input.sku, input.itemName, initialStocks, input.categoryId, input.variation || null, input.price, input.uniformGender || null, input.uniformType || null, input.uniformSize || null, input.lowStockThreshold, adminId]);
+    (sku, item_name, stocks, category_id, variation, price, uniform_gender, uniform_type, uniform_size, remarks, low_stock_threshold, created_by, updated_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12) RETURNING inventory_id`,
+    [
+      input.sku,
+      input.itemName,
+      initialStocks,
+      input.categoryId,
+      input.variation || null,
+      input.price,
+      input.uniformGender || null,
+      input.uniformType || null,
+      input.uniformSize || null,
+      input.remarks || null,
+      input.lowStockThreshold,
+      adminId,
+    ]);
   const id = result.rows[0].inventory_id;
 
   if (!isKit && initialStocks > 0) {
@@ -340,10 +353,18 @@ export async function createInventoryBatch(items, adminId) {
 
 export async function updateInventory(id, input, adminId) {
   return withTransaction(async (db) => {
+    const before = await db.query(
+      'SELECT sku FROM inventory WHERE inventory_id = $1 FOR UPDATE',
+      [id],
+    );
+    if (!before.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+    const previousSku = before.rows[0].sku;
+
     const fields = {
       sku: 'sku', itemName: 'item_name', categoryId: 'category_id', variation: 'variation',
       price: 'price',
       uniformGender: 'uniform_gender', uniformType: 'uniform_type', uniformSize: 'uniform_size',
+      remarks: 'remarks',
       lowStockThreshold: 'low_stock_threshold', lifecycleStatus: 'lifecycle_status',
     };
     const sets = [];
@@ -360,12 +381,28 @@ export async function updateInventory(id, input, adminId) {
 
     if (sets.length) {
       values.push(adminId, id);
-      const result = await db.query(`UPDATE inventory SET ${sets.join(', ')}, updated_by = $${values.length - 1}, updated_at = NOW()
-        WHERE inventory_id = $${values.length} RETURNING inventory_id`, values);
-      if (!result.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
-    } else {
-      const exists = await db.query('SELECT 1 FROM inventory WHERE inventory_id = $1', [id]);
-      if (!exists.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+      try {
+        const result = await db.query(`UPDATE inventory SET ${sets.join(', ')}, updated_by = $${values.length - 1}, updated_at = NOW()
+          WHERE inventory_id = $${values.length} RETURNING inventory_id, sku`, values);
+        if (!result.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+
+        const nextSku = result.rows[0].sku;
+        if (Object.hasOwn(input, 'sku') && nextSku && nextSku !== previousSku) {
+          await db.query(
+            `UPDATE online_order_items SET matched_sku = $1 WHERE matched_inventory_id = $2`,
+            [nextSku, id],
+          );
+          await db.query(
+            `UPDATE stock_requests SET matched_sku = $1 WHERE inventory_id = $2`,
+            [nextSku, id],
+          );
+        }
+      } catch (error) {
+        if (error?.code === '23505') {
+          throw new AppError(409, 'SKU_EXISTS', 'An item with this SKU already exists');
+        }
+        throw error;
+      }
     }
 
     if (Array.isArray(input.components)) {
@@ -378,6 +415,136 @@ export async function updateInventory(id, input, adminId) {
     }
 
     return getInventory(id, db);
+  });
+}
+
+/**
+ * Permanently delete an inventory item (admin).
+ * Requires confirmationName to match item_name exactly (trimmed).
+ * Blocked when the item is tied to online-order matches, active stock requests, or another kit's BOM.
+ * Completed stock requests are unlinked (inventory_id cleared; matched_sku kept).
+ */
+export async function deleteInventory(id, { confirmationName }, adminId) {
+  return withTransaction(async (db) => {
+    const itemResult = await db.query(
+      `SELECT inventory_id, sku, item_name, category_id
+       FROM inventory
+       WHERE inventory_id = $1
+       FOR UPDATE`,
+      [id],
+    );
+    if (!itemResult.rowCount) {
+      throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+    }
+
+    const item = itemResult.rows[0];
+    const expected = String(item.item_name || '').trim();
+    const provided = String(confirmationName || '').trim();
+    if (!expected || provided !== expected) {
+      throw new AppError(
+        422,
+        'CONFIRMATION_NAME_MISMATCH',
+        'Type the exact item name to confirm deletion',
+      );
+    }
+
+    const asKitComponent = await db.query(
+      `SELECT 1 FROM inventory_bundle_components
+       WHERE component_inventory_id = $1
+       LIMIT 1`,
+      [id],
+    );
+    if (asKitComponent.rowCount) {
+      throw new AppError(
+        409,
+        'ITEM_IN_KIT_BOM',
+        'Cannot delete an item that is used as a Learning Kit component. Remove it from kit BOMs first.',
+      );
+    }
+
+    const orderMatches = await db.query(
+      `SELECT 1 FROM online_order_item_matches WHERE inventory_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (orderMatches.rowCount) {
+      throw new AppError(
+        409,
+        'ITEM_IN_ONLINE_ORDERS',
+        'Cannot delete an item that is mapped to online order lines.',
+      );
+    }
+
+    const orderLines = await db.query(
+      `SELECT 1 FROM online_order_items WHERE matched_inventory_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (orderLines.rowCount) {
+      throw new AppError(
+        409,
+        'ITEM_IN_ONLINE_ORDERS',
+        'Cannot delete an item that is linked to online order lines.',
+      );
+    }
+
+    const activeStockRequests = await db.query(
+      `SELECT 1 FROM stock_requests
+       WHERE inventory_id = $1
+         AND status IN ('PENDING', 'APPROVED')
+       LIMIT 1`,
+      [id],
+    );
+    if (activeStockRequests.rowCount) {
+      throw new AppError(
+        409,
+        'ITEM_IN_STOCK_REQUESTS',
+        'Cannot delete an item that still has pending or approved stock requests.',
+      );
+    }
+
+    // Preserve request history text (matched_sku) but drop the live FK so DELETE can proceed.
+    await db.query(
+      `UPDATE stock_requests
+       SET inventory_id = NULL,
+           movement_id = NULL,
+           updated_at = NOW()
+       WHERE inventory_id = $1`,
+      [id],
+    );
+
+    // Clean dependent rows that would otherwise block DELETE.
+    await db.query('DELETE FROM channel_sku_mappings WHERE inventory_id = $1', [id]);
+    await db.query('DELETE FROM channel_stock_snapshots WHERE inventory_id = $1', [id]);
+    await db.query('DELETE FROM channel_allocation_logs WHERE inventory_id = $1', [id]);
+    await db.query('DELETE FROM inventory_bundle_components WHERE bundle_inventory_id = $1', [id]);
+
+    // Clear remaining movement FKs that point at this item's history, then remove movements.
+    await db.query(
+      `UPDATE stock_requests
+       SET movement_id = NULL
+       WHERE movement_id IN (SELECT movement_id FROM stock_movements WHERE inventory_id = $1)`,
+      [id],
+    );
+    await db.query(
+      `UPDATE online_order_items
+       SET movement_id = NULL
+       WHERE movement_id IN (SELECT movement_id FROM stock_movements WHERE inventory_id = $1)`,
+      [id],
+    );
+    await db.query('DELETE FROM stock_movements WHERE inventory_id = $1', [id]);
+
+    const deleted = await db.query(
+      `DELETE FROM inventory WHERE inventory_id = $1
+       RETURNING inventory_id, sku, item_name`,
+      [id],
+    );
+    if (!deleted.rowCount) {
+      throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+    }
+
+    return camelize({
+      ...deleted.rows[0],
+      deletedBy: adminId || null,
+    });
   });
 }
 
@@ -563,6 +730,14 @@ export async function listMovements(query) {
   const add = (value) => { values.push(value); return `$${values.length}`; };
   if (query.inventoryId) where.push(`m.inventory_id = ${add(query.inventoryId)}`);
   if (query.type) where.push(`m.movement_type = ${add(query.type)}`);
+  if (query.types) {
+    const types = String(query.types).split(',').map((value) => value.trim()).filter(Boolean);
+    if (types.length) where.push(`m.movement_type = ANY(${add(types)}::text[])`);
+  }
+  if (query.excludeTypes) {
+    const types = String(query.excludeTypes).split(',').map((value) => value.trim()).filter(Boolean);
+    if (types.length) where.push(`NOT (m.movement_type = ANY(${add(types)}::text[]))`);
+  }
   if (query.from) where.push(`m.created_at >= ${add(query.from)}`);
   if (query.to) where.push(`m.created_at < ${add(query.to)}`);
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';

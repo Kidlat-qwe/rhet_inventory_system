@@ -32,6 +32,7 @@ export const inventoryItemBody = z.object({
   itemName: z.string().trim().min(2).max(180), categoryId: uuid,
   variation: optionalText(180), price: money,
   uniformGender: optionalText(10), uniformType: optionalText(20), uniformSize: optionalText(10),
+  remarks: optionalText(500),
   stocks: z.coerce.number().int().min(0).default(0),
   lowStockThreshold: z.coerce.number().int().min(0).max(1000000).default(20),
   components: z.array(bundleComponentBody).max(50).optional(),
@@ -50,10 +51,20 @@ export const updateInventorySchema = z.object({ body: z.object({
   itemName: z.string().trim().min(2).max(180).optional(), categoryId: uuid.optional(),
   variation: optionalText(180), price: money.optional(),
   uniformGender: optionalText(10), uniformType: optionalText(20), uniformSize: optionalText(10),
+  remarks: optionalText(500),
   lowStockThreshold: z.coerce.number().int().min(0).max(1000000).optional(),
   lifecycleStatus: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   components: z.array(bundleComponentBody).max(50).optional(),
 }).refine((body) => Object.keys(body).length > 0, 'At least one field is required'), query: z.any(), params: z.object({ id: uuid }) });
+
+/** Admin hard-delete: body must repeat the exact item name. */
+export const deleteInventorySchema = z.object({
+  body: z.object({
+    confirmationName: z.string().trim().min(1).max(180),
+  }),
+  query: z.any(),
+  params: z.object({ id: uuid }),
+});
 
 export const movementSchema = z.object({ body: z.object({
   movementType: z.enum(['STOCK_IN', 'STOCK_OUT', 'ADJUSTMENT', 'RETURN', 'DAMAGED', 'RELEASED', 'CANCELLED', 'ONLINE_SALE', 'CHANNEL_ALLOCATION']),
@@ -68,6 +79,12 @@ export const movementSchema = z.object({ body: z.object({
 }), query: z.any(), params: z.object({ id: uuid }) });
 
 export const movementListSchema = z.object({ body: z.any(), params: z.any(), query: z.object({
-  inventoryId: uuid.optional(), type: z.string().optional(), from: z.coerce.date().optional(), to: z.coerce.date().optional(),
-  page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20),
+  inventoryId: uuid.optional(),
+  type: z.string().optional(),
+  types: z.string().optional(), // comma-separated, e.g. ONLINE_SALE,CANCELLED
+  excludeTypes: z.string().optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 }) });

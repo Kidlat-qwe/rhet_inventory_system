@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
 import { CategoryModal } from '../../components/CategoryModal'
+import { DeleteCategoryModal } from '../../components/DeleteCategoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -15,6 +16,7 @@ function kindLabel(kind) {
 
 export default function CategoriesPage({ categories, items = [], canManage = false, onRefresh }) {
   const [modal, setModal] = useState(null) // { mode: 'create' } | { mode: 'edit', category }
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -44,12 +46,13 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
     }
   }
 
-  async function removeCategory(category) {
-    if (!window.confirm(`Delete category "${category.categoryName}"? This cannot be undone.`)) return
+  async function confirmDeleteCategory(category) {
+    if (!canManage || !category?.categoryId) return
     setBusy(true)
     setError('')
     try {
       await deleteCategory(category.categoryId)
+      setDeleteTarget(null)
       await onRefresh()
     } catch (err) {
       setError(err.message)
@@ -61,10 +64,21 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
   return (
     <>
       <div className="page-title">
-        <div><h1>Categories</h1><p>Manage merchandise categories used across inventory items.</p></div>
         <div>
-          <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>＋ Add category</button>
+          <h1>Categories</h1>
+          <p>
+            {canManage
+              ? 'Manage merchandise categories used across inventory items. Delete is only available here (not on Inventory).'
+              : 'Browse merchandise categories used across inventory items.'}
+          </p>
         </div>
+        {canManage && (
+          <div>
+            <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>
+              ＋ Add category
+            </button>
+          </div>
+        )}
       </div>
       {error && <div className="page-error">{error}</div>}
       <section className="panel recent">
@@ -104,8 +118,13 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
                                 label: 'Delete',
                                 danger: true,
                                 disabled: inUse,
-                                title: inUse ? 'Category still has inventory items' : 'Delete category',
-                                onClick: () => removeCategory(category),
+                                title: inUse
+                                  ? 'Remove or move inventory items first — categories cannot be deleted from Inventory'
+                                  : 'Delete category',
+                                onClick: () => {
+                                  setError('')
+                                  setDeleteTarget(category)
+                                },
                               },
                             ]}
                           />
@@ -121,18 +140,30 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
         ) : (
           <EmptyState
             title="No categories found"
-            message="Seed categories should load from the database. You can also add a new category."
-            action={<button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>＋ Add category</button>}
+            message={canManage
+              ? 'Seed categories should load from the database. You can also add a new category.'
+              : 'No categories are available yet.'}
+            action={canManage
+              ? <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>＋ Add category</button>
+              : null}
           />
         )}
       </section>
-      {modal && (
+      {canManage && modal && (
         <CategoryModal
           category={modal.mode === 'edit' ? modal.category : null}
           categories={categories}
           busy={busy}
-          onClose={() => setModal(null)}
+          onClose={() => !busy && setModal(null)}
           onSave={saveCategory}
+        />
+      )}
+      {canManage && deleteTarget && (
+        <DeleteCategoryModal
+          category={deleteTarget}
+          busy={busy}
+          onClose={() => !busy && setDeleteTarget(null)}
+          onConfirm={confirmDeleteCategory}
         />
       )}
     </>

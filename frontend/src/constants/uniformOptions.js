@@ -6,14 +6,14 @@ export const SCHOOL_UNIFORM_FEMALE_TYPES = ['Blouse', 'Skirt']
 
 export const PE_UNIFORM_TYPES = ['Shirt', 'Pants']
 
-export const LCA_SHIRT_TYPES = ['Shirt']
+export const LCA_SHIRT_TYPES = ['Logo 1', 'Logo 2']
 
 // Category-type presets shown when creating a category.
 // category_kind is stored separately so the same type can be reused with unique names.
 export const CATEGORY_TYPE_OPTIONS = [
   { value: 'SCHOOL_UNIFORM', label: 'School Uniform', categoryName: 'School Uniform' },
   { value: 'PE_UNIFORM', label: 'PE Uniform', categoryName: 'PE Uniform' },
-  { value: 'LCA_SHIRT', label: 'LCA T-Shirt', categoryName: 'LCA T-Shirt' },
+  { value: 'LCA_SHIRT', label: 'Shirt', categoryName: 'Shirt' },
   { value: 'LEARNING_KIT', label: 'Learning Kit', categoryName: 'Learning Kit' },
   { value: 'OTHER', label: 'Others', categoryName: '' },
 ]
@@ -24,12 +24,14 @@ const UNIFORM_KINDS = new Set(['SCHOOL_UNIFORM', 'PE_UNIFORM', 'LCA_SHIRT'])
 const UNIFORM_TYPE_LISTS = {
   'school uniform': SCHOOL_UNIFORM_TYPES,
   'pe uniform': PE_UNIFORM_TYPES,
+  shirt: LCA_SHIRT_TYPES,
   'lca shirt': LCA_SHIRT_TYPES,
   'lca t-shirt': LCA_SHIRT_TYPES,
   'lca tshirt': LCA_SHIRT_TYPES,
   uniform: PE_UNIFORM_TYPES, // backward-compatible generic uniform
 }
 
+/** Default sizes for School Uniform / PE Uniform. */
 export const UNIFORM_SIZES = [
   'XS',
   'S',
@@ -40,6 +42,16 @@ export const UNIFORM_SIZES = [
   '3XL',
   '4XL',
   '5XL',
+]
+
+/** Shirt (LCA) sizes: XS–XL plus Teen (no 2XL–5XL). */
+export const SHIRT_SIZES = [
+  'XS',
+  'S',
+  'M',
+  'L',
+  'XL',
+  'Teen',
 ]
 
 const GENDER_CODES = {
@@ -55,6 +67,8 @@ const TYPE_CODES = {
   Skirt: 'SKIRT',
   Shirt: 'SHIRT',
   Pants: 'PANTS',
+  'Logo 1': 'LOGO1',
+  'Logo 2': 'LOGO2',
 }
 
 const DEFAULT_FIELD_PLACEHOLDERS = {
@@ -68,10 +82,11 @@ const DEFAULT_FIELD_PLACEHOLDERS = {
 const CATEGORY_FIELD_PLACEHOLDERS = {
   uniform: { itemName: 'e.g. Classic White Polo', variation: 'Gender, type, size...' },
   'school uniform': { itemName: 'e.g. Classic White Polo', variation: 'Gender, type, size...' },
-  'pe uniform': { itemName: 'e.g. PE Training Shirt', variation: 'Gender, type, size...' },
-  'lca shirt': { itemName: 'e.g. LCA T-Shirt', variation: 'Gender, type, size...' },
-  'lca t-shirt': { itemName: 'e.g. LCA T-Shirt', variation: 'Gender, type, size...' },
-  'lca tshirt': { itemName: 'e.g. LCA T-Shirt', variation: 'Gender, type, size...' },
+  'pe uniform': { itemName: 'e.g. PE Training Shirt', variation: 'Type, size (Unisex)...' },
+  shirt: { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  'lca shirt': { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  'lca t-shirt': { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  'lca tshirt': { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
   bag: { itemName: 'e.g. School Backpack', variation: 'Color, capacity...' },
   book: { itemName: 'e.g. Grade 5 Mathematics Textbook', variation: 'Grade level, edition...' },
   accessory: { itemName: 'e.g. School Necktie', variation: 'Color, size...' },
@@ -86,6 +101,7 @@ export function categoryKindOf(category) {
 export function isLcaShirtCategoryName(categoryName = '') {
   const normalized = categoryName.toLowerCase().trim()
   if (!normalized) return false
+  if (normalized === 'shirt') return true
   if (UNIFORM_TYPE_LISTS[normalized] === LCA_SHIRT_TYPES) return true
   return normalized.includes('lca') && normalized.includes('shirt')
 }
@@ -128,13 +144,44 @@ export function isSchoolUniformCategory(categoryId, categories = []) {
   return category.categoryName?.toLowerCase().trim() === 'school uniform'
 }
 
-// Gender options available for a category. School Uniform is Male/Female only
-// (no Unisex); other uniform categories keep the full list.
+export function isPeUniformCategory(categoryId, categories = []) {
+  const category = categories.find((entry) => entry.categoryId === categoryId)
+  if (!category) return false
+  if (categoryKindOf(category) === 'PE_UNIFORM') return true
+  if (categoryKindOf(category)) return false
+  return category.categoryName?.toLowerCase().trim() === 'pe uniform'
+}
+
+export function isLcaShirtCategory(categoryId, categories = []) {
+  const category = categories.find((entry) => entry.categoryId === categoryId)
+  if (!category) return false
+  if (categoryKindOf(category) === 'LCA_SHIRT') return true
+  if (categoryKindOf(category)) return false
+  return isLcaShirtCategoryName(category.categoryName)
+}
+
+// Gender options available for a category:
+// - School Uniform → Male / Female only
+// - PE Uniform → Unisex only
+// - Shirt (LCA_SHIRT) → Unisex only (Logo 1 / Logo 2)
+// - other uniforms → Male / Female / Unisex
 export function getUniformGendersForCategory(categoryId, categories = []) {
   if (isSchoolUniformCategory(categoryId, categories)) {
     return UNIFORM_GENDERS.filter((gender) => gender !== 'Unisex')
   }
+  if (isPeUniformCategory(categoryId, categories)) {
+    return ['Unisex']
+  }
+  if (isLcaShirtCategory(categoryId, categories)) {
+    return ['Unisex']
+  }
   return UNIFORM_GENDERS
+}
+
+/** Size options for a category (Shirt uses XS–XL + Teen). */
+export function getUniformSizesForCategory(categoryId, categories = []) {
+  if (isLcaShirtCategory(categoryId, categories)) return [...SHIRT_SIZES]
+  return [...UNIFORM_SIZES]
 }
 
 export function getFieldPlaceholders(categoryId, categories = []) {
@@ -142,14 +189,14 @@ export function getFieldPlaceholders(categoryId, categories = []) {
   const kind = categoryKindOf(category)
   if (kind === 'SCHOOL_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['school uniform']
   if (kind === 'PE_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['pe uniform']
-  if (kind === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS['lca t-shirt']
+  if (kind === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS.shirt
   if (kind === 'LEARNING_KIT') return CATEGORY_FIELD_PLACEHOLDERS['learning kit']
 
   const normalized = category?.categoryName?.toLowerCase().trim() || ''
   if (!normalized) return DEFAULT_FIELD_PLACEHOLDERS
   if (CATEGORY_FIELD_PLACEHOLDERS[normalized]) return CATEGORY_FIELD_PLACEHOLDERS[normalized]
   if (normalized.endsWith(' uniform')) return CATEGORY_FIELD_PLACEHOLDERS.uniform
-  if (isLcaShirtCategoryName(normalized)) return CATEGORY_FIELD_PLACEHOLDERS['lca t-shirt']
+  if (isLcaShirtCategoryName(normalized)) return CATEGORY_FIELD_PLACEHOLDERS.shirt
   if (isLearningKitCategoryName(normalized)) return CATEGORY_FIELD_PLACEHOLDERS['learning kit']
   if (normalized.includes('bag')) return CATEGORY_FIELD_PLACEHOLDERS.bag
   if (normalized.includes('book')) return CATEGORY_FIELD_PLACEHOLDERS.book

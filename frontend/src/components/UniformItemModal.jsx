@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  UNIFORM_SIZES,
   buildUniformVariation,
   generateUniqueSku,
   getUniformGendersForCategory,
+  getUniformSizesForCategory,
   getUniformTypesForCategory,
   parseUniformVariation,
 } from '../constants/uniformOptions'
@@ -27,6 +27,7 @@ function emptyLines(types, categoryName = '') {
       itemName: buildUniformItemName(categoryName, type),
       stocks: 0,
       price: '',
+      remarks: '',
       inventoryId: null,
       sku: '',
       previousStocks: 0,
@@ -67,6 +68,7 @@ function linesFromItems(types, setItems, categoryName = '') {
       stocks: item.stocks ?? 0,
       previousStocks: item.stocks ?? 0,
       price: item.price ?? '',
+      remarks: item.remarks || '',
       inventoryId: item.inventoryId,
       sku: item.sku || '',
     }
@@ -75,7 +77,8 @@ function linesFromItems(types, setItems, categoryName = '') {
 }
 
 // Creates or edits the type rows for a uniform category as a set. School Uniform
-// pairs are Polo+Short (Male) or Blouse+Skirt (Female); PE is Shirt+Pants.
+// pairs are Polo+Short (Male) or Blouse+Skirt (Female); PE is Shirt+Pants;
+// LCA T-Shirt is Logo 1 + Logo 2.
 // Pass `editSeed` to open in edit mode with both mates of that gender/size.
 export function UniformItemModal({
   category,
@@ -105,7 +108,19 @@ export function UniformItemModal({
     () => getUniformGendersForCategory(category.categoryId, categories),
     [category.categoryId, categories],
   )
+  const sizes = useMemo(
+    () => getUniformSizesForCategory(category.categoryId, categories),
+    [category.categoryId, categories],
+  )
   const isPair = types.length > 1
+
+  // PE Uniform is Unisex-only — auto-select so the type/size form opens immediately.
+  useEffect(() => {
+    if (isEdit) return
+    if (genders.length === 1 && gender !== genders[0]) {
+      setGender(genders[0])
+    }
+  }, [genders, gender, isEdit])
 
   const setMates = useMemo(
     () => (isEdit ? findUniformSetMates(editSeed, items) : []),
@@ -135,6 +150,7 @@ export function UniformItemModal({
           itemName: buildUniformItemName(category.categoryName, type),
           stocks: 0,
           price: '',
+          remarks: '',
           inventoryId: null,
           sku: '',
           previousStocks: 0,
@@ -189,6 +205,7 @@ export function UniformItemModal({
       price: Number(lines[type]?.price || 0),
       stocks: Number(lines[type]?.stocks || 0),
       previousStocks: Number(lines[type]?.previousStocks || 0),
+      remarks: String(lines[type]?.remarks || '').trim().slice(0, 500) || null,
       lowStockThreshold: Number(lowStockThreshold || 0),
     }))
     onSave(payload, { isEdit })
@@ -235,7 +252,7 @@ export function UniformItemModal({
               onChange={(e) => setSize(e.target.value)}
             >
               <option value="">Select size</option>
-              {UNIFORM_SIZES.map((option) => <option key={option} value={option}>{option}</option>)}
+              {sizes.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
             {isEdit && <small className="field-hint">Size is locked for an existing set.</small>}
           </label>
@@ -299,13 +316,27 @@ export function UniformItemModal({
                         onChange={(e) => setLine(type, 'stocks', e.target.value)}
                       />
                     </label>
+                    <label className="uniform-line-remarks">Remarks
+                      <textarea
+                        rows={2}
+                        maxLength={500}
+                        disabled={isEdit && !lines[type]?.inventoryId}
+                        value={lines[type]?.remarks ?? ''}
+                        onChange={(e) => setLine(type, 'remarks', e.target.value)}
+                        placeholder="Optional description"
+                      />
+                    </label>
                   </div>
                 </div>
               )
             })}
           </div>
         ) : (
-          <p className="uniform-gender-hint">Choose Male or Female first. For School Uniform, Female uses Blouse and Skirt.</p>
+          <p className="uniform-gender-hint">
+            {genders.length === 1
+              ? `PE Uniform uses ${genders[0]} only. Select a size to continue.`
+              : 'Choose Male or Female first. For School Uniform, Female uses Blouse and Skirt.'}
+          </p>
         )}
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>

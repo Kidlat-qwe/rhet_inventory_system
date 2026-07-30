@@ -94,6 +94,14 @@ export function normalizeInventoryText(value = '') {
     .replace(/-+/g, '-')
 }
 
+/** Truncate long text for table cells; full value belongs in title/tooltip. */
+export function truncateText(value = '', maxLength = 48) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+}
+
 export function statusClass(status) {
   return formatStatus(status).toLowerCase().replaceAll(' ', '-')
 }

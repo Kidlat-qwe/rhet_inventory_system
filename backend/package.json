@@ -9,7 +9,11 @@
     "lint": "powershell -NoProfile -Command \"Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName }\"",
     "test": "node --test",
     "db:migrate": "node src/database/migrate.js",
-    "db:reset-inventory": "node scripts/reset-inventory.mjs"
+    "db:reset-inventory": "node scripts/reset-inventory.mjs",
+    "db:seed-uniforms": "node scripts/seed-uniform-variants.mjs",
+    "db:normalize-pe-unisex": "node scripts/normalize-pe-uniform-unisex.mjs",
+    "db:reset-lca-logos": "node scripts/reset-lca-shirt-logos.mjs",
+    "db:rename-shirt-skus": "node scripts/rename-shirt-skus-to-shi.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -21,6 +25,7 @@
     "helmet": "^8.1.0",
     "morgan": "^1.10.1",
     "pg": "^8.16.3",
+    "xlsx": "^0.18.5",
     "zod": "^4.1.12"
   }
 }

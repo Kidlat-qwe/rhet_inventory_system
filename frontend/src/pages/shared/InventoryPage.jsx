@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
-import { AllocationModal } from '../../components/AllocationModal'
+import { DeleteInventoryModal } from '../../components/DeleteInventoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
 import { ItemModal } from '../../components/ItemModal'
@@ -11,18 +11,19 @@ import { UniformItemModal } from '../../components/UniformItemModal'
 import { usePagination } from '../../hooks/usePagination'
 import {
   generateUniqueSku,
+  isLcaShirtCategory,
   isLearningKitCategory,
   isUniformCategory,
   resolveItemVariation,
 } from '../../constants/uniformOptions'
-import { allocateToChannel, deallocateFromChannel } from '../../services/channelAllocationApi'
 import {
   batchCreateInventory,
   createInventoryItem,
   createStockMovement,
+  deleteInventoryItem,
   updateInventoryItem,
 } from '../../services/inventoryApi'
-import { formatCurrency, formatDate, normalizeInventoryText } from '../../utils/format'
+import { formatCurrency, formatDate, normalizeInventoryText, truncateText } from '../../utils/format'
 
 /** Prefer virtual kit availability when deciding stock health badges. */
 function effectiveItemStatus(item) {
@@ -51,28 +52,21 @@ function CategoryStatus({ row }) {
   )
 }
 
-export default function InventoryPage({ items, categories, allocations = [], canManage = false, onRefresh }) {
+export default function InventoryPage({ items, categories, canManage = false, onRefresh }) {
   const [activeCategoryId, setActiveCategoryId] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [editItem, setEditItem] = useState(null)
   const [uniformModal, setUniformModal] = useState(null) // { category, editSeed? }
   const [stock, setStock] = useState(null)
-  const [allocation, setAllocation] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-
-  const allocatedByItem = useMemo(() => {
-    const map = new Map()
-    allocations.forEach((row) => map.set(row.inventoryId, row.allocatedQty))
-    return map
-  }, [allocations])
 
   // Category-level rollup shown on the main inventory page.
   const summaryRows = useMemo(() => categories.map((category) => {
     const catItems = items.filter((item) => item.categoryId === category.categoryId)
     let totalStocks = 0
-    let totalShopee = 0
     let low = 0
     let out = 0
     let inactive = 0
@@ -80,14 +74,13 @@ export default function InventoryPage({ items, categories, allocations = [], can
     catItems.forEach((item) => {
       const status = effectiveItemStatus(item)
       totalStocks += item.stocks
-      totalShopee += allocatedByItem.get(item.inventoryId) || 0
       if (status === 'LOW_STOCK') low += 1
       if (status === 'OUT_OF_STOCK') out += 1
       if (status === 'INACTIVE') inactive += 1
       if (!lastUpdated || new Date(item.updatedAt) > new Date(lastUpdated)) lastUpdated = item.updatedAt
     })
-    return { ...category, itemCount: catItems.length, totalStocks, totalShopee, low, out, inactive, lastUpdated }
-  }), [categories, items, allocatedByItem])
+    return { ...category, itemCount: catItems.length, totalStocks, low, out, inactive, lastUpdated }
+  }), [categories, items])
 
   const activeCategory = useMemo(
     () => categories.find((category) => category.categoryId === activeCategoryId) || null,
@@ -128,12 +121,17 @@ export default function InventoryPage({ items, categories, allocations = [], can
   }
 
   function startAdd() {
-    if (isUniformCategory(activeCategoryId, categories)) setUniformModal({ category: activeCategory })
-    else setEditItem({ categoryId: activeCategoryId })
+    // LCA T-Shirt uses the single-item form so Logo (Logo 1 / Logo 2) is a visible field.
+    // School Uniform / PE Uniform still use the paired set modal.
+    if (isUniformCategory(activeCategoryId, categories) && !isLcaShirtCategory(activeCategoryId, categories)) {
+      setUniformModal({ category: activeCategory })
+    } else {
+      setEditItem({ categoryId: activeCategoryId })
+    }
   }
 
   function startEdit(item) {
-    if (isUniformCategory(item.categoryId, categories)) {
+    if (isUniformCategory(item.categoryId, categories) && !isLcaShirtCategory(item.categoryId, categories)) {
       const category = categories.find((entry) => entry.categoryId === item.categoryId) || activeCategory
       setUniformModal({ category, editSeed: item })
       return
@@ -145,16 +143,18 @@ export default function InventoryPage({ items, categories, allocations = [], can
     setBusy(true)
     setError('')
     try {
-      // SKU is immutable after creation: keep the existing code on edit and
-      // only derive a fresh, collision-safe SKU for brand-new items.
-      const sku = form.inventoryId ? form.sku : generateUniqueSku(form, categories, items)
+      const isUniform = isUniformCategory(form.categoryId, categories)
+      const isLearningKit = isLearningKitCategory(form.categoryId, categories)
+      // Uniform SKUs stay locked after create. Non-uniform (Others, etc.) regenerate
+      // from category + item name on edit so renaming the item updates the SKU.
+      const sku = (form.inventoryId && isUniform)
+        ? form.sku
+        : (generateUniqueSku(form, categories, items) || form.sku)
       if (!sku) {
-        throw new Error(isUniformCategory(form.categoryId, categories)
+        throw new Error(isUniform
           ? 'Complete category, gender, type, and size to generate the SKU.'
           : 'Complete item name and category to generate the SKU.')
       }
-      const isUniform = isUniformCategory(form.categoryId, categories)
-      const isLearningKit = isLearningKitCategory(form.categoryId, categories)
       const body = {
         sku,
         itemName: normalizeInventoryText(form.itemName).slice(0, 180),
@@ -165,6 +165,7 @@ export default function InventoryPage({ items, categories, allocations = [], can
         uniformGender: isUniform ? form.uniformGender || null : null,
         uniformType: isUniform ? form.uniformType || null : null,
         uniformSize: isUniform ? form.uniformSize || null : null,
+        remarks: String(form.remarks || '').trim().slice(0, 500) || null,
         ...(form.inventoryId ? {} : { stocks: form.stocks }),
         ...(isLearningKit ? { components: form.components || [] } : {}),
       }
@@ -195,6 +196,7 @@ export default function InventoryPage({ items, categories, allocations = [], can
             uniformGender: row.uniformGender,
             uniformType: row.uniformType,
             uniformSize: row.uniformSize,
+            remarks: row.remarks || null,
           })
           if (Number(row.stocks) !== Number(row.previousStocks)) {
             await createStockMovement(row.inventoryId, {
@@ -233,14 +235,13 @@ export default function InventoryPage({ items, categories, allocations = [], can
     }
   }
 
-  async function submitAllocation(item, kind, quantity, remarks) {
+  async function confirmDeleteItem(item) {
+    if (!canManage || !item?.inventoryId) return
     setBusy(true)
     setError('')
     try {
-      const body = { inventoryId: item.inventoryId, channel: 'SHOPEE', quantity: Number(quantity), remarks: remarks || undefined }
-      if (kind === 'allocate') await allocateToChannel(body)
-      else await deallocateFromChannel(body)
-      setAllocation(null)
+      await deleteInventoryItem(item.inventoryId, item.itemName)
+      setDeleteTarget(null)
       await onRefresh()
     } catch (err) {
       setError(err.message)
@@ -274,13 +275,12 @@ export default function InventoryPage({ items, categories, allocations = [], can
         />
       )}
       {stock && <StockModal item={stock} busy={busy} close={() => setStock(null)} adjust={adjustStock} />}
-      {allocation && (
-        <AllocationModal
-          item={allocation}
-          allocatedQty={allocatedByItem.get(allocation.inventoryId) || 0}
+      {canManage && deleteTarget && (
+        <DeleteInventoryModal
+          item={deleteTarget}
           busy={busy}
-          close={() => setAllocation(null)}
-          submit={submitAllocation}
+          onClose={() => !busy && setDeleteTarget(null)}
+          onConfirm={confirmDeleteItem}
         />
       )}
     </>
@@ -325,8 +325,8 @@ export default function InventoryPage({ items, categories, allocations = [], can
                   <th>Item name</th>
                   <th>SKU</th>
                   <th>Variation</th>
+                  <th>Remarks</th>
                   <th>Stock</th>
-                  <th>Shopee</th>
                   <th>Price</th>
                   <th>Status</th>
                   <th>Last updated</th>
@@ -337,6 +337,7 @@ export default function InventoryPage({ items, categories, allocations = [], can
                 {detailShown.length ? detailPager.pageItems.map((item) => {
                   const isVirtualKit = item.stockMode === 'VIRTUAL_BUNDLE' || isLearningKitCategory(item.categoryId, categories)
                   const status = effectiveItemStatus(item)
+                  const remarksText = String(item.remarks || '').trim()
                   return (
                   <tr key={item.inventoryId}>
                     <td>
@@ -350,6 +351,13 @@ export default function InventoryPage({ items, categories, allocations = [], can
                     </td>
                     <td><span className="sku-chip">{item.sku}</span></td>
                     <td className="variation-cell">{item.variation || '—'}</td>
+                    <td className="remarks-cell">
+                      {remarksText ? (
+                        <span title={remarksText}>{truncateText(remarksText, 48)}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -369,16 +377,6 @@ export default function InventoryPage({ items, categories, allocations = [], can
                         </small>
                       </button>
                     </td>
-                    <td>
-                      {canManage ? (
-                        <button type="button" className="stock-link" onClick={() => setAllocation(item)}>
-                          <strong>{allocatedByItem.get(item.inventoryId) || 0}</strong>
-                          <small>Allocated</small>
-                        </button>
-                      ) : (
-                        <span className="muted">{allocatedByItem.get(item.inventoryId) || 0}</span>
-                      )}
-                    </td>
                     <td className="metric-cell"><strong>{formatCurrency(item.price)}</strong></td>
                     <td>
                       <StatusBadge
@@ -391,11 +389,29 @@ export default function InventoryPage({ items, categories, allocations = [], can
                     <td><span className="muted">{formatDate(item.updatedAt)}</span></td>
                     <td>
                       <ActionsMenu
-                        items={[{
-                          key: 'edit',
-                          label: isUniformCategory(item.categoryId, categories) ? 'Edit set' : 'Edit item',
-                          onClick: () => startEdit(item),
-                        }]}
+                        label={`Actions for ${item.itemName}`}
+                        disabled={busy}
+                        items={[
+                          {
+                            key: 'edit',
+                            label: isUniformCategory(item.categoryId, categories)
+                              && !isLcaShirtCategory(item.categoryId, categories)
+                              ? 'Edit set'
+                              : 'Edit item',
+                            onClick: () => startEdit(item),
+                          },
+                          ...(canManage
+                            ? [{
+                              key: 'delete',
+                              label: 'Delete item',
+                              danger: true,
+                              onClick: () => {
+                                setError('')
+                                setDeleteTarget(item)
+                              },
+                            }]
+                            : []),
+                        ]}
                       />
                     </td>
                   </tr>
@@ -422,12 +438,11 @@ export default function InventoryPage({ items, categories, allocations = [], can
       {error && <div className="page-error">{error}</div>}
       <section className="panel inventory-panel">
         <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-          <table className="inventory-table" style={{ width: '100%', minWidth: '860px' }}>
+          <table className="inventory-table" style={{ width: '100%', minWidth: '760px' }}>
             <thead>
               <tr>
                 <th>Category</th>
                 <th>Total stocks</th>
-                <th>Total Shopee</th>
                 <th>Status</th>
                 <th>Last updated</th>
                 <th />
@@ -443,7 +458,6 @@ export default function InventoryPage({ items, categories, allocations = [], can
                     </button>
                   </td>
                   <td><strong className="metric-cell">{row.totalStocks}</strong></td>
-                  <td className="metric-cell">{row.totalShopee}</td>
                   <td><CategoryStatus row={row} /></td>
                   <td><span className="muted">{formatDate(row.lastUpdated)}</span></td>
                   <td>

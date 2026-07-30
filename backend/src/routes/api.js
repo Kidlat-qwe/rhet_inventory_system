@@ -6,7 +6,7 @@ import { CATEGORY_KINDS, normalizeCategoryKind } from '../services/inventory.ser
 import { asyncHandler, camelize, success } from '../utils/api.js';
 import { validate } from '../middleware/validate.js';
 import { requireAdminRole } from '../middleware/auth.js';
-import { createInventoryBatchSchema, createInventorySchema, idParams, listInventorySchema, movementListSchema, movementSchema, updateInventorySchema } from '../validation/schemas.js';
+import { createInventoryBatchSchema, createInventorySchema, deleteInventorySchema, idParams, listInventorySchema, movementListSchema, movementSchema, updateInventorySchema } from '../validation/schemas.js';
 import {
   createIntegrationClientSchema,
   integrationSystemCodeParams,
@@ -123,5 +123,6 @@ api.post('/inventory', validate(createInventorySchema), asyncHandler(controller.
 api.post('/inventory/batch', validate(createInventoryBatchSchema), asyncHandler(controller.createBatch));
 api.get('/inventory/:id', validate(idParams), asyncHandler(controller.get));
 api.patch('/inventory/:id', validate(updateInventorySchema), asyncHandler(controller.update));
+api.delete('/inventory/:id', requireAdminRole, validate(deleteInventorySchema), asyncHandler(controller.remove));
 api.post('/inventory/:id/movements', validate(movementSchema), asyncHandler(controller.move));
 api.get('/stock-movements', validate(movementListSchema), asyncHandler(controller.movements));

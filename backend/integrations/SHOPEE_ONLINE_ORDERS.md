@@ -4,49 +4,37 @@ Tracks Shopee checkout orders and channel stock allocation inside RHET Inventory
 
 The integration was built in two phases. **Phase 2B (current)** replaces the Phase 1 order-based stock deduction with an **allocation model**, and repurposes the Online Orders page into a **fulfillment tracking board**. Phase 1 behavior described further below is kept only for historical/audit compatibility.
 
-## Stock model: allocation, not order deduction (Phase 2B)
+## Stock model: ship deduct via CSV/XLSX import (current)
 
-RHET stock is deducted when the admin **allocates** units to the Shopee channel — not when a Shopee customer checks out. This is the "RHET-initiated" model, chosen because the RHET inventory admin and the Shopee seller are the same person/team (no third-party seller to reconcile with).
+Shopee Open API is not available yet, so RHET uses **Seller Centre export import**. Warehouse stock is deducted when an order becomes **`SHIPPED`** (import or **Mark shipped**), for **mapped** line items only.
 
-| Step | RHET stock | Shopee allocated qty | Movement |
-|---|---|---|---|
-| Initial | 100 | 0 | — |
-| Admin allocates 20 to Shopee | 80 (−20) | 20 | `CHANNEL_ALLOCATION` (deduct) |
-| Buyer purchases 1 on Shopee | 80 (unchanged) | 19 | none in RHET |
-| Return initiated (inspecting) | 80 (unchanged) | 19 | none yet |
-| Admin confirms reusable | 81 (+1) | 19 | `RETURN` |
-| Admin confirms not reusable | 80 (unchanged) | 19 | none |
-| Admin deallocates unsold stock | +qty | −qty | `CHANNEL_ALLOCATION` (add) |
+| Step | RHET stock | Movement |
+|---|---|---|
+| Import unpaid / to ship (mapped) | unchanged | none |
+| Map unmatched / bundle lines | unchanged | none |
+| Order enters `SHIPPED` (mapped + enough stock) | −qty | `ONLINE_SALE` |
+| Mark shipped blocked if unmatched or short stock | unchanged | none |
+| Cancel after deduct | +qty | `CANCELLED` |
+| Reusable return confirmed | +qty | `RETURN` |
+| Not-reusable return | unchanged | none |
 
 Rules:
 
-1. Importing/creating a Shopee order **never deducts RHET stock**. Orders are matched to inventory for visibility/reporting only (`MATCHED` / `UNMATCHED` line status).
-2. Stock only moves when an admin explicitly allocates or deallocates from the **Inventory** page ("Shopee" column → allocation modal).
-3. Returns are never auto-restored. An inventory admin must confirm reusable/not-reusable from the fulfillment board's Return step.
-4. Not-reusable returns intentionally create **no stock movement** — the unit was already allocated out of the warehouse, so there is nothing to "damage" in RHET; it simply never comes back. This is a deliberate deviation from a literal `DAMAGED` movement, which would incorrectly deduct stock a second time.
-5. First-time Shopee API connection (Phase 4, not built yet) will take a baseline snapshot and will not retroactively deduct existing Shopee stock.
+1. Channel **allocation UI is hidden** (no Shopee API). Allocate APIs remain in code for a future Phase 4 but are not used in the product UI.
+2. **Map all lines** before shipping. Bundle lines use multi-item matches with per-item qty.
+3. **Mark shipped** and import-to-`SHIPPED` require sufficient stock; otherwise the action is blocked (manual) or fulfillment is left unchanged (import).
+4. Re-import never deducts twice (`DEDUCTED` + `movement_id` on matches).
+5. Returns: reusable restores mapped qtys; not-reusable restores nothing.
 
-### Data model
+### Legacy note (Phase 2B allocation)
 
-- `channel_stock_snapshots` — one row per `(channel, inventory_id)`. Tracks `allocated_qty` (cumulative units currently allocated to the channel) and reserves `baseline_qty` / `last_synced_at` for the future live Shopee sync.
-- `channel_allocation_logs` — append-only audit trail of every allocate/deallocate action, linked to the `stock_movements` row it produced.
-- `stock_movements.movement_type` gained `CHANNEL_ALLOCATION` (direction-based, like `CANCELLED`: `direction: 'DEDUCT'` for allocate, `direction: 'ADD'` for deallocate).
-
-### API — Channel allocations
-
-Base path: `/api/v1/channel-allocations`
-
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| GET | `/` | Admin/User | List per-item allocation snapshots for a channel (`?channel=SHOPEE`) |
-| POST | `/allocate` | Admin | Deduct RHET stock and increase channel allocated qty `{ inventoryId, channel?, quantity, remarks? }` |
-| POST | `/deallocate` | Admin | Restore RHET stock and decrease channel allocated qty `{ inventoryId, channel?, quantity, remarks? }` |
+Earlier builds deducted on Inventory “Allocate to Shopee”. That path is retired in the UI while Open Platform credentials are unavailable. Tables `channel_stock_snapshots` / `channel_allocation_logs` are kept for a future live sync.
 
 ## Fulfillment tracking board (Phase 2B)
 
 The Online Orders page is now an **internal delivery tracker**, table-style with status tabs (not a kanban board, to reuse the existing responsive-table pattern). It is for admin/user staff only — there is no customer-facing tracking view.
 
-`fulfillment_status` is a separate column from `order_status` (SKU matching). Moving an order across fulfillment columns never touches stock **except** the Return confirmation step.
+`fulfillment_status` is a separate column from `order_status` (SKU matching). Moving an order to **`SHIPPED`** deducts mapped RHET stock. Return confirmation may restore stock when reusable.
 
 | Column | Meaning |
 |---|---|
@@ -56,8 +44,9 @@ The Online Orders page is now an **internal delivery tracker**, table-style with
 | `RECEIVED` | Customer received the item |
 | `RETURN` | Return initiated, needs inspection |
 | `RETURN_CONFIRMED` | Inventory admin finished inspection |
+| `CANCELLED` | Order cancelled on Shopee or cancelled in RHET (terminal) |
 
-Allowed transitions: `PROCESSING → READY_TO_SHIP → SHIPPED → RECEIVED`, and `SHIPPED`/`RECEIVED → RETURN → RETURN_CONFIRMED` (return confirmation is its own endpoint, not a plain status move). Before the Shopee API is connected, an admin moves orders manually with buttons on the order detail modal. After Phase 4 connects the Shopee Order Status Push webhook, `fulfillment_status` will auto-update; manual override stays available.
+Allowed transitions: `PROCESSING → READY_TO_SHIP → SHIPPED → RECEIVED`, and `SHIPPED`/`RECEIVED → RETURN → RETURN_CONFIRMED` (return confirmation is its own endpoint, not a plain status move). Cancel is a side-exit to `CANCELLED` (CSV import or **Cancel order**); it is not available from Return stages. Before the Shopee API is connected, an admin moves orders manually with buttons on the order detail modal. After Phase 4 connects the Shopee Order Status Push webhook, `fulfillment_status` will auto-update; manual override stays available.
 
 ### API — Fulfillment & returns
 
@@ -81,8 +70,22 @@ Historical orders imported before Phase 2B may still show `DEDUCTED`/`OVERSOLD` 
 
 | Source | Auth | Notes |
 |---|---|---|
-| CSV import | Firebase admin | Upload Shopee Seller Centre order export |
-| Manual order entry | Firebase admin | One-off order when live sync is unavailable |
+| CSV / XLSX import | Firebase admin or user staff | Upload Shopee Seller Centre order export `.csv` or `.xlsx` (preview → confirm) |
+| Manual order entry | Firebase admin or user staff | One-off order when live sync is unavailable |
+
+### Import preview and re-import fulfillment sync
+
+1. Admin selects a Shopee `.csv` or `.xlsx` → RHET calls `POST /online-orders/import/preview` (no DB writes).
+2. UI shows new vs existing orders and any **forward-only** fulfillment changes driven by the export’s Order Status.
+3. Admin confirms → `POST /online-orders/import` saves orders/lines and may advance `fulfillment_status`.
+
+Re-import rules for delivery status:
+
+- Status follows the **exported** Shopee value (e.g. still “To Receive” → stay `SHIPPED`; “Completed” → `RECEIVED`).
+- Only **forward** moves are applied; never move backward (e.g. `RECEIVED` → `SHIPPED`).
+- Rows already in `RETURN` / `RETURN_CONFIRMED` are not changed by import.
+- Import still may deduct RHET stock when advancing into `SHIPPED` (mapped lines + sufficient stock).
+- Manual fulfillment buttons remain available as override (**Mark shipped** requires mapped lines and stock).
 
 ## Phase 4 (future, needs Shopee API credentials — not implemented yet)
 
@@ -113,30 +116,58 @@ The parser accepts common Shopee export headers and maps them flexibly:
 | `Quantity` | `quantity` |
 | `Deal Price`, `Original Price` | `unitPrice` |
 | `Order Total`, `Total Amount` | `totalAmount` |
+| `Order Status`, `Status`, `Parcel Status`, `Shipping Status` | mapped → `fulfillment_status` (forward-only on import) |
+
+Approximate Shopee status → RHET fulfillment mapping:
+
+| Shopee export text (examples) | RHET `fulfillment_status` |
+|---|---|
+| Unpaid / To Pay / Processing | `PROCESSING` |
+| To Ship / Ready To Ship / Processed | `READY_TO_SHIP` |
+| Shipped / To Receive / Shipping | `SHIPPED` |
+| Completed / Delivered / Received | `RECEIVED` |
+| Return / Refund | `RETURN` (only from `SHIPPED` or `RECEIVED`) |
+| Cancelled | `CANCELLED` (from active stages; not from Return) |
 
 Multiple CSV rows with the same order ID are grouped into one order with multiple line items.
 
 ## Matching rules (no stock effect)
 
 1. Look up `channel_sku_mappings` by `(channel, external_sku)`
-2. If no mapping exists, or the mapped item is inactive → line status `UNMATCHED`, order becomes `NEEDS_ATTENTION`
-3. If mapping exists and is active → line status `MATCHED`
-4. Order status is derived from line statuses:
+2. If Shopee SKU was blank (`ROW-n`), try `channel_sku_mappings` by `external_variation`
+3. If still no mapping, match when `external_sku` equals an active RHET `inventory.sku` (case-insensitive) and remember that mapping for later imports
+4. If no match exists, or the matched item is inactive → line status `UNMATCHED`, order becomes `NEEDS_ATTENTION`
+5. If a match exists and is active → line status `MATCHED`
+6. Order status is derived from line statuses:
    - all matched (or cancelled) with at least one matched → `FULFILLED`
    - any unmatched → `NEEDS_ATTENTION`
    - all cancelled → `CANCELLED`
 
-Re-importing the same Shopee order ID is idempotent.
+Re-importing the same Shopee order ID upserts order/line details and may advance fulfillment from the export status (forward-only).
 
 ## Admin resolution workflow
 
 When a line is `UNMATCHED`:
 
-1. Open **Online Orders** → **Review**
-2. Choose the RHET inventory item for that Shopee SKU
-3. RHET saves the mapping and marks the line `MATCHED` (still no stock effect)
+1. Open **Online Orders** → order details → **Map item**
+2. Pick a **category**, then the RHET **inventory item** (add more rows for bundles; set qty per item)
+3. Set a configurable quantity per RHET item (bundle / kit lines)
+4. Save — RHET marks the line `MATCHED` (still no stock effect)
 
-Future imports with the same Shopee SKU will auto-resolve through the saved mapping.
+API body for `POST /items/:id/resolve`:
+
+```json
+{
+  "matches": [
+    { "inventoryId": "uuid", "quantity": 2 },
+    { "inventoryId": "uuid", "quantity": 1 }
+  ]
+}
+```
+
+Legacy single-item body `{ "inventoryId": "uuid" }` still works. Multi-item rows are stored in `online_order_item_matches`; `online_order_items.matched_inventory_id` keeps the first (primary) match for backward compatibility. Synthetic CSV SKUs (`ROW-n`) are not written to `channel_sku_mappings`.
+
+Future imports with a real Shopee SKU auto-resolve through the saved primary channel mapping (single-item). Bundle lines still need multi-map when there is no real SKU.
 
 ## REST API — Orders (Firebase auth)
 
@@ -147,9 +178,10 @@ Base path: `/api/v1/online-orders`
 | GET | `/` | Admin/User | List online orders (`?status=`, `?fulfillmentStatus=`, `?channel=`, `?search=`) |
 | GET | `/:id` | Admin/User | Order detail with line items |
 | GET | `/mappings` | Admin/User | List channel SKU mappings |
-| POST | `/import` | Admin | Import Shopee CSV text `{ csvText, channel? }` |
+| POST | `/import/preview` | Admin | Dry-run parse + compare (no save) `{ csvText }` or `{ fileBase64, fileName }` |
+| POST | `/import` | Admin | Confirm import Shopee `.csv` / `.xlsx` |
 | POST | `/manual` | Admin | Create one manual order |
-| POST | `/items/:id/resolve` | Admin | Map line item to inventory (visibility only) |
+| POST | `/items/:id/resolve` | Admin | Map line to one or more inventory items (`matches[]` or legacy `inventoryId`) |
 | POST | `/items/:id/cancel` | Admin | Cancel one line (restores stock only for legacy deducted lines) |
 | POST | `/:id/cancel` | Admin | Cancel entire order (restores stock only for legacy deducted lines) |
 | POST | `/:id/fulfillment-status` | Admin | Move order to the next fulfillment column |
@@ -159,11 +191,12 @@ Base path: `/api/v1/online-orders`
 
 - `online_orders` (now includes `fulfillment_status`, `return_reusable`, `return_notes`)
 - `online_order_items`
+- `online_order_item_matches` (multi RHET items per Shopee line; migration `019`)
 - `channel_sku_mappings`
 - `channel_stock_snapshots` (Phase 2B)
 - `channel_allocation_logs` (Phase 2B)
 
-Migrations: `backend/database/migrations/010_online_orders.sql`, `backend/database/migrations/011_channel_allocation_and_fulfillment.sql`
+Migrations: `010_online_orders.sql`, `011_channel_allocation_and_fulfillment.sql`, `019_online_order_item_matches.sql`, `020_fulfillment_cancelled.sql`
 
 ## Relationship to PSMS integration
 

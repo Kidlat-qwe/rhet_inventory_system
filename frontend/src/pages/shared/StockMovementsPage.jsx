@@ -7,9 +7,20 @@ export default function StockMovementsPage({ movements }) {
 
   return (
     <>
-      <div className="page-title"><div><h1>Stock movements</h1><p>A complete audit trail of every inventory transaction.</p></div></div>
+      <div className="page-title">
+        <div>
+          <h1>Stock movements</h1>
+          <p>
+            Warehouse audit trail (stock in/out, adjustments, PSMS/CMS releases).
+            Shopee online-order sales and restores are under Merchandise releasing logs → Online orders.
+          </p>
+        </div>
+      </div>
       <section className="panel recent">
-        <MovementTable rows={pageItems} />
+        <MovementTable
+          rows={pageItems}
+          emptyMessage="Warehouse stock in/out and adjustments will appear here. Online order deductions are listed under Releasing logs."
+        />
         <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="movements" />
       </section>
     </>

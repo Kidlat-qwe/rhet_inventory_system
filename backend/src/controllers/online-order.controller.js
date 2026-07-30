@@ -17,9 +17,13 @@ export const get = asyncHandler(async (req, res) => {
 });
 
 export const importCsv = asyncHandler(async (req, res) => {
-  const { csvText, channel } = req.validated.body;
-  const data = await service.importOrdersFromCsv(csvText, req.admin.user_id, channel);
+  const data = await service.importOrdersFromCsv(req.validated.body, req.admin.user_id);
   success(res, data, { count: data.length }, 201);
+});
+
+export const previewImportCsv = asyncHandler(async (req, res) => {
+  const data = await service.previewOrdersFromCsv(req.validated.body);
+  success(res, data);
 });
 
 export const createManual = asyncHandler(async (req, res) => {
@@ -30,7 +34,7 @@ export const createManual = asyncHandler(async (req, res) => {
 export const resolveItem = asyncHandler(async (req, res) => {
   success(res, await service.resolveOrderItem(
     req.validated.params.id,
-    req.validated.body.inventoryId,
+    req.validated.body,
     req.admin,
   ));
 });

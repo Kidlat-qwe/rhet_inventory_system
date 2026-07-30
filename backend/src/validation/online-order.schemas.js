@@ -10,7 +10,15 @@ const orderItemSchema = z.object({
   unitPrice: z.coerce.number().min(0).default(0),
 });
 
-export const FULFILLMENT_STATUSES = ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED', 'RECEIVED', 'RETURN', 'RETURN_CONFIRMED'];
+export const FULFILLMENT_STATUSES = [
+  'PROCESSING',
+  'READY_TO_SHIP',
+  'SHIPPED',
+  'RECEIVED',
+  'RETURN',
+  'RETURN_CONFIRMED',
+  'CANCELLED',
+];
 
 export const onlineOrderListSchema = z.object({
   body: z.any(),
@@ -39,8 +47,20 @@ export const onlineOrderItemIdParams = z.object({
 
 export const importOnlineOrdersSchema = z.object({
   body: z.object({
-    csvText: z.string().trim().min(1).max(2_000_000),
+    csvText: z.string().max(2_000_000).optional(),
+    fileBase64: z.string().min(1).max(12_000_000).optional(),
+    fileName: z.string().trim().max(255).optional(),
     channel: z.string().trim().max(50).default('SHOPEE'),
+  }).superRefine((body, ctx) => {
+    const hasCsv = Boolean(body.csvText && String(body.csvText).trim());
+    const hasFile = Boolean(body.fileBase64 && String(body.fileBase64).trim());
+    if (!hasCsv && !hasFile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide csvText or fileBase64',
+        path: ['csvText'],
+      });
+    }
   }),
   query: z.any(),
   params: z.any(),
@@ -62,7 +82,30 @@ export const manualOnlineOrderSchema = z.object({
 
 export const resolveOnlineOrderItemSchema = z.object({
   body: z.object({
-    inventoryId: z.string().uuid(),
+    inventoryId: z.string().uuid().optional(),
+    quantity: z.coerce.number().int().positive().max(10000).optional(),
+    matches: z.array(z.object({
+      inventoryId: z.string().uuid(),
+      quantity: z.coerce.number().int().positive().max(10000),
+    })).min(1).max(30).optional(),
+  }).superRefine((body, ctx) => {
+    if (!body.matches?.length && !body.inventoryId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide matches[] or inventoryId',
+        path: ['matches'],
+      });
+    }
+    if (body.matches?.length) {
+      const ids = body.matches.map((row) => row.inventoryId);
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Each inventory item may only appear once in matches',
+          path: ['matches'],
+        });
+      }
+    }
   }),
   query: z.any(),
   params: z.object({ id: z.string().uuid() }),

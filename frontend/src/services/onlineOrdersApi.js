@@ -18,11 +18,25 @@ export const fetchOnlineOrders = (params = {}) =>
 export const fetchOnlineOrder = (id) =>
   api(`/online-orders/${id}`).then((response) => response.data)
 
-export const importOnlineOrdersCsv = (csvText, channel = 'SHOPEE') =>
-  api('/online-orders/import', {
+export const importOnlineOrdersCsv = (payload, channel = 'SHOPEE') => {
+  const body = typeof payload === 'string'
+    ? { csvText: payload, channel }
+    : { channel, ...payload }
+  return api('/online-orders/import', {
     method: 'POST',
-    body: JSON.stringify({ csvText, channel }),
+    body: JSON.stringify(body),
   }).then((response) => response.data)
+}
+
+export const previewOnlineOrdersCsv = (payload, channel = 'SHOPEE') => {
+  const body = typeof payload === 'string'
+    ? { csvText: payload, channel }
+    : { channel, ...payload }
+  return api('/online-orders/import/preview', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }).then((response) => response.data)
+}
 
 export const createManualOnlineOrder = (body) =>
   api('/online-orders/manual', {
@@ -30,11 +44,15 @@ export const createManualOnlineOrder = (body) =>
     body: JSON.stringify(body),
   }).then((response) => response.data)
 
-export const resolveOnlineOrderItem = (itemId, inventoryId) =>
-  api(`/online-orders/items/${itemId}/resolve`, {
+export const resolveOnlineOrderItem = (itemId, payload) => {
+  const body = typeof payload === 'string'
+    ? { inventoryId: payload }
+    : payload
+  return api(`/online-orders/items/${itemId}/resolve`, {
     method: 'POST',
-    body: JSON.stringify({ inventoryId }),
+    body: JSON.stringify(body),
   }).then((response) => response.data)
+}
 
 export const cancelOnlineOrderItem = (itemId) =>
   api(`/online-orders/items/${itemId}/cancel`, {

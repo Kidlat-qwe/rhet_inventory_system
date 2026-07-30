@@ -72,6 +72,12 @@ export const batchCreateInventory = (items) =>
 export const updateInventoryItem = (id, body) =>
   api(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
 
+export const deleteInventoryItem = (id, confirmationName) =>
+  api(`/inventory/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmationName }),
+  }).then((response) => response.data)
+
 export const createStockMovement = (id, body) =>
   api(`/inventory/${id}/movements`, { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 

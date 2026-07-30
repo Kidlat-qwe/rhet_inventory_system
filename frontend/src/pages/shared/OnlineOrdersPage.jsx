@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -9,6 +9,7 @@ import {
   createManualOnlineOrder,
   fetchOnlineOrder,
   importOnlineOrdersCsv,
+  previewOnlineOrdersCsv,
   resolveOnlineOrderItem,
   updateOnlineOrderFulfillmentStatus,
 } from '../../services/onlineOrdersApi'
@@ -25,7 +26,15 @@ const EMPTY_MANUAL_ITEM = {
 // Delivery/fulfillment tracking columns, separate from order_status (SKU
 // matching). Mirrors FULFILLMENT_TRANSITIONS in the backend online-order
 // service — keep the two in sync if the workflow changes.
-const FULFILLMENT_COLUMNS = ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED', 'RECEIVED', 'RETURN', 'RETURN_CONFIRMED']
+const FULFILLMENT_COLUMNS = [
+  'PROCESSING',
+  'READY_TO_SHIP',
+  'SHIPPED',
+  'RECEIVED',
+  'RETURN',
+  'RETURN_CONFIRMED',
+  'CANCELLED',
+]
 
 const NEXT_FULFILLMENT_ACTION = {
   PROCESSING: { status: 'READY_TO_SHIP', label: 'Mark ready to ship' },
@@ -42,13 +51,33 @@ function canResolveLine(line) {
   return line?.lineStatus === 'UNMATCHED' || line?.lineStatus === 'OVERSOLD'
 }
 
+function emptyMapRow(quantity = 1) {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    categoryName: '',
+    inventoryId: '',
+    quantity: Math.max(1, Number(quantity) || 1),
+  }
+}
+
+function formatMatchedSku(line) {
+  const matches = line?.inventoryMatches || []
+  if (matches.length > 1) {
+    return matches.map((match) => `${match.sku || '—'} ×${match.quantity}`).join(', ')
+  }
+  if (matches.length === 1) {
+    return matches[0].sku || line.matchedSku || '—'
+  }
+  return detailValue(line?.matchedSku)
+}
+
 export default function OnlineOrdersPage({ orders, inventory, onRefresh, canManage = false }) {
   const [filter, setFilter] = useState('PROCESSING')
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(null)
   const [mode, setMode] = useState('details')
-  const [resolveInventoryId, setResolveInventoryId] = useState('')
+  const [resolveMatches, setResolveMatches] = useState([])
   const [resolveItemId, setResolveItemId] = useState('')
   const [returnReusable, setReturnReusable] = useState('true')
   const [returnNotes, setReturnNotes] = useState('')
@@ -58,6 +87,9 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
     notes: '',
     items: [{ ...EMPTY_MANUAL_ITEM }],
   })
+  const [importPreview, setImportPreview] = useState(null)
+  const [importPayload, setImportPayload] = useState(null)
+  const [importFileName, setImportFileName] = useState('')
   const fileInputRef = useRef(null)
 
   const shown = useMemo(() => {
@@ -72,11 +104,67 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
     [orders],
   )
 
+  const inventoryByCategory = useMemo(() => {
+    const groups = new Map()
+    for (const item of inventory || []) {
+      const category = String(item.categoryName || 'Uncategorized').trim() || 'Uncategorized'
+      if (!groups.has(category)) groups.set(category, [])
+      groups.get(category).push(item)
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([categoryName, items]) => ({
+        categoryName,
+        items: [...items].sort((a, b) => String(a.itemName || '').localeCompare(String(b.itemName || ''))),
+      }))
+  }, [inventory])
+
+  const categoryOptions = useMemo(
+    () => inventoryByCategory.map((group) => group.categoryName),
+    [inventoryByCategory],
+  )
+
+  const itemsByCategoryName = useMemo(() => {
+    const map = new Map()
+    for (const group of inventoryByCategory) {
+      map.set(group.categoryName, group.items)
+    }
+    return map
+  }, [inventoryByCategory])
+
+  function resetResolveState() {
+    setResolveItemId('')
+    setResolveMatches([])
+  }
+
+  function openMapConfig(line) {
+    setError('')
+    setResolveItemId(line.orderItemId)
+    setResolveMatches([emptyMapRow(line.quantity)])
+  }
+
+  function updateResolveMatch(key, field, value) {
+    setResolveMatches((prev) => prev.map((row) => {
+      if (row.key !== key) return row
+      if (field === 'categoryName') {
+        return { ...row, categoryName: value, inventoryId: '' }
+      }
+      return { ...row, [field]: value }
+    }))
+  }
+
+  function addResolveMatch(lineQuantity) {
+    setResolveMatches((prev) => [...prev, emptyMapRow(lineQuantity)])
+  }
+
+  function removeResolveMatch(key) {
+    setResolveMatches((prev) => (prev.length <= 1 ? prev : prev.filter((row) => row.key !== key)))
+  }
+
   async function openDetails(order) {
     setError('')
     setMode('details')
-    setResolveInventoryId('')
-    setResolveItemId('')
+    resetResolveState()
     setReturnReusable('true')
     setReturnNotes('')
     setBusyId(order.orderId)
@@ -93,8 +181,35 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
     if (busyId) return
     setSelected(null)
     setMode('details')
-    setResolveInventoryId('')
-    setResolveItemId('')
+    resetResolveState()
+  }
+
+  function closeImportPreview() {
+    if (busyId === 'import' || busyId === 'import-preview') return
+    setImportPreview(null)
+    setImportPayload(null)
+    setImportFileName('')
+  }
+
+  async function readImportPayload(file) {
+    const lower = String(file.name || '').toLowerCase()
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+      const buffer = await file.arrayBuffer()
+      const bytes = new Uint8Array(buffer)
+      let binary = ''
+      const chunkSize = 0x8000
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+      }
+      return {
+        fileBase64: btoa(binary),
+        fileName: file.name,
+      }
+    }
+    return {
+      csvText: await file.text(),
+      fileName: file.name,
+    }
   }
 
   async function handleImportFile(event) {
@@ -102,11 +217,32 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
     event.target.value = ''
     if (!file) return
 
+    setBusyId('import-preview')
+    setError('')
+    try {
+      const payload = await readImportPayload(file)
+      const preview = await previewOnlineOrdersCsv(payload)
+      setImportPayload(payload)
+      setImportFileName(file.name)
+      setImportPreview(preview)
+      setMode('import-preview')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  async function confirmImportCsv() {
+    if (!importPayload) return
     setBusyId('import')
     setError('')
     try {
-      const csvText = await file.text()
-      await importOnlineOrdersCsv(csvText)
+      await importOnlineOrdersCsv(importPayload)
+      setImportPreview(null)
+      setImportPayload(null)
+      setImportFileName('')
+      setMode('details')
       await onRefresh()
     } catch (err) {
       setError(err.message)
@@ -164,18 +300,33 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
   }
 
   async function confirmResolve(itemId) {
-    if (!resolveInventoryId) {
-      setError('Select an inventory item to map this Shopee SKU.')
+    const prepared = resolveMatches
+      .map((row) => ({
+        inventoryId: row.inventoryId,
+        quantity: Number(row.quantity),
+      }))
+      .filter((row) => row.inventoryId)
+
+    if (!prepared.length) {
+      setError('Select at least one RHET inventory item for this Shopee line.')
+      return
+    }
+    if (prepared.some((row) => !Number.isInteger(row.quantity) || row.quantity < 1)) {
+      setError('Each mapped item needs a quantity of at least 1.')
+      return
+    }
+    const uniqueIds = new Set(prepared.map((row) => row.inventoryId))
+    if (uniqueIds.size !== prepared.length) {
+      setError('Remove duplicate inventory items before saving.')
       return
     }
 
     setBusyId(itemId)
     setError('')
     try {
-      const updated = await resolveOnlineOrderItem(itemId, resolveInventoryId)
+      const updated = await resolveOnlineOrderItem(itemId, { matches: prepared })
       setSelected(updated)
-      setResolveItemId('')
-      setResolveInventoryId('')
+      resetResolveState()
       await onRefresh()
     } catch (err) {
       setError(err.message)
@@ -237,19 +388,22 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
       <div className="page-title">
         <div>
           <h1>Online orders</h1>
-          <p>Fulfillment tracking board for Shopee orders. RHET stock is deducted through channel allocation, not order checkout — see the Inventory page.</p>
+          <p>
+            Fulfillment board for Shopee CSV/XLSX imports. Stock is deducted when an order is marked
+            <strong> Shipped</strong> (mapped lines only). Map unmatched items before shipping.
+          </p>
         </div>
         {canManage && (
           <div className="page-actions">
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               hidden
               onChange={handleImportFile}
             />
-            <button type="button" className="secondary" disabled={busyId === 'import'} onClick={() => fileInputRef.current?.click()}>
-              {busyId === 'import' ? 'Importing…' : 'Import CSV'}
+            <button type="button" className="secondary" disabled={busyId === 'import' || busyId === 'import-preview'} onClick={() => fileInputRef.current?.click()}>
+              {busyId === 'import-preview' ? 'Reading…' : busyId === 'import' ? 'Importing…' : 'Import orders'}
             </button>
             <button type="button" className="primary" onClick={() => { setError(''); setMode('manual') }}>
               Add order
@@ -270,7 +424,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
         )}
       </div>
 
-      {error && !selected && mode === 'details' && <div className="page-error">{error}</div>}
+      {error && !selected && mode === 'details' && !importPreview && <div className="page-error">{error}</div>}
 
       <section className="panel recent">
         {shown.length ? (
@@ -325,10 +479,96 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
         ) : (
           <EmptyState
             title={`No orders in ${formatStatus(filter).toLowerCase()}`}
-            message={canManage ? 'Import a Shopee CSV export or add an order manually to start tracking fulfillment.' : 'Online orders will appear here once they are imported.'}
+            message={canManage ? 'Import a Shopee CSV/XLSX export or add an order manually to start tracking fulfillment.' : 'Online orders will appear here once they are imported.'}
           />
         )}
       </section>
+
+      {mode === 'import-preview' && canManage && importPreview && (
+        <div className="modal-backdrop">
+          <div className="modal request-detail-modal import-preview-modal">
+            <div className="modal-head">
+              <div>
+                <h2>Confirm import</h2>
+                <p>
+                  Review the parsed Shopee export before saving.
+                  {importFileName ? ` File: ${importFileName}` : ''}
+                </p>
+              </div>
+              <button type="button" onClick={() => { closeImportPreview(); setMode('details') }} disabled={busyId === 'import'}>×</button>
+            </div>
+
+            <div className="request-detail-grid">
+              <div><span>Orders</span><strong>{importPreview.summary?.orderCount ?? 0}</strong></div>
+              <div><span>New</span><strong>{importPreview.summary?.newCount ?? 0}</strong></div>
+              <div><span>Existing updates</span><strong>{importPreview.summary?.updateCount ?? 0}</strong></div>
+              <div><span>Line items</span><strong>{importPreview.summary?.itemCount ?? 0}</strong></div>
+              <div><span>Fulfillment changes</span><strong>{importPreview.summary?.fulfillmentChangeCount ?? 0}</strong></div>
+              <div>
+                <span>Unmapped status text</span>
+                <strong>{importPreview.summary?.unmappedStatusCount ?? 0}</strong>
+              </div>
+            </div>
+
+            <p className="field-hint" style={{ margin: '0 23px 12px' }}>
+              Delivery status follows the Shopee export when it advances. Entering <strong>Shipped</strong> deducts
+              mapped RHET stock; unmatched lines or insufficient stock keep the previous status until fixed.
+              Same status stays unchanged.
+            </p>
+
+            <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', minWidth: '920px' }}>
+                <thead>
+                  <tr>
+                    <th>Order #</th>
+                    <th>Buyer</th>
+                    <th>Items</th>
+                    <th>Shopee status</th>
+                    <th>Current</th>
+                    <th>After import</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(importPreview.orders || []).map((row) => (
+                    <tr key={row.externalOrderId}>
+                      <td><strong>{row.externalOrderId}</strong></td>
+                      <td>{detailValue(row.buyerName)}</td>
+                      <td>{row.itemCount}</td>
+                      <td>{detailValue(row.externalOrderStatus)}</td>
+                      <td>
+                        {row.isNew ? <span className="muted">—</span> : <StatusBadge status={row.currentFulfillmentStatus} />}
+                      </td>
+                      <td><StatusBadge status={row.resultingFulfillmentStatus} /></td>
+                      <td>
+                        {row.isNew ? 'New order' : row.fulfillmentWillChange
+                          ? `${formatStatus(row.currentFulfillmentStatus)} → ${formatStatus(row.proposedFulfillmentStatus)}`
+                          : 'Update details'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {error && <div className="page-error">{error}</div>}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={busyId === 'import'}
+                onClick={() => { closeImportPreview(); setMode('details'); setError('') }}
+              >
+                Cancel
+              </button>
+              <button type="button" className="primary" disabled={busyId === 'import'} onClick={confirmImportCsv}>
+                {busyId === 'import' ? 'Importing…' : 'Confirm import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mode === 'manual' && canManage && (
         <div className="modal-backdrop">
@@ -399,7 +639,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
 
       {selected && mode === 'details' && (
         <div className="modal-backdrop">
-          <div className="modal request-detail-modal">
+          <div className="modal request-detail-modal online-order-detail-modal">
             <div className="modal-head">
               <div>
                 <h2>Online order details</h2>
@@ -408,13 +648,13 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
               <button type="button" onClick={closeModal}>×</button>
             </div>
 
-            <div className="request-detail-status">
+            <div className="request-detail-status online-order-detail-status">
               <StatusBadge status={selected.fulfillmentStatus} />
               <StatusBadge status={selected.orderStatus} />
               <span className="muted">Placed {formatDate(selected.orderPlacedAt || selected.createdAt)}</span>
             </div>
 
-            <div className="request-detail-grid">
+            <div className="request-detail-grid online-order-meta-grid">
               <div><span>Buyer</span><strong>{detailValue(selected.buyerName)}</strong></div>
               <div><span>Total</span><strong>{formatCurrency(selected.totalAmount)}</strong></div>
               <div><span>Source</span><strong>{formatStatus(selected.source)}</strong></div>
@@ -428,12 +668,16 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
               )}
             </div>
 
-            <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ width: '100%', minWidth: '900px' }}>
+            <div
+              className="overflow-x-auto rounded-lg table-scroll online-order-lines-scroll"
+              style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
+            >
+              <table className="online-order-lines-table" style={{ width: '100%', minWidth: '980px' }}>
                 <thead>
                   <tr>
                     <th>Shopee SKU</th>
                     <th>Item</th>
+                    <th>Variation</th>
                     <th>Qty</th>
                     <th>Match status</th>
                     <th>Matched SKU</th>
@@ -441,55 +685,168 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                   </tr>
                 </thead>
                 <tbody>
-                  {(selected.items || []).map((line) => (
-                    <tr key={line.orderItemId}>
-                      <td><strong>{detailValue(line.externalSku)}</strong></td>
-                      <td>
-                        <strong>{detailValue(line.externalItemName)}</strong>
-                        <small>{detailValue(line.externalVariation)}</small>
-                      </td>
-                      <td>{line.quantity}</td>
-                      <td><StatusBadge status={line.lineStatus} /></td>
-                      <td>
-                        <strong>{detailValue(line.matchedSku)}</strong>
-                        {line.failureReason && <small className="danger-text">{line.failureReason}</small>}
-                      </td>
-                      {canManage && (
-                        <td>
-                          {canResolveLine(line) ? (
-                            resolveItemId === line.orderItemId ? (
-                              <div className="row-actions">
-                                <select value={resolveInventoryId} onChange={(e) => setResolveInventoryId(e.target.value)}>
-                                  <option value="">Select inventory item</option>
-                                  {inventory.map((item) => (
-                                    <option key={item.inventoryId} value={item.inventoryId}>
-                                      {item.sku} · {item.itemName} ({item.stocks} in stock)
-                                    </option>
-                                  ))}
-                                </select>
-                                <button type="button" className="primary small-btn" disabled={busyId === line.orderItemId} onClick={() => confirmResolve(line.orderItemId)}>
-                                  {busyId === line.orderItemId ? 'Saving…' : 'Map item'}
-                                </button>
-                                <button type="button" className="secondary small-btn" onClick={() => { setResolveItemId(''); setResolveInventoryId('') }}>
-                                  Cancel
-                                </button>
+                  {(selected.items || []).map((line) => {
+                    const mappingOpen = canManage && resolveItemId === line.orderItemId
+                    const colSpan = canManage ? 7 : 6
+                    return (
+                      <Fragment key={line.orderItemId}>
+                        <tr className={mappingOpen ? 'online-order-line-active' : undefined}>
+                          <td><strong>{detailValue(line.externalSku)}</strong></td>
+                          <td className="online-order-item-cell">
+                            <strong>{detailValue(line.externalItemName)}</strong>
+                          </td>
+                          <td>{detailValue(line.externalVariation)}</td>
+                          <td>{line.quantity}</td>
+                          <td><StatusBadge status={line.lineStatus} /></td>
+                          <td>
+                            <strong>{formatMatchedSku(line)}</strong>
+                            {line.failureReason && !mappingOpen && (
+                              <small className="danger-text">{line.failureReason}</small>
+                            )}
+                          </td>
+                          {canManage && (
+                            <td className="online-order-actions-cell">
+                              {canResolveLine(line) ? (
+                                mappingOpen ? (
+                                  <span className="muted">Configuring…</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="primary small-btn"
+                                    onClick={() => openMapConfig(line)}
+                                  >
+                                    Map item
+                                  </button>
+                                )
+                              ) : '—'}
+                            </td>
+                          )}
+                        </tr>
+                        {mappingOpen && (
+                          <tr className="online-order-map-config-row">
+                            <td colSpan={colSpan}>
+                              <div className="online-order-map-config">
+                                <div className="online-order-map-config-intro">
+                                  <div>
+                                    <span>Shopee line</span>
+                                    <strong>
+                                      {detailValue(line.externalItemName)}
+                                      {line.externalVariation ? ` · ${line.externalVariation}` : ''}
+                                      {` · qty ${line.quantity}`}
+                                    </strong>
+                                  </div>
+                                  <p className="field-hint">
+                                    Bundle listings can map to multiple RHET items. Set each item quantity independently.
+                                  </p>
+                                </div>
+
+                                <div className="online-order-map-rows">
+                                  {resolveMatches.map((row, index) => {
+                                    const categoryItems = row.categoryName
+                                      ? (itemsByCategoryName.get(row.categoryName) || [])
+                                      : []
+                                    return (
+                                      <div key={row.key} className="online-order-map-row">
+                                        <div className="online-order-map-config-field">
+                                          <span>{index === 0 ? 'Category' : `Category ${index + 1}`}</span>
+                                          <select
+                                            value={row.categoryName}
+                                            onChange={(e) => updateResolveMatch(row.key, 'categoryName', e.target.value)}
+                                          >
+                                            <option value="">Select category</option>
+                                            {categoryOptions.map((categoryName) => (
+                                              <option key={categoryName} value={categoryName}>
+                                                {categoryName}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="online-order-map-config-field">
+                                          <span>Item</span>
+                                          <select
+                                            value={row.inventoryId}
+                                            disabled={!row.categoryName}
+                                            onChange={(e) => updateResolveMatch(row.key, 'inventoryId', e.target.value)}
+                                          >
+                                            <option value="">
+                                              {row.categoryName ? 'Select inventory item' : 'Select a category first'}
+                                            </option>
+                                            {categoryItems.map((item) => (
+                                              <option key={item.inventoryId} value={item.inventoryId}>
+                                                {item.sku} · {item.itemName} ({item.stocks} in stock)
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="online-order-map-config-field online-order-map-config-qty">
+                                          <span>Qty</span>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            value={row.quantity}
+                                            onChange={(e) => updateResolveMatch(row.key, 'quantity', e.target.value)}
+                                          />
+                                        </div>
+                                        <div className="online-order-map-config-actions">
+                                          {resolveMatches.length > 1 && (
+                                            <button
+                                              type="button"
+                                              className="secondary kit-remove"
+                                              aria-label="Remove mapped item"
+                                              onClick={() => removeResolveMatch(row.key)}
+                                            >
+                                              ×
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+
+                                <div className="online-order-map-config-footer">
+                                  <button
+                                    type="button"
+                                    className="secondary small-btn"
+                                    onClick={() => addResolveMatch(line.quantity)}
+                                  >
+                                    + Add item
+                                  </button>
+                                  <div className="online-order-map-config-actions">
+                                    <button
+                                      type="button"
+                                      className="primary small-btn"
+                                      disabled={
+                                        busyId === line.orderItemId
+                                        || !resolveMatches.some((row) => row.inventoryId)
+                                      }
+                                      onClick={() => confirmResolve(line.orderItemId)}
+                                    >
+                                      {busyId === line.orderItemId ? 'Saving…' : 'Save mapping'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="secondary kit-remove"
+                                      aria-label="Cancel mapping"
+                                      onClick={() => { resetResolveState(); setError('') }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
-                            ) : (
-                              <button type="button" className="primary small-btn" onClick={() => { setResolveItemId(line.orderItemId); setResolveInventoryId('') }}>
-                                Map item
-                              </button>
-                            )
-                          ) : '—'}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
 
             {canManage && selected.fulfillmentStatus === 'RETURN' && (
-              <div className="request-detail-grid" style={{ marginTop: '1rem' }}>
+              <div className="request-detail-grid online-order-meta-grid" style={{ marginTop: '1rem' }}>
                 <div className="full">
                   <span>Return inspection</span>
                   <p className="field-hint">Choose whether the returned item(s) can be resold. Reusable returns restore RHET stock; the Shopee channel quantity is not affected either way.</p>
@@ -527,7 +884,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                   {busyId === 'fulfillment-RETURN' ? 'Updating…' : 'Mark as return'}
                 </button>
               )}
-              {canManage && selected.orderStatus !== 'CANCELLED' && (
+              {canManage && selected.orderStatus !== 'CANCELLED' && selected.fulfillmentStatus !== 'CANCELLED' && (
                 <button type="button" className="secondary" disabled={busyId === selected.orderId} onClick={confirmCancelOrder}>
                   {busyId === selected.orderId ? 'Cancelling…' : 'Cancel order'}
                 </button>

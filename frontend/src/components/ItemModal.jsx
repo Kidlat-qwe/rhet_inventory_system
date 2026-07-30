@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  UNIFORM_SIZES,
-  getFieldPlaceholders,
   getUniformGendersForCategory,
+  getUniformSizesForCategory,
   getUniformTypesForCategory,
+  isLcaShirtCategory,
   isLearningKitCategory,
   isUniformCategory,
   parseUniformVariation,
   generateUniqueSku,
   canGenerateSku,
+  getFieldPlaceholders,
 } from '../constants/uniformOptions'
 import { normalizeInventoryText } from '../utils/format'
 
@@ -45,6 +46,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     uniformGender: initialUniform.uniformGender,
     uniformType: initialUniform.uniformType,
     uniformSize: initialUniform.uniformSize,
+    remarks: item.remarks || '',
     stocks: item.stocks ?? 0,
     lowStockThreshold: item.lowStockThreshold ?? 20,
     price: item.price ?? 0,
@@ -59,8 +61,10 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
 
   const isUniform = isUniformCategory(form.categoryId, categories)
   const isLearningKit = isLearningKitCategory(form.categoryId, categories)
+  const isLcaShirt = isLcaShirtCategory(form.categoryId, categories)
   const uniformTypes = getUniformTypesForCategory(form.categoryId, categories, form.uniformGender)
   const uniformGenders = getUniformGendersForCategory(form.categoryId, categories)
+  const uniformSizes = getUniformSizesForCategory(form.categoryId, categories)
   const placeholders = getFieldPlaceholders(form.categoryId, categories)
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
 
@@ -80,11 +84,27 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     return Math.min(...totals)
   }, [isLearningKit, components, items])
 
+  // Create: always regenerate SKU.
+  // Edit: regenerate only for non-uniform items when name/category changes (Others, Bag, etc.).
+  // Uniform SKUs stay locked (gender/type/size driven).
   useEffect(() => {
-    if (item.inventoryId) return
+    const lockSku = Boolean(item.inventoryId) && isUniform
+    if (lockSku) return
+    if (!canGenerateSku(form, categories) && isUniform) return
     const nextSku = generateUniqueSku(form, categories, items)
+    if (!nextSku) return
     setForm((current) => (current.sku === nextSku ? current : { ...current, sku: nextSku }))
-  }, [item.inventoryId, form.categoryId, form.itemName, form.uniformGender, form.uniformType, form.uniformSize, categories, items])
+  }, [
+    item.inventoryId,
+    isUniform,
+    form.categoryId,
+    form.itemName,
+    form.uniformGender,
+    form.uniformType,
+    form.uniformSize,
+    categories,
+    items,
+  ])
 
   function setCategoryId(value) {
     setForm((current) => {
@@ -209,16 +229,16 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                   {uniformGenders.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
               </label>
-              <label>Type *
+              <label>{isLcaShirt ? 'Logo *' : 'Type *'}
                 <select required value={form.uniformType} onChange={(e) => set('uniformType', e.target.value)}>
-                  <option value="">Select type</option>
+                  <option value="">{isLcaShirt ? 'Select logo' : 'Select type'}</option>
                   {uniformTypes.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
               </label>
               <label>Size *
                 <select required value={form.uniformSize} onChange={(e) => set('uniformSize', e.target.value)}>
                   <option value="">Select size</option>
-                  {UNIFORM_SIZES.map((option) => <option key={option} value={option}>{option}</option>)}
+                  {uniformSizes.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
               </label>
             </>
@@ -233,8 +253,14 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
               value={form.sku}
               placeholder={isUniform ? 'Auto-generated from category, gender, type, and size' : 'Auto-generated from category and item name'}
             />
-            {item.inventoryId && (
-              <small className="field-hint">SKU is locked after creation to keep external references stable.</small>
+            {item.inventoryId && isUniform && (
+              <small className="field-hint">SKU is locked after creation for uniform items.</small>
+            )}
+            {item.inventoryId && !isUniform && (
+              <small className="field-hint">SKU updates automatically when you change the item name.</small>
+            )}
+            {!item.inventoryId && !isUniform && (
+              <small className="field-hint">Auto-generated from category and item name.</small>
             )}
           </label>
           <label>{isUniform ? 'Per-piece price (₱) *' : 'Selling price (₱) *'}<input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => set('price', e.target.value)} /></label>
@@ -251,6 +277,18 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
             !item.inventoryId && <label>Initial stock *<input required type="number" min="0" value={form.stocks} onChange={(e) => set('stocks', e.target.value)} /></label>
           )}
         </div>
+
+        <label className="full-width">
+          Remarks
+          <textarea
+            rows={3}
+            maxLength={500}
+            value={form.remarks}
+            onChange={(e) => set('remarks', e.target.value)}
+            placeholder="Optional description or notes for this item"
+          />
+          <small className="field-hint">{String(form.remarks || '').length}/500</small>
+        </label>
 
         {isLearningKit && (
           <div className="kit-components">
