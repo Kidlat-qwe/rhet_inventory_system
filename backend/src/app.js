@@ -15,6 +15,8 @@ import { stockRequests } from './routes/stock-requests.js';
 
 export const app = express();
 app.disable('x-powered-by');
+// Coolify / reverse proxy sets X-Forwarded-For; required for express-rate-limit.
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: env.FRONTEND_URL.split(',').map((v) => v.trim()), credentials: false }));
 app.use(express.json({ limit: '15mb' }));
