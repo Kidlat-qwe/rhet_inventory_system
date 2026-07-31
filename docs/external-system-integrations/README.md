@@ -52,18 +52,22 @@ Use these when changing the **existing** CMS merchandise / stock-request flow. D
 | **[CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md](./CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md)** | **Paste** — Stocks table shows **Item name** for Workbooks/Backpack/etc. (hide empty Gender/Type) |
 | **[CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md](./CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md)** | **Paste** — different Workbooks items must deduct/credit the correct row (CMS-only) |
 | **[CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md](./CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md)** | **Paste** — blank Item name on Workbooks/Backpack Stocks (all non-uniform fulfill) |
+| **[CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md](./CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md)** | **Paste** — Shirt / `LCA_SHIRT` must use Gender+Logo+Size via `categoryKind` (CMS-only) |
+| **[CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md)** | **Paste** — required `branchName` (campus display name) on every `POST /stock-requests` |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
 ### CMS quick path
 
-1. [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
-2. [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form.
-3. [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Create Merchandise fields.
-4. [CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md](./CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md) — Item name on non-uniform Stocks tables.
-5. [CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md](./CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md) — multi-item Workbooks deduct/fulfill.
-6. [CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md](./CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md) — blank Workbooks Stocks row after multi-item approve.
-7. [CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md](./CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md) — Learning Kits.
-8. [CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md](./CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md) — live catalog dropdowns.
+1. [CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md) — **required now** — send `branchName` or RHET rejects the request.
+2. [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
+3. [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form.
+4. [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Create Merchandise fields.
+5. [CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md](./CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md) — Item name on non-uniform Stocks tables.
+6. [CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md](./CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md) — multi-item Workbooks deduct/fulfill.
+7. [CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md](./CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md) — blank Workbooks Stocks row after multi-item approve.
+8. [CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md](./CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md) — Learning Kits.
+9. [CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md](./CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md) — live catalog dropdowns.
+10. [CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md](./CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md) — Shirt / LCA_SHIRT Gender+Logo+Size via categoryKind.
 
 ---
 

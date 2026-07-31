@@ -210,6 +210,7 @@ X-Integration-Key: YOUR_KEY
 | Field | Required | Notes |
 |---|---|---|
 | `requestedBy` | Yes | 2–150 chars |
+| `branchName` | Yes | Branch / campus **display name** (2–150 chars). Not an internal id. |
 | `reason` | Yes | 5–500 chars |
 | `items` | Yes | 1–50 line items |
 | `requestDate` | No | Defaults to today |
@@ -270,6 +271,7 @@ Assume RHET kit `grade-1-learning-kit` includes categories: **LCA T-Shirt**, **S
 {
   "requestDate": "2026-07-23",
   "requestedBy": "Branch Admin",
+  "branchName": "LCA Makati",
   "reason": "Restock Grade 1 learning kits for campus display",
   "webhookUrl": "https://your-api.example.com/api/webhooks/inventory",
   "items": [

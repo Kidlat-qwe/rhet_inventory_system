@@ -64,6 +64,7 @@ Errors: `{ "success": false, "error": { "code", "message", "details" } }`
 {
   "requestDate": "YYYY-MM-DD",
   "requestedBy": "Name",
+  "branchName": "Branch Display Name",
   "reason": "Reason text (min 5 chars)",
   "webhookUrl": "<INVENTORY_WEBHOOK_URL>",
   "batchReference": "optional",
@@ -79,6 +80,8 @@ Errors: `{ "success": false, "error": { "code", "message", "details" } }`
   ]
 }
 ```
+
+`branchName` is **required** (campus / branch display name, not an internal id).
 
 Non-uniform item example fields: `categoryName`, `itemName`, `sku` (optional), `quantity`, `externalReference`.
 

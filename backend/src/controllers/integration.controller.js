@@ -7,6 +7,7 @@ export const submit = asyncHandler(async (req, res) => {
     sourceSystem: req.integration?.sourceSystem,
     requestDate: body.requestDate || new Date(),
     requestedBy: body.requestedBy,
+    branchName: body.branchName,
     reason: body.reason,
     batchReference: body.batchReference,
     webhookUrl: body.webhookUrl,

@@ -149,6 +149,7 @@ For each local merchandise request line CMS already sends, ensure the RHET body 
 {
   "requestDate": "2026-07-23",
   "requestedBy": "<branch admin name>",
+  "branchName": "<branch display name, e.g. LCA Makati>",
   "reason": "<reason, min 5 chars>",
   "webhookUrl": "https://api-cms.lca-app.com/api/webhooks/inventory",
   "items": [

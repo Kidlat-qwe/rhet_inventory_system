@@ -173,6 +173,7 @@ X-Integration-Key: YOUR_KEY
 | Field | Required | Notes |
 |---|---|---|
 | `requestedBy` | Yes | 2–150 chars |
+| `branchName` | Yes | Branch / campus display name (2–150 chars) |
 | `reason` | Yes | 5–500 chars |
 | `items` | Yes | 1–50 lines |
 | `requestDate` | No | Defaults to today |
@@ -195,6 +196,7 @@ X-Integration-Key: YOUR_KEY
 ```json
 {
   "requestedBy": "Campus Admin",
+  "branchName": "LCA Makati",
   "reason": "Restock Male Polo size S",
   "webhookUrl": "https://your-api.example.com/api/webhooks/inventory",
   "items": [
@@ -215,6 +217,7 @@ X-Integration-Key: YOUR_KEY
 ```json
 {
   "requestedBy": "Campus Admin",
+  "branchName": "LCA Makati",
   "reason": "Restock backpacks",
   "webhookUrl": "https://your-api.example.com/api/webhooks/inventory",
   "items": [

@@ -230,6 +230,7 @@ CREATE TABLE IF NOT EXISTS public.stock_requests
     external_reference character varying(100) COLLATE pg_catalog."default",
     request_date date NOT NULL DEFAULT CURRENT_DATE,
     requested_by character varying(150) COLLATE pg_catalog."default" NOT NULL,
+    branch_name character varying(150) COLLATE pg_catalog."default",
     reason character varying(500) COLLATE pg_catalog."default" NOT NULL,
     category_name character varying(100) COLLATE pg_catalog."default" NOT NULL,
     gender character varying(20) COLLATE pg_catalog."default",

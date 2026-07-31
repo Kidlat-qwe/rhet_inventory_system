@@ -159,10 +159,11 @@ export default function StockRequestsPage({ requests, onRefresh }) {
       <section className="panel recent">
         {shown.length ? (
           <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', minWidth: '1100px' }}>
+            <table style={{ width: '100%', minWidth: '1220px' }}>
               <thead>
                 <tr>
                   <th>Requested by</th>
+                  <th>Branch</th>
                   <th>Item</th>
                   <th>Qty</th>
                   <th>Reason</th>
@@ -177,6 +178,9 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                     <td>
                       <strong>{request.requestedBy}</strong>
                       <small>{request.sourceSystem}</small>
+                    </td>
+                    <td>
+                      <strong>{request.branchName || '—'}</strong>
                     </td>
                     <td>
                       <strong>{request.categoryName}</strong>
@@ -218,7 +222,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
             <div className="modal-head">
               <div>
                 <h2>Stock request details</h2>
-                <p>{selected.requestedBy} · {selected.sourceSystem}</p>
+                <p>{selected.requestedBy} · {selected.branchName || 'No branch'} · {selected.sourceSystem}</p>
               </div>
               <button type="button" onClick={closeModal}>×</button>
             </div>
@@ -236,6 +240,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
             )}
 
             <div className="request-detail-grid">
+              <div><span>Branch</span><strong>{detailValue(selected.branchName)}</strong></div>
               <div><span>Category</span><strong>{detailValue(selected.categoryName)}</strong></div>
               <div><span>Variation</span><strong>{detailValue(variation)}</strong></div>
               <div><span>Quantity requested</span><strong>{detailValue(selected.quantity)}</strong></div>
@@ -320,7 +325,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
             <div className="modal-head">
               <div>
                 <h2>{stockIssue ? 'Cannot approve request' : 'Confirm approval'}</h2>
-                <p>{selected.requestedBy} · {selected.categoryName} · Qty {selected.quantity}</p>
+                <p>{selected.requestedBy} · {selected.branchName || '—'} · {selected.categoryName} · Qty {selected.quantity}</p>
               </div>
               <button type="button" onClick={closeModal}>×</button>
             </div>
@@ -369,7 +374,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
             <div className="modal-head">
               <div>
                 <h2>Reject request</h2>
-                <p>{selected.requestedBy} · {selected.categoryName} · Qty {selected.quantity}</p>
+                <p>{selected.requestedBy} · {selected.branchName || '—'} · {selected.categoryName} · Qty {selected.quantity}</p>
               </div>
               <button type="button" onClick={closeModal}>×</button>
             </div>

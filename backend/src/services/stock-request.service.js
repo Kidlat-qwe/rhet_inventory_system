@@ -180,16 +180,17 @@ export async function createStockRequestsFromPsms(input) {
 
     const result = await pool.query(
       `INSERT INTO stock_requests (
-        source_system, external_reference, request_date, requested_by, reason,
+        source_system, external_reference, request_date, requested_by, branch_name, reason,
         category_name, gender, item_type, size_label, quantity, status,
         inventory_id, matched_sku, webhook_url
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PENDING',$11,$12,$13)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'PENDING',$12,$13,$14)
       RETURNING *`,
       [
         sourceSystem,
         externalReference,
         input.requestDate,
         input.requestedBy,
+        input.branchName,
         input.reason,
         item.categoryName,
         item.gender || null,

@@ -96,6 +96,7 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
     sourceSystem: request.source_system || request.sourceSystem,
     status: request.status,
     requestedBy: request.requested_by || request.requestedBy,
+    branchName: request.branch_name || request.branchName || null,
     reason: request.reason,
     categoryName: request.category_name || request.categoryName,
     gender: request.gender,

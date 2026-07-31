@@ -16,6 +16,8 @@ export const psmsStockRequestSchema = z.object({
   body: z.object({
     requestDate: z.coerce.date().optional(),
     requestedBy: z.string().trim().min(2).max(150),
+    // CMS branch / campus display name (required so RHET staff know which site requested stock).
+    branchName: z.string().trim().min(2).max(150),
     reason: z.string().trim().min(5).max(500),
     batchReference: optionalText(100),
     webhookUrl: z.string().url().optional().nullable(),
