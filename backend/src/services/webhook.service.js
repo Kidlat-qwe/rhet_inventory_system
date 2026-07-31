@@ -1,7 +1,14 @@
 import { env } from '../config/env.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const TERMINAL_EVENTS = new Set(['stock_request.fulfilled', 'stock_request.rejected']);
+const TERMINAL_EVENTS = new Set([
+  'stock_request.shipped',
+  'stock_request.delivered',
+  'stock_request.returned',
+  'stock_request.rejected',
+  // Legacy alias — some partners may still expect fulfilled during transition.
+  'stock_request.fulfilled',
+]);
 
 export function looksLikeUuid(value) {
   return typeof value === 'string' && UUID_RE.test(value.trim());
@@ -34,6 +41,9 @@ export function resolveProcessedByDisplayName(request = {}) {
   const candidates = [
     request.processed_by_name,
     request.processedByName,
+    request.delivery_confirmed_by,
+    request.deliveryConfirmedBy,
+    request.confirmedBy,
     request.processed_by_email,
     request.processedByEmail,
     request.approvedBy,
@@ -107,6 +117,10 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
     inventoryId: request.inventory_id || request.inventoryId,
     rejectionReason: request.rejection_reason || request.rejectionReason,
     failureReason: request.failure_reason || request.failureReason,
+    confirmedBy: request.delivery_confirmed_by || request.deliveryConfirmedBy || request.confirmedBy || null,
+    deliveryNotes: request.delivery_notes || request.deliveryNotes || request.notes || null,
+    deliveredAt: request.delivered_at || request.deliveredAt || null,
+    wasDelivered: request.was_delivered ?? request.wasDelivered ?? null,
     processedAt: request.processed_at || request.processedAt,
     timestamp: new Date().toISOString(),
   };
@@ -119,6 +133,15 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
     payload.processedByUserId = processedByUserId || null;
     if (event === 'stock_request.rejected') {
       payload.rejectedBy = processedByName;
+    }
+    if (event === 'stock_request.shipped') {
+      payload.shippedBy = processedByName;
+    }
+    if (event === 'stock_request.delivered') {
+      payload.deliveredBy = processedByName;
+    }
+    if (event === 'stock_request.returned') {
+      payload.returnedBy = processedByName;
     }
   }
 

@@ -54,12 +54,14 @@ Use these when changing the **existing** CMS merchandise / stock-request flow. D
 | **[CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md](./CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md)** | **Paste** — blank Item name on Workbooks/Backpack Stocks (all non-uniform fulfill) |
 | **[CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md](./CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md)** | **Paste** — Shirt / `LCA_SHIRT` must use Gender+Logo+Size via `categoryKind` (CMS-only) |
 | **[CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md)** | **Paste** — required `branchName` (campus display name) on every `POST /stock-requests` |
+| **[CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md)** | **Paste** — Pending → Shipped → Delivered → Returned (cut out FULFILLED) |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
 ### CMS quick path
 
-1. [CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md) — **required now** — send `branchName` or RHET rejects the request.
-2. [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
+1. [CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md) — **required now** — Shipped / Delivered / Returned webhooks (no FULFILLED).
+2. [CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md) — required `branchName`.
+3. [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
 3. [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form.
 4. [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Create Merchandise fields.
 5. [CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md](./CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md) — Item name on non-uniform Stocks tables.

@@ -16,17 +16,18 @@ export default function ReleaseLogsPage({ requests, onlineMovements = [] }) {
   const [search, setSearch] = useState('')
 
   const releaseLogs = useMemo(() => {
-    const fulfilled = (requests || [])
-      .filter((request) => request.status === 'FULFILLED')
+    const released = (requests || [])
+      .filter((request) => ['SHIPPED', 'DELIVERED', 'RETURNED'].includes(request.status))
       .slice()
       .sort((a, b) => new Date(b.processedAt || b.updatedAt || b.createdAt) - new Date(a.processedAt || a.updatedAt || a.createdAt))
 
     const query = search.trim().toLowerCase()
-    if (!query) return fulfilled
+    if (!query) return released
 
-    return fulfilled.filter((request) => {
+    return released.filter((request) => {
       const haystack = [
         request.requestedBy,
+        request.branchName,
         request.sourceSystem,
         request.categoryName,
         request.gender,
@@ -37,6 +38,7 @@ export default function ReleaseLogsPage({ requests, onlineMovements = [] }) {
         request.externalReference,
         request.reason,
         request.processedByName,
+        request.status,
       ]
         .filter(Boolean)
         .join(' ')

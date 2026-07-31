@@ -8,6 +8,7 @@ Admin role entry points. Workspace pages re-export shared implementations; API K
 | `adminInventory.jsx` | Wrapper → `InventoryPage` |
 | `adminStockRequests.jsx` | Wrapper → `StockRequestsPage` |
 | `adminOnlineOrders.jsx` | Wrapper → `OnlineOrdersPage` |
+| `adminManualOrders.jsx` | Wrapper → `ManualOrdersPage` |
 | `adminReleaseLogs.jsx` | Wrapper → `ReleaseLogsPage` |
 | `adminStockMovements.jsx` | Wrapper → `StockMovementsPage` |
 | `adminCategories.jsx` | Wrapper → `CategoriesPage` |

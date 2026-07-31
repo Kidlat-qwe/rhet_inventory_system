@@ -17,6 +17,7 @@ import {
   AdminStockRequests,
   AdminUsers,
   AdminOnlineOrders,
+  AdminManualOrders,
 } from './pages/admin'
 import Login from './pages/Login'
 import {
@@ -27,6 +28,7 @@ import {
   UserStockMovements,
   UserStockRequests,
   UserOnlineOrders,
+  UserManualOrders,
 } from './pages/user'
 import { ADMIN_PAGES, USER_PAGES, pageFromPath, pathForPage, roleBasePath } from './routes/paths'
 import { firebaseConfigured, observeAuth, signOutAdmin } from './services/firebase'
@@ -40,13 +42,14 @@ import {
   fetchStockRequests,
   fetchIntegrationClients,
 } from './services/inventoryApi'
+import { fetchManualOrders } from './services/manualOrdersApi'
 import { fetchOnlineOrders } from './services/onlineOrdersApi'
 
 /** Set to true after redeploy to show the floating Help Assistant again. */
 const ENABLE_HELP_ASSISTANT = true
 
-/** Movement types owned by Shopee online-order flow (shown on Release Logs → Online orders). */
-const ONLINE_ORDER_MOVEMENT_TYPES = 'ONLINE_SALE,CANCELLED,RETURN,CHANNEL_ALLOCATION'
+/** Movement types owned by marketplace / HQ outbound flows (Release Logs → Online orders). */
+const ONLINE_ORDER_MOVEMENT_TYPES = 'ONLINE_SALE,MANUAL_SALE,CANCELLED,RETURN,CHANNEL_ALLOCATION'
 
 function AppShell() {
   const location = useLocation()
@@ -61,6 +64,7 @@ function AppShell() {
   const [onlineMovements, setOnlineMovements] = useState([])
   const [stockRequests, setStockRequests] = useState([])
   const [onlineOrders, setOnlineOrders] = useState([])
+  const [manualOrders, setManualOrders] = useState([])
   const [integrationClients, setIntegrationClients] = useState([])
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
@@ -77,7 +81,7 @@ function AppShell() {
     try {
       const me = await fetchMe()
       const roleIsAdmin = String(me?.role || 'ADMIN').toUpperCase() === 'ADMIN'
-      const [dash, cats, inv, mov, onlineMov, requests, online, adminList, clients] = await Promise.all([
+      const [dash, cats, inv, mov, onlineMov, requests, online, manual, adminList, clients] = await Promise.all([
         fetchDashboard(),
         fetchCategories(),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
@@ -85,6 +89,7 @@ function AppShell() {
         fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),
         fetchStockRequests({ limit: 100 }),
         fetchOnlineOrders({ limit: 100 }),
+        fetchManualOrders({ limit: 100 }),
         roleIsAdmin ? fetchUsers() : Promise.resolve([]),
         roleIsAdmin ? fetchIntegrationClients() : Promise.resolve([]),
       ])
@@ -96,6 +101,7 @@ function AppShell() {
       setOnlineMovements(onlineMov.data)
       setStockRequests(requests.data)
       setOnlineOrders(online.data)
+      setManualOrders(manual.data)
       setIntegrationClients(clients)
       setAdmins(adminList)
     } catch (err) {
@@ -227,6 +233,8 @@ function AppShell() {
           return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
         case 'Online Orders':
           return <AdminOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
+        case 'Manual Orders':
+          return <AdminManualOrders orders={manualOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
         case 'Release Logs':
           return <AdminReleaseLogs requests={stockRequests} onlineMovements={onlineMovements} />
         case 'Stock Movements':
@@ -251,6 +259,8 @@ function AppShell() {
         return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
       case 'Online Orders':
         return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
+      case 'Manual Orders':
+        return <UserManualOrders orders={manualOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
       case 'Release Logs':
         return <UserReleaseLogs requests={stockRequests} onlineMovements={onlineMovements} />
       case 'Stock Movements':

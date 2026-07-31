@@ -58,7 +58,19 @@ export const fetchStockRequests = (params = {}) =>
   }))
 
 export const approveStockRequest = (id) =>
-  api(`/stock-requests/${id}/approve`, { method: 'POST' }).then((response) => response.data)
+  api(`/stock-requests/${id}/ship`, { method: 'POST' }).then((response) => response.data)
+
+export const shipStockRequest = (id) =>
+  api(`/stock-requests/${id}/ship`, { method: 'POST' }).then((response) => response.data)
+
+export const deliverStockRequest = (id) =>
+  api(`/stock-requests/${id}/deliver`, { method: 'POST' }).then((response) => response.data)
+
+export const returnStockRequest = (id, notes = '') =>
+  api(`/stock-requests/${id}/return`, {
+    method: 'POST',
+    body: JSON.stringify({ notes: notes || null }),
+  }).then((response) => response.data)
 
 export const rejectStockRequest = (id, rejectionReason) =>
   api(`/stock-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ rejectionReason }) }).then((response) => response.data)

@@ -3,6 +3,7 @@ import * as controller from '../controllers/integration.controller.js';
 import { validate } from '../middleware/validate.js';
 import {
   availabilityQuerySchema,
+  deliverStockRequestSchema,
   psmsStockRequestSchema,
   stockRequestIdParams,
 } from '../validation/stock-request.schemas.js';
@@ -13,3 +14,4 @@ integrations.get('/catalog', controller.catalog);
 integrations.get('/availability', validate(availabilityQuerySchema), controller.availability);
 integrations.post('/stock-requests', validate(psmsStockRequestSchema), controller.submit);
 integrations.get('/stock-requests/:id', validate(stockRequestIdParams), controller.get);
+integrations.post('/stock-requests/:id/deliver', validate(deliverStockRequestSchema), controller.deliver);

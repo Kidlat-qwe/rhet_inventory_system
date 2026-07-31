@@ -53,7 +53,7 @@ export const stockRequestListSchema = z.object({
   body: z.any(),
   params: z.any(),
   query: z.object({
-    status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'FULFILLED', 'FAILED']).optional(),
+    status: z.enum(['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'REJECTED']).optional(),
     sourceSystem: z.string().trim().max(50).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -70,6 +70,25 @@ export const rejectStockRequestSchema = z.object({
   body: z.object({
     rejectionReason: z.string().trim().min(3).max(500),
   }),
+  query: z.any(),
+  params: z.object({ id: z.string().uuid() }),
+});
+
+export const returnStockRequestSchema = z.object({
+  body: z.object({
+    notes: optionalText(500),
+  }).default({}),
+  query: z.any(),
+  params: z.object({ id: z.string().uuid() }),
+});
+
+/** CMS branch confirm receipt — also used by RHET staff manual deliver override. */
+export const deliverStockRequestSchema = z.object({
+  body: z.object({
+    confirmedBy: optionalText(150),
+    branchName: optionalText(150),
+    notes: optionalText(500),
+  }).default({}),
   query: z.any(),
   params: z.object({ id: z.string().uuid() }),
 });

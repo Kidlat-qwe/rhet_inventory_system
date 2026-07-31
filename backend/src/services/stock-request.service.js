@@ -311,7 +311,7 @@ export async function getStockRequest(id) {
   return shapeStockRequest(withComponents);
 }
 
-export async function approveStockRequest(id, admin) {
+export async function shipStockRequest(id, admin) {
   const adminId = typeof admin === 'object' ? admin.user_id : admin;
   const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
 
@@ -419,7 +419,7 @@ export async function approveStockRequest(id, admin) {
 
     await db.query(
       `UPDATE stock_requests
-       SET status = 'APPROVED', inventory_id = $1, matched_sku = $2, processed_by = $3, processed_at = NOW(), updated_at = NOW()
+       SET inventory_id = $1, matched_sku = $2, processed_by = $3, processed_at = NOW(), updated_at = NOW()
        WHERE request_id = $4`,
       [inventoryId, matchedSku, adminId, id],
     );
@@ -430,7 +430,7 @@ export async function approveStockRequest(id, admin) {
         movementType: 'RELEASED',
         quantity: current.quantity,
         referenceNumber: current.external_reference || current.request_id,
-        remarks: `${current.source_system} request by ${current.requested_by}: ${current.reason}`,
+        remarks: `${current.source_system} shipped to branch for ${current.requested_by}: ${current.reason}`,
       },
       adminId,
       db,
@@ -447,7 +447,7 @@ export async function approveStockRequest(id, admin) {
 
     await db.query(
       `UPDATE stock_requests
-       SET status = 'FULFILLED', movement_id = $1, updated_at = NOW()
+       SET status = 'SHIPPED', movement_id = $1, updated_at = NOW()
        WHERE request_id = $2`,
       [movementId, id],
     );
@@ -458,8 +458,150 @@ export async function approveStockRequest(id, admin) {
   const resolvedProcessor = processor?.displayName
     ? processor
     : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email });
+  await notify(withComponents, 'stock_request.shipped', resolvedProcessor);
+  return shapeStockRequest(withComponents);
+}
+
+/** @deprecated Prefer shipStockRequest — kept for older clients during transition. */
+export async function approveStockRequest(id, admin) {
+  return shipStockRequest(id, admin);
+}
+
+export async function deliverStockRequest(id, options = {}) {
+  const admin = options.admin || null;
+  const adminId = typeof admin === 'object' && admin ? (admin.user_id || admin.userId || null) : admin;
+  const confirmedBy = String(options.confirmedBy || '').trim() || null;
+  const branchName = String(options.branchName || '').trim() || null;
+  const notes = String(options.notes || '').trim() || null;
+
+  const staffProcessor = typeof admin === 'object' && admin ? processorFromAdmin(admin) : null;
+  const processor = staffProcessor?.displayName
+    ? staffProcessor
+    : (confirmedBy ? { userId: null, displayName: confirmedBy, email: null } : null);
+
+  const result = await pool.query(
+    `UPDATE stock_requests
+     SET status = 'DELIVERED',
+         processed_by = COALESCE(processed_by, $1),
+         processed_at = COALESCE(processed_at, NOW()),
+         delivered_at = COALESCE(delivered_at, NOW()),
+         delivery_confirmed_by = COALESCE($2, delivery_confirmed_by),
+         delivery_notes = COALESCE($3, delivery_notes),
+         branch_name = CASE
+           WHEN branch_name IS NULL OR branch_name = '' THEN COALESCE($4, branch_name)
+           ELSE branch_name
+         END,
+         updated_at = NOW()
+     WHERE request_id = $5 AND status = 'SHIPPED'
+     RETURNING *`,
+    [adminId, confirmedBy, notes, branchName, id],
+  );
+
+  if (!result.rowCount) {
+    const existing = await getStockRequest(id);
+    throw new AppError(
+      409,
+      'INVALID_STATUS_TRANSITION',
+      `Cannot mark delivered from ${existing.status.toLowerCase()} (must be shipped)`,
+    );
+  }
+
+  const enriched = await enrichProcessorIdentity(await loadRequestRow(id), adminId);
+  const [withComponents] = await attachRequestComponents([enriched]);
+  const resolvedProcessor = processor?.displayName
+    ? processor
+    : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email })
+      || (confirmedBy ? { userId: null, displayName: confirmedBy, email: null } : null)
+      || { userId: null, displayName: 'Branch Admin', email: null };
+
+  // Branch stock credit happens on delivered (CMS). Legacy partners may still listen for fulfilled.
+  await notify(withComponents, 'stock_request.delivered', resolvedProcessor);
   await notify(withComponents, 'stock_request.fulfilled', resolvedProcessor);
   return shapeStockRequest(withComponents);
+}
+
+export async function returnStockRequest(id, admin, notes = null) {
+  const adminId = typeof admin === 'object' ? admin.user_id : admin;
+  const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
+  let wasDelivered = false;
+
+  await withTransaction(async (db) => {
+    const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
+    if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
+
+    const current = locked.rows[0];
+    if (current.status !== 'SHIPPED' && current.status !== 'DELIVERED') {
+      throw new AppError(
+        409,
+        'INVALID_STATUS_TRANSITION',
+        `Cannot return a request in ${current.status.toLowerCase()} status`,
+      );
+    }
+
+    if (!current.inventory_id) {
+      throw new AppError(422, 'ITEM_NOT_MATCHED', 'Cannot restock a request with no matched inventory item');
+    }
+
+    wasDelivered = current.status === 'DELIVERED';
+    const components = await listRequestComponents(id, db);
+    const isKit = components.length > 0;
+
+    if (isKit) {
+      for (const spec of components) {
+        if (!spec.inventoryId) continue;
+        await inventory.createMovement(
+          spec.inventoryId,
+          {
+            movementType: 'RETURN',
+            quantity: Number(spec.quantity) || current.quantity,
+            referenceNumber: current.external_reference || current.request_id,
+            remarks: notes
+              || `Returned stock request ${current.external_reference || current.request_id}`,
+          },
+          adminId,
+          db,
+        );
+      }
+    } else {
+      await inventory.createMovement(
+        current.inventory_id,
+        {
+          movementType: 'RETURN',
+          quantity: current.quantity,
+          referenceNumber: current.external_reference || current.request_id,
+          remarks: notes
+            || `Returned stock request ${current.external_reference || current.request_id}`,
+        },
+        adminId,
+        db,
+      );
+    }
+
+    await db.query(
+      `UPDATE stock_requests
+       SET status = 'RETURNED',
+           rejection_reason = CASE
+             WHEN $1::text IS NULL OR $1 = '' THEN rejection_reason
+             WHEN rejection_reason IS NULL OR rejection_reason = '' THEN $1
+             ELSE rejection_reason || ' | ' || $1
+           END,
+           processed_by = COALESCE(processed_by, $2),
+           updated_at = NOW()
+       WHERE request_id = $3`,
+      [notes || null, adminId, id],
+    );
+  });
+
+  const enriched = await enrichProcessorIdentity(await loadRequestRow(id), adminId);
+  const [withComponents] = await attachRequestComponents([enriched]);
+  const resolvedProcessor = processor?.displayName
+    ? processor
+    : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email });
+
+  const shaped = shapeStockRequest(withComponents);
+  shaped.wasDelivered = wasDelivered;
+  await notify({ ...withComponents, was_delivered: wasDelivered, wasDelivered }, 'stock_request.returned', resolvedProcessor);
+  return shaped;
 }
 
 export async function rejectStockRequest(id, admin, rejectionReason) {

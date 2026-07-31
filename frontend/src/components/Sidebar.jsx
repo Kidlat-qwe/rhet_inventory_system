@@ -10,6 +10,7 @@ export function Sidebar({ open, close, admin, pendingRequests, attentionOrders =
     ['Inventory', 'box'],
     ['Stock Requests', 'swap'],
     ['Online Orders', 'cart'],
+    ['Manual Orders', 'box'],
     ['Release Logs', 'list'],
     ['Stock Movements', 'swap'],
   ]

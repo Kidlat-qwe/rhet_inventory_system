@@ -3,8 +3,15 @@ import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { usePagination } from '../../hooks/usePagination'
-import { approveStockRequest, rejectStockRequest } from '../../services/inventoryApi'
+import {
+  deliverStockRequest,
+  rejectStockRequest,
+  returnStockRequest,
+  shipStockRequest,
+} from '../../services/inventoryApi'
 import { formatDate, formatStatus } from '../../utils/format'
+
+const STATUS_TABS = ['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'REJECTED']
 
 function detailValue(value) {
   if (value === null || value === undefined || value === '') return '—'
@@ -22,9 +29,9 @@ function getStockIssue(request) {
     return {
       code: 'UNMATCHED',
       title: 'Item not matched in inventory',
-      message: 'This request does not match an inventory item yet. You cannot approve until the category, gender, type, and size match a stocked item.',
+      message: 'This request does not match an inventory item yet. You cannot ship until the category, gender, type, and size match a stocked item.',
       available: null,
-      canApprove: false,
+      canShip: false,
     }
   }
 
@@ -32,9 +39,9 @@ function getStockIssue(request) {
     return {
       code: 'UNKNOWN_STOCK',
       title: 'Current stock unavailable',
-      message: 'Unable to verify current warehouse stock for this item. Check Inventory before approving.',
+      message: 'Unable to verify current warehouse stock for this item. Check Inventory before shipping.',
       available: null,
-      canApprove: false,
+      canShip: false,
     }
   }
 
@@ -44,7 +51,7 @@ function getStockIssue(request) {
       title: 'Out of stock',
       message: `This item is out of stock (0 available), but the request needs ${needed} unit(s). Add stock first, or reject this request.`,
       available,
-      canApprove: false,
+      canShip: false,
     }
   }
 
@@ -54,7 +61,7 @@ function getStockIssue(request) {
       title: 'Insufficient stock',
       message: `Only ${available} unit(s) are available, but this request needs ${needed}. Add stock first, or reject / ask the branch to reduce quantity.`,
       available,
-      canApprove: false,
+      canShip: false,
     }
   }
 
@@ -68,6 +75,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
   const [selected, setSelected] = useState(null)
   const [mode, setMode] = useState('details')
   const [rejectReason, setRejectReason] = useState('')
+  const [returnNotes, setReturnNotes] = useState('')
 
   const shown = useMemo(
     () => (filter ? requests.filter((request) => request.status === filter) : requests),
@@ -84,6 +92,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
   function openDetails(request) {
     setError('')
     setRejectReason('')
+    setReturnNotes('')
     setMode('details')
     setSelected(request)
   }
@@ -93,16 +102,12 @@ export default function StockRequestsPage({ requests, onRefresh }) {
     setSelected(null)
     setMode('details')
     setRejectReason('')
+    setReturnNotes('')
   }
 
-  function openApproveWarning() {
-    setError('')
-    setMode('approve')
-  }
-
-  async function confirmApprove() {
+  async function confirmShip() {
     if (!selected?.requestId) return
-    if (stockIssue && !stockIssue.canApprove) {
+    if (stockIssue && !stockIssue.canShip) {
       setError(stockIssue.message)
       return
     }
@@ -110,13 +115,47 @@ export default function StockRequestsPage({ requests, onRefresh }) {
     setBusyId(selected.requestId)
     setError('')
     try {
-      await approveStockRequest(selected.requestId)
+      await shipStockRequest(selected.requestId)
       setSelected(null)
       setMode('details')
       await onRefresh()
     } catch (err) {
       setError(err.message)
-      setMode('approve')
+      setMode('ship')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  async function confirmDeliver() {
+    if (!selected?.requestId) return
+    setBusyId(selected.requestId)
+    setError('')
+    try {
+      await deliverStockRequest(selected.requestId)
+      setSelected(null)
+      setMode('details')
+      await onRefresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  async function confirmReturn(e) {
+    e.preventDefault()
+    if (!selected?.requestId) return
+    setBusyId(selected.requestId)
+    setError('')
+    try {
+      await returnStockRequest(selected.requestId, returnNotes.trim())
+      setSelected(null)
+      setMode('details')
+      setReturnNotes('')
+      await onRefresh()
+    } catch (err) {
+      setError(err.message)
     } finally {
       setBusyId('')
     }
@@ -145,13 +184,21 @@ export default function StockRequestsPage({ requests, onRefresh }) {
       <div className="page-title">
         <div>
           <h1>Stock requests</h1>
-          <p>Review merchandise requests submitted by external systems. Approving a request automatically deducts inventory stock.</p>
+          <p>
+            Branch merchandise requests. Marking shipped deducts warehouse stock; delivered means the branch received the goods.
+          </p>
         </div>
       </div>
       <div className="quick-filters">
-        {['PENDING', 'FULFILLED', 'REJECTED', 'FAILED'].map((status) => (
-          <button key={status} type="button" className={filter === status ? 'selected' : ''} onClick={() => setFilter(status)}>
-            <span>{requests.filter((request) => request.status === status).length}</span>{formatStatus(status)}
+        {STATUS_TABS.map((status) => (
+          <button
+            key={status}
+            type="button"
+            className={filter === status ? 'selected' : ''}
+            onClick={() => { setFilter(status); setPage(1) }}
+          >
+            <span>{requests.filter((request) => request.status === status).length}</span>
+            {formatStatus(status)}
           </button>
         ))}
       </div>
@@ -193,17 +240,13 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                     <td><StatusBadge status={request.status} /></td>
                     <td className="muted">{formatDate(request.createdAt)}</td>
                     <td>
-                      {request.status === 'PENDING' ? (
-                        <div className="row-actions">
-                          <button type="button" className="primary small-btn" onClick={() => openDetails(request)}>
-                            Review
-                          </button>
-                        </div>
-                      ) : (
-                        <button type="button" className="secondary small-btn" onClick={() => openDetails(request)}>
-                          View
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className={request.status === 'PENDING' ? 'primary small-btn' : 'secondary small-btn'}
+                        onClick={() => openDetails(request)}
+                      >
+                        {request.status === 'PENDING' || request.status === 'SHIPPED' ? 'Manage' : 'View'}
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -259,7 +302,16 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                 <div className="full"><span>Failure reason</span><strong className="danger-text">{selected.failureReason}</strong></div>
               )}
               {selected.rejectionReason && (
-                <div className="full"><span>Rejection reason</span><strong>{selected.rejectionReason}</strong></div>
+                <div className="full"><span>Notes / rejection</span><strong>{selected.rejectionReason}</strong></div>
+              )}
+              {selected.deliveryConfirmedBy && (
+                <div><span>Delivery confirmed by</span><strong>{selected.deliveryConfirmedBy}</strong></div>
+              )}
+              {selected.deliveredAt && (
+                <div><span>Delivered at</span><strong>{formatDate(selected.deliveredAt)}</strong></div>
+              )}
+              {selected.deliveryNotes && (
+                <div className="full"><span>Delivery notes</span><strong>{selected.deliveryNotes}</strong></div>
               )}
               {selected.processedByName && (
                 <div><span>Processed by</span><strong>{selected.processedByName}</strong></div>
@@ -267,7 +319,7 @@ export default function StockRequestsPage({ requests, onRefresh }) {
               {selected.processedAt && (
                 <div><span>Processed at</span><strong>{formatDate(selected.processedAt)}</strong></div>
               )}
-              {(selected.status === 'FULFILLED' || selected.status === 'REJECTED') && (
+              {(selected.status === 'SHIPPED' || selected.status === 'DELIVERED' || selected.status === 'RETURNED' || selected.status === 'REJECTED') && (
                 <div className="full">
                   <span>External webhook</span>
                   <strong className={
@@ -287,14 +339,22 @@ export default function StockRequestsPage({ requests, onRefresh }) {
             {selected.status === 'PENDING' ? (
               <div className={`integration-note ${stockIssue ? 'warn' : ''}`}>
                 {stockIssue
-                  ? 'Approve is blocked until stock is available or the item is matched. You can reject this request now.'
-                  : `Approving will deduct ${selected.quantity} unit(s) from inventory${selected.matchedSku ? ` (${selected.matchedSku})` : ''}.`}
+                  ? 'Ship is blocked until stock is available or the item is matched. You can reject this request now.'
+                  : `Marking shipped will deduct ${selected.quantity} unit(s) from warehouse stock${selected.matchedSku ? ` (${selected.matchedSku})` : ''}.`}
+              </div>
+            ) : selected.status === 'SHIPPED' ? (
+              <div className="integration-note">
+                Goods left the warehouse. Normal PSMS flow: the branch confirms receipt in CMS (POST /deliver).
+                You can still mark delivered here as a manual override, or mark returned to restock.
+              </div>
+            ) : selected.status === 'DELIVERED' ? (
+              <div className="integration-note">
+                Branch received this shipment. You can still mark returned to restock the warehouse (CMS should reverse branch stock).
               </div>
             ) : selected.webhookLastStatus === 'SKIPPED' || selected.webhookLastStatus === 'FAILED' ? (
               <div className="integration-note warn">
-                RHET marked this request {formatStatus(selected.status).toLowerCase()}, but the external system may still show Pending
+                RHET marked this request {formatStatus(selected.status).toLowerCase()}, but the external system may still be out of sync
                 because the webhook was {String(selected.webhookLastStatus).toLowerCase()}.
-                Fix webhook URL / CMS reachability, then resend or use CMS sync-inventory repair.
               </div>
             ) : (
               <div className="integration-note">
@@ -309,22 +369,37 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                   <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('reject') }}>
                     Reject
                   </button>
-                  <button type="button" className="primary" disabled={busyId === selected.requestId} onClick={openApproveWarning}>
-                    Approve
+                  <button type="button" className="primary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('ship') }}>
+                    Mark shipped
                   </button>
                 </>
+              )}
+              {selected.status === 'SHIPPED' && (
+                <>
+                  <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('return') }}>
+                    Mark returned
+                  </button>
+                  <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={confirmDeliver}>
+                    {busyId === selected.requestId ? 'Saving…' : 'Mark delivered (override)'}
+                  </button>
+                </>
+              )}
+              {selected.status === 'DELIVERED' && (
+                <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('return') }}>
+                  Mark returned
+                </button>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {selected && mode === 'approve' && (
+      {selected && mode === 'ship' && (
         <div className="modal-backdrop">
           <div className="modal small approve-warning-modal">
             <div className="modal-head">
               <div>
-                <h2>{stockIssue ? 'Cannot approve request' : 'Confirm approval'}</h2>
+                <h2>{stockIssue ? 'Cannot ship request' : 'Confirm shipment'}</h2>
                 <p>{selected.requestedBy} · {selected.branchName || '—'} · {selected.categoryName} · Qty {selected.quantity}</p>
               </div>
               <button type="button" onClick={closeModal}>×</button>
@@ -342,9 +417,9 @@ export default function StockRequestsPage({ requests, onRefresh }) {
               </div>
             ) : (
               <div className="integration-note warn">
-                You are about to approve this request and deduct <strong>{selected.quantity}</strong> unit(s)
+                You are about to mark this request shipped and deduct <strong>{selected.quantity}</strong> unit(s)
                 from warehouse stock{selected.matchedSku ? ` (${selected.matchedSku})` : ''}.
-                Available stock after approval: <strong>{Number(selected.currentStocks) - Number(selected.quantity)}</strong>.
+                Available stock after ship: <strong>{Number(selected.currentStocks) - Number(selected.quantity)}</strong>.
               </div>
             )}
 
@@ -359,12 +434,46 @@ export default function StockRequestsPage({ requests, onRefresh }) {
                   Reject instead
                 </button>
               ) : (
-                <button type="button" className="primary" disabled={busyId === selected.requestId} onClick={confirmApprove}>
-                  {busyId === selected.requestId ? 'Approving…' : 'Confirm approve'}
+                <button type="button" className="primary" disabled={busyId === selected.requestId} onClick={confirmShip}>
+                  {busyId === selected.requestId ? 'Shipping…' : 'Confirm ship'}
                 </button>
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {selected && mode === 'return' && (
+        <div className="modal-backdrop">
+          <form className="modal small" onSubmit={confirmReturn}>
+            <div className="modal-head">
+              <div>
+                <h2>Mark returned</h2>
+                <p>{selected.requestedBy} · {selected.branchName || '—'} · Qty {selected.quantity}</p>
+              </div>
+              <button type="button" onClick={closeModal}>×</button>
+            </div>
+            <div className="integration-note warn">
+              Warehouse stock will be restocked. If this was already delivered, CMS should reverse branch stock.
+            </div>
+            <label>
+              Notes
+              <textarea
+                value={returnNotes}
+                onChange={(e) => setReturnNotes(e.target.value)}
+                placeholder="Optional return notes"
+              />
+            </label>
+            {error && <div className="page-error">{error}</div>}
+            <div className="modal-actions">
+              <button type="button" className="secondary" onClick={() => { setError(''); setMode('details') }} disabled={Boolean(busyId)}>
+                Back to details
+              </button>
+              <button className="primary" disabled={busyId === selected.requestId}>
+                {busyId === selected.requestId ? 'Saving…' : 'Confirm return'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

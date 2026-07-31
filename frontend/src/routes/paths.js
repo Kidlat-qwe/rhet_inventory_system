@@ -8,6 +8,7 @@ export const PAGE_BY_SLUG = {
   'api-keys': 'API Keys',
   users: 'Users',
   'online-orders': 'Online Orders',
+  'manual-orders': 'Manual Orders',
 }
 
 export const SLUG_BY_PAGE = Object.fromEntries(
@@ -19,6 +20,7 @@ export const ADMIN_PAGES = [
   'Inventory',
   'Stock Requests',
   'Online Orders',
+  'Manual Orders',
   'Release Logs',
   'Stock Movements',
   'Categories',
@@ -31,6 +33,7 @@ export const USER_PAGES = [
   'Inventory',
   'Stock Requests',
   'Online Orders',
+  'Manual Orders',
   'Release Logs',
   'Stock Movements',
   'Categories',

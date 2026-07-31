@@ -67,7 +67,7 @@ export const deleteInventorySchema = z.object({
 });
 
 export const movementSchema = z.object({ body: z.object({
-  movementType: z.enum(['STOCK_IN', 'STOCK_OUT', 'ADJUSTMENT', 'RETURN', 'DAMAGED', 'RELEASED', 'CANCELLED', 'ONLINE_SALE', 'CHANNEL_ALLOCATION']),
+  movementType: z.enum(['STOCK_IN', 'STOCK_OUT', 'ADJUSTMENT', 'RETURN', 'DAMAGED', 'RELEASED', 'CANCELLED', 'ONLINE_SALE', 'CHANNEL_ALLOCATION', 'MANUAL_SALE']),
   quantity: z.coerce.number().int().positive().optional(),
   newStock: z.coerce.number().int().min(0).optional(),
   direction: z.enum(['ADD', 'DEDUCT']).optional(),

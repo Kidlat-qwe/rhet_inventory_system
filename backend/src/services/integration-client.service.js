@@ -64,7 +64,7 @@ const clientSelect = `SELECT ic.client_id, ic.system_code, ic.display_name, ic.d
    SELECT
      COUNT(*)::int AS total_requests,
      COUNT(*) FILTER (WHERE status = 'PENDING')::int AS pending_requests,
-     COUNT(*) FILTER (WHERE status = 'FULFILLED')::int AS fulfilled_requests,
+     COUNT(*) FILTER (WHERE status IN ('SHIPPED', 'DELIVERED'))::int AS fulfilled_requests,
      COUNT(*) FILTER (WHERE status = 'REJECTED')::int AS rejected_requests
    FROM stock_requests sr
    WHERE sr.source_system = ic.system_code

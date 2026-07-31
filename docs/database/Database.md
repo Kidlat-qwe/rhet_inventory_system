@@ -238,6 +238,7 @@ CREATE TABLE IF NOT EXISTS public.stock_requests
     size_label character varying(20) COLLATE pg_catalog."default",
     quantity integer NOT NULL,
     status character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'PENDING'::character varying,
+    -- Allowed: PENDING | SHIPPED | DELIVERED | RETURNED | REJECTED
     inventory_id uuid,
     matched_sku character varying(64) COLLATE pg_catalog."default",
     movement_id uuid,

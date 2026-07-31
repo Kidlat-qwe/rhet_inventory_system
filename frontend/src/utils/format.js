@@ -7,6 +7,9 @@ const statusLabels = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   FULFILLED: 'Fulfilled',
+  SHIPPED: 'Shipped',
+  DELIVERED: 'Delivered',
+  RETURNED: 'Returned',
   RECEIVED: 'Received',
   NEEDS_ATTENTION: 'Needs attention',
   MATCHED: 'Matched',
@@ -37,6 +40,7 @@ const movementLabels = {
   RELEASED: 'Released',
   CANCELLED: 'Cancelled',
   ONLINE_SALE: 'Online sale',
+  MANUAL_SALE: 'Manual sale',
   CHANNEL_ALLOCATION: 'Channel allocation',
 }
 

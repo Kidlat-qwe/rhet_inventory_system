@@ -36,3 +36,13 @@ export const availability = asyncHandler(async (req, res) => {
 export const catalog = asyncHandler(async (_req, res) => {
   success(res, await service.getIntegrationCatalog());
 });
+
+/** CMS branch admin confirms physical receipt → SHIPPED → DELIVERED (no re-deduct). */
+export const deliver = asyncHandler(async (req, res) => {
+  const body = req.validated.body || {};
+  success(res, await service.deliverStockRequest(req.validated.params.id, {
+    confirmedBy: body.confirmedBy,
+    branchName: body.branchName,
+    notes: body.notes,
+  }));
+});

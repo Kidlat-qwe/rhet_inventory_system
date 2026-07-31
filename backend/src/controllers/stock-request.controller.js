@@ -16,8 +16,30 @@ export async function get(req, res) {
   success(res, await service.getStockRequest(req.validated.params.id));
 }
 
+export async function ship(req, res) {
+  success(res, await service.shipStockRequest(req.validated.params.id, req.admin));
+}
+
+/** @deprecated Prefer POST /:id/ship */
 export async function approve(req, res) {
-  success(res, await service.approveStockRequest(req.validated.params.id, req.admin));
+  success(res, await service.shipStockRequest(req.validated.params.id, req.admin));
+}
+
+export async function deliver(req, res) {
+  success(res, await service.deliverStockRequest(req.validated.params.id, {
+    admin: req.admin,
+    confirmedBy: req.validated.body?.confirmedBy,
+    branchName: req.validated.body?.branchName,
+    notes: req.validated.body?.notes,
+  }));
+}
+
+export async function markReturned(req, res) {
+  success(res, await service.returnStockRequest(
+    req.validated.params.id,
+    req.admin,
+    req.validated.body?.notes || null,
+  ));
 }
 
 export async function reject(req, res) {

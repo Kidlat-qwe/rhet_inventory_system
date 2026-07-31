@@ -8,6 +8,7 @@ User role entry points. Each file wraps a shared page and forwards all props unc
 | `userInventory.jsx` | `InventoryPage` |
 | `userStockRequests.jsx` | `StockRequestsPage` |
 | `userOnlineOrders.jsx` | `OnlineOrdersPage` with `canManage` (import, map, fulfill — same as admin) |
+| `userManualOrders.jsx` | `ManualOrdersPage` with `canManage` (create, fulfill, return — same as admin) |
 | `userReleaseLogs.jsx` | `ReleaseLogsPage` |
 | `userStockMovements.jsx` | `StockMovementsPage` |
 | `userCategories.jsx` | `CategoriesPage` |

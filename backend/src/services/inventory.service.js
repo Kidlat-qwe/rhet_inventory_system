@@ -486,10 +486,22 @@ export async function deleteInventory(id, { confirmationName }, adminId) {
       );
     }
 
+    const manualLines = await db.query(
+      `SELECT 1 FROM manual_order_items WHERE inventory_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (manualLines.rowCount) {
+      throw new AppError(
+        409,
+        'ITEM_IN_MANUAL_ORDERS',
+        'Cannot delete an item that is linked to manual order lines.',
+      );
+    }
+
     const activeStockRequests = await db.query(
       `SELECT 1 FROM stock_requests
        WHERE inventory_id = $1
-         AND status IN ('PENDING', 'APPROVED')
+         AND status IN ('PENDING', 'SHIPPED')
        LIMIT 1`,
       [id],
     );
@@ -497,7 +509,7 @@ export async function deleteInventory(id, { confirmationName }, adminId) {
       throw new AppError(
         409,
         'ITEM_IN_STOCK_REQUESTS',
-        'Cannot delete an item that still has pending or approved stock requests.',
+        'Cannot delete an item that still has pending or shipped stock requests.',
       );
     }
 
@@ -609,6 +621,7 @@ export async function createBundleAwareMovement(inventoryId, input, adminId, db,
     const isChannelAllocation = input.movementType === 'CHANNEL_ALLOCATION';
     const isDeduct = input.movementType === 'RELEASED'
       || input.movementType === 'ONLINE_SALE'
+      || input.movementType === 'MANUAL_SALE'
       || input.movementType === 'STOCK_OUT'
       || input.movementType === 'DAMAGED'
       || (isChannelAllocation && input.direction === 'DEDUCT');
