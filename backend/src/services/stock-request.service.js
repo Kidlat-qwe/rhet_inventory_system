@@ -479,6 +479,26 @@ export async function deliverStockRequest(id, options = {}) {
     ? staffProcessor
     : (confirmedBy ? { userId: null, displayName: confirmedBy, email: null } : null);
 
+  // Idempotent: CMS confirm-delivery may retry after RHET is already DELIVERED.
+  const current = await getStockRequest(id);
+  if (String(current.status || '').toUpperCase() === 'DELIVERED') {
+    if (confirmedBy || notes || branchName) {
+      await pool.query(
+        `UPDATE stock_requests
+         SET delivery_confirmed_by = COALESCE(delivery_confirmed_by, $1),
+             delivery_notes = COALESCE(delivery_notes, $2),
+             branch_name = CASE
+               WHEN branch_name IS NULL OR branch_name = '' THEN COALESCE($3, branch_name)
+               ELSE branch_name
+             END,
+             updated_at = NOW()
+         WHERE request_id = $4 AND status = 'DELIVERED'`,
+        [confirmedBy, notes, branchName, id],
+      );
+    }
+    return getStockRequest(id);
+  }
+
   const result = await pool.query(
     `UPDATE stock_requests
      SET status = 'DELIVERED',
@@ -499,10 +519,14 @@ export async function deliverStockRequest(id, options = {}) {
 
   if (!result.rowCount) {
     const existing = await getStockRequest(id);
+    // Race / retry: another caller already delivered — treat as success (no second webhook).
+    if (String(existing.status || '').toUpperCase() === 'DELIVERED') {
+      return existing;
+    }
     throw new AppError(
       409,
       'INVALID_STATUS_TRANSITION',
-      `Cannot mark delivered from ${existing.status.toLowerCase()} (must be shipped)`,
+      `Cannot mark delivered from ${String(existing.status || 'unknown').toLowerCase()} (must be shipped)`,
     );
   }
 

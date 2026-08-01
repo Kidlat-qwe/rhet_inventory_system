@@ -25,9 +25,10 @@ Body (optional):
 
 RHET behavior:
 - Only from SHIPPED → DELIVERED (409 otherwise)
+- If already DELIVERED → **200 idempotent** (safe CMS retry; no re-webhook / no re-deduct)
 - No warehouse re-deduct
 - Stores confirmedBy / notes / delivered_at
-- Webhooks: stock_request.delivered (+ fulfilled alias)
+- Webhooks: stock_request.delivered (+ fulfilled alias) on first transition only
 - Response 200: { success, data: { requestId, status: "DELIVERED", externalReference, ... } }
 
 Path is **/deliver** (not /confirm-delivery). Keep CMS hardcoded path.
