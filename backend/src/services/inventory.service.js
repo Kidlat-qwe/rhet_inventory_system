@@ -298,8 +298,8 @@ async function insertInventoryRow(db, input, adminId) {
   const initialStocks = isKit ? 0 : input.stocks;
 
   const result = await db.query(`INSERT INTO inventory
-    (sku, item_name, stocks, category_id, variation, price, uniform_gender, uniform_type, uniform_size, remarks, low_stock_threshold, created_by, updated_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12) RETURNING inventory_id`,
+    (sku, item_name, stocks, category_id, variation, price, internal_selling_price, uniform_gender, uniform_type, uniform_size, remarks, low_stock_threshold, created_by, updated_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13) RETURNING inventory_id`,
     [
       input.sku,
       input.itemName,
@@ -307,6 +307,7 @@ async function insertInventoryRow(db, input, adminId) {
       input.categoryId,
       input.variation || null,
       input.price,
+      input.internalSellingPrice,
       input.uniformGender || null,
       input.uniformType || null,
       input.uniformSize || null,
@@ -363,6 +364,7 @@ export async function updateInventory(id, input, adminId) {
     const fields = {
       sku: 'sku', itemName: 'item_name', categoryId: 'category_id', variation: 'variation',
       price: 'price',
+      internalSellingPrice: 'internal_selling_price',
       uniformGender: 'uniform_gender', uniformType: 'uniform_type', uniformSize: 'uniform_size',
       remarks: 'remarks',
       lowStockThreshold: 'low_stock_threshold', lifecycleStatus: 'lifecycle_status',

@@ -161,6 +161,7 @@ export default function InventoryPage({ items, categories, canManage = false, on
         categoryId: form.categoryId,
         variation: resolveItemVariation(form, categories),
         price: form.price,
+        internalSellingPrice: form.internalSellingPrice,
         lowStockThreshold: form.lowStockThreshold,
         uniformGender: isUniform ? form.uniformGender || null : null,
         uniformType: isUniform ? form.uniformType || null : null,
@@ -192,6 +193,7 @@ export default function InventoryPage({ items, categories, canManage = false, on
             categoryId: row.categoryId,
             variation: row.variation,
             price: row.price,
+            internalSellingPrice: row.internalSellingPrice,
             lowStockThreshold: row.lowStockThreshold,
             uniformGender: row.uniformGender,
             uniformType: row.uniformType,
@@ -319,7 +321,7 @@ export default function InventoryPage({ items, categories, canManage = false, on
             <span>{detailShown.length} items</span>
           </div>
           <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table className="inventory-table" style={{ width: '100%', minWidth: '1080px' }}>
+            <table className="inventory-table" style={{ width: '100%', minWidth: '1180px' }}>
               <thead>
                 <tr>
                   <th>Item name</th>
@@ -327,7 +329,8 @@ export default function InventoryPage({ items, categories, canManage = false, on
                   <th>Variation</th>
                   <th>Remarks</th>
                   <th>Stock</th>
-                  <th>Price</th>
+                  <th>Selling price</th>
+                  <th>Internal selling price</th>
                   <th>Status</th>
                   <th>Last updated</th>
                   <th />
@@ -378,6 +381,7 @@ export default function InventoryPage({ items, categories, canManage = false, on
                       </button>
                     </td>
                     <td className="metric-cell"><strong>{formatCurrency(item.price)}</strong></td>
+                    <td className="metric-cell"><strong>{formatCurrency(item.internalSellingPrice)}</strong></td>
                     <td>
                       <StatusBadge
                         status={status}
@@ -417,7 +421,7 @@ export default function InventoryPage({ items, categories, canManage = false, on
                   </tr>
                   )
                 }) : (
-                  <tr><td colSpan={9}><EmptyState title="No items in this category yet" message="Add your first item to start tracking stock, pricing, and availability." action={<button type="button" className="primary" onClick={startAdd}>＋ Add new item</button>} /></td></tr>
+                  <tr><td colSpan={10}><EmptyState title="No items in this category yet" message="Add your first item to start tracking stock, pricing, and availability." action={<button type="button" className="primary" onClick={startAdd}>＋ Add new item</button>} /></td></tr>
                 )}
               </tbody>
             </table>
@@ -465,7 +469,7 @@ export default function InventoryPage({ items, categories, canManage = false, on
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={6}><EmptyState title="No categories yet" message="Create a category first, then add inventory items to it from here." /></td></tr>
+                <tr><td colSpan={5}><EmptyState title="No categories yet" message="Create a category first, then add inventory items to it from here." /></td></tr>
               )}
             </tbody>
           </table>

@@ -28,14 +28,14 @@ test('parseShopeeCsv groups rows by order id', () => {
   assert.equal(orders[0].externalOrderStatus, 'To Receive');
   assert.equal(orders[1].externalOrderId, '220102GHIJKL');
   assert.equal(orders[1].items[0].quantity, 1);
-  assert.equal(orders[1].fulfillmentStatus, 'RECEIVED');
+  assert.equal(orders[1].fulfillmentStatus, 'DELIVERED');
 });
 
 test('mapShopeeOrderStatusToFulfillment maps common Seller Centre labels', () => {
   assert.equal(mapShopeeOrderStatusToFulfillment('To Ship'), 'READY_TO_SHIP');
   assert.equal(mapShopeeOrderStatusToFulfillment('Shipped'), 'SHIPPED');
   assert.equal(mapShopeeOrderStatusToFulfillment('To Receive'), 'SHIPPED');
-  assert.equal(mapShopeeOrderStatusToFulfillment('Completed'), 'RECEIVED');
+  assert.equal(mapShopeeOrderStatusToFulfillment('Completed'), 'DELIVERED');
   assert.equal(mapShopeeOrderStatusToFulfillment('Cancelled'), 'CANCELLED');
   assert.equal(mapShopeeOrderStatusToFulfillment(''), null);
 });
@@ -81,21 +81,21 @@ test('parseShopeeOrders accepts xlsx base64 payloads', () => {
 
 test('shipmentRequiresDeduction triggers at SHIPPED and beyond', () => {
   assert.equal(shipmentRequiresDeduction('READY_TO_SHIP', 'SHIPPED'), true);
-  assert.equal(shipmentRequiresDeduction('PROCESSING', 'RECEIVED'), true);
-  assert.equal(shipmentRequiresDeduction('SHIPPED', 'RECEIVED'), false);
+  assert.equal(shipmentRequiresDeduction('PROCESSING', 'DELIVERED'), true);
+  assert.equal(shipmentRequiresDeduction('SHIPPED', 'DELIVERED'), false);
   assert.equal(shipmentRequiresDeduction('READY_TO_SHIP', 'READY_TO_SHIP'), false);
   assert.equal(shipmentRequiresDeduction('SHIPPED', 'CANCELLED'), false);
 });
 
 test('shouldApplyFulfillmentFromImport advances only when export is newer', () => {
   assert.equal(shouldApplyFulfillmentFromImport('SHIPPED', 'SHIPPED'), false);
-  assert.equal(shouldApplyFulfillmentFromImport('SHIPPED', 'RECEIVED'), true);
-  assert.equal(shouldApplyFulfillmentFromImport('RECEIVED', 'SHIPPED'), false);
-  assert.equal(shouldApplyFulfillmentFromImport('RETURN', 'RECEIVED'), false);
+  assert.equal(shouldApplyFulfillmentFromImport('SHIPPED', 'DELIVERED'), true);
+  assert.equal(shouldApplyFulfillmentFromImport('DELIVERED', 'SHIPPED'), false);
+  assert.equal(shouldApplyFulfillmentFromImport('RETURNED', 'DELIVERED'), false);
   assert.equal(shouldApplyFulfillmentFromImport(null, 'SHIPPED'), true);
   assert.equal(shouldApplyFulfillmentFromImport('READY_TO_SHIP', 'CANCELLED'), true);
   assert.equal(shouldApplyFulfillmentFromImport('CANCELLED', 'READY_TO_SHIP'), false);
-  assert.equal(shouldApplyFulfillmentFromImport('RETURN', 'CANCELLED'), false);
+  assert.equal(shouldApplyFulfillmentFromImport('RETURNED', 'CANCELLED'), false);
 });
 
 test('computeOrderStatus returns FULFILLED when all lines are matched', () => {
@@ -141,12 +141,11 @@ test('decideLineOutcome marks matched items (no stock deduction — allocation m
 });
 
 test('fulfillment transitions only allow the documented forward moves', () => {
-  assert.deepEqual(FULFILLMENT_TRANSITIONS.PROCESSING, ['READY_TO_SHIP']);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.PROCESSING, ['READY_TO_SHIP', 'SHIPPED']);
   assert.deepEqual(FULFILLMENT_TRANSITIONS.READY_TO_SHIP, ['SHIPPED']);
-  assert.deepEqual(FULFILLMENT_TRANSITIONS.SHIPPED, ['RECEIVED', 'RETURN']);
-  assert.deepEqual(FULFILLMENT_TRANSITIONS.RECEIVED, ['RETURN']);
-  assert.deepEqual(FULFILLMENT_TRANSITIONS.RETURN, []);
-  assert.deepEqual(FULFILLMENT_TRANSITIONS.RETURN_CONFIRMED, []);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.SHIPPED, ['DELIVERED']);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.DELIVERED, []);
+  assert.deepEqual(FULFILLMENT_TRANSITIONS.RETURNED, []);
   assert.deepEqual(FULFILLMENT_TRANSITIONS.CANCELLED, []);
 });
 

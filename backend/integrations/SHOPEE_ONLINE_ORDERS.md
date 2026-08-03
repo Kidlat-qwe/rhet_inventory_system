@@ -38,15 +38,14 @@ The Online Orders page is now an **internal delivery tracker**, table-style with
 
 | Column | Meaning |
 |---|---|
-| `PROCESSING` | Customer checked out on Shopee (default state) |
-| `READY_TO_SHIP` | Seller admin confirmed/processed the order |
-| `SHIPPED` | Handed to courier |
-| `RECEIVED` | Customer received the item |
-| `RETURN` | Return initiated, needs inspection |
-| `RETURN_CONFIRMED` | Inventory admin finished inspection |
+| `PROCESSING` | Customer checked out on Shopee (CSV sync / pre-board) |
+| `READY_TO_SHIP` | Seller admin confirmed/processed the order (CSV sync / pre-board) |
+| `SHIPPED` | Handed to courier (board tab; stock deducts here) |
+| `DELIVERED` | Customer received the item (was `RECEIVED`) |
+| `RETURNED` | Return completed (was `RETURN` + `RETURN_CONFIRMED`) |
 | `CANCELLED` | Order cancelled on Shopee or cancelled in RHET (terminal) |
 
-Allowed transitions: `PROCESSING → READY_TO_SHIP → SHIPPED → RECEIVED`, and `SHIPPED`/`RECEIVED → RETURN → RETURN_CONFIRMED` (return confirmation is its own endpoint, not a plain status move). Cancel is a side-exit to `CANCELLED` (CSV import or **Cancel order**); it is not available from Return stages. Before the Shopee API is connected, an admin moves orders manually with buttons on the order detail modal. After Phase 4 connects the Shopee Order Status Push webhook, `fulfillment_status` will auto-update; manual override stays available.
+UI board tabs: **Shipped**, **Delivered**, **Returned** only. Pre-ship statuses still appear under the Shipped tab until marked shipped. Allowed transitions: `PROCESSING → READY_TO_SHIP → SHIPPED → DELIVERED`, and `SHIPPED`/`DELIVERED → RETURNED` via confirm-return (reusable / not reusable in one step). Cancel is a side-exit to `CANCELLED` (not available from Returned).
 
 ### API — Fulfillment & returns
 
@@ -54,8 +53,8 @@ Base path: `/api/v1/online-orders`
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|
-| POST | `/:id/fulfillment-status` | Admin | Manually move an order forward `{ status }` (`READY_TO_SHIP`\|`SHIPPED`\|`RECEIVED`\|`RETURN`) |
-| POST | `/:id/confirm-return` | Admin | Resolve a return `{ reusable: boolean, notes? }` — reusable restores RHET stock via `RETURN`, not reusable restores nothing |
+| POST | `/:id/fulfillment-status` | Admin | Manually move an order forward `{ status }` (`READY_TO_SHIP`\|`SHIPPED`\|`DELIVERED`) |
+| POST | `/:id/confirm-return` | Admin | Mark returned from `SHIPPED`/`DELIVERED` `{ reusable: boolean, notes? }` — reusable restores RHET stock via `RETURN`, not reusable restores nothing |
 
 ## Phase 1 (implemented, superseded by allocation model above)
 
@@ -81,9 +80,9 @@ Historical orders imported before Phase 2B may still show `DEDUCTED`/`OVERSOLD` 
 
 Re-import rules for delivery status:
 
-- Status follows the **exported** Shopee value (e.g. still “To Receive” → stay `SHIPPED`; “Completed” → `RECEIVED`).
-- Only **forward** moves are applied; never move backward (e.g. `RECEIVED` → `SHIPPED`).
-- Rows already in `RETURN` / `RETURN_CONFIRMED` are not changed by import.
+- Status follows the **exported** Shopee value (e.g. still “To Receive” → stay `SHIPPED`; “Completed” → `DELIVERED`).
+- Only **forward** moves are applied; never move backward (e.g. `DELIVERED` → `SHIPPED`).
+- Rows already in `RETURNED` are not changed by import.
 - Import still may deduct RHET stock when advancing into `SHIPPED` (mapped lines + sufficient stock).
 - Manual fulfillment buttons remain available as override (**Mark shipped** requires mapped lines and stock).
 
@@ -125,8 +124,8 @@ Approximate Shopee status → RHET fulfillment mapping:
 | Unpaid / To Pay / Processing | `PROCESSING` |
 | To Ship / Ready To Ship / Processed | `READY_TO_SHIP` |
 | Shipped / To Receive / Shipping | `SHIPPED` |
-| Completed / Delivered / Received | `RECEIVED` |
-| Return / Refund | `RETURN` (only from `SHIPPED` or `RECEIVED`) |
+| Completed / Delivered / Received | `DELIVERED` |
+| Return / Refund | `RETURNED` (only from `SHIPPED` or `DELIVERED`) |
 | Cancelled | `CANCELLED` (from active stages; not from Return) |
 
 Multiple CSV rows with the same order ID are grouped into one order with multiple line items.
@@ -218,7 +217,7 @@ Both modules share the same inventory balances and movement audit trail. Neither
 | All lines unmatched | No SKU mappings yet | Map lines from the Online Orders detail modal |
 | "INSUFFICIENT_STOCK" on allocate | Not enough RHET stock for the requested allocation | Restock first, or allocate a smaller quantity |
 | "INSUFFICIENT_ALLOCATION" on deallocate | Trying to deallocate more than is currently allocated | Check the allocation modal's current allocated qty |
-| Fulfillment status move rejected (409) | Skipping a column, e.g. `PROCESSING → RECEIVED` | Move through the columns in order, or use return flow |
+| Fulfillment status move rejected (409) | Skipping a column, e.g. `PROCESSING → DELIVERED` | Move through the columns in order, or use return flow |
 | Return confirm rejected (409) | Order is not currently in the `RETURN` column | Move the order to `RETURN` first |
 
 If your Shopee export uses different column names, share a sample file so the alias list in `online-order.service.js` can be updated.

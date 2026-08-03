@@ -230,7 +230,7 @@ function AppShell() {
         case 'Inventory':
           return <AdminInventory items={inventory} categories={categories} onRefresh={refreshQuietly} />
         case 'Stock Requests':
-          return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
+          return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} admin={admin} />
         case 'Online Orders':
           return <AdminOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
         case 'Manual Orders':
@@ -256,7 +256,7 @@ function AppShell() {
       case 'Inventory':
         return <UserInventory items={inventory} categories={categories} onRefresh={refreshQuietly} />
       case 'Stock Requests':
-        return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} />
+        return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} admin={admin} />
       case 'Online Orders':
         return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
       case 'Manual Orders':

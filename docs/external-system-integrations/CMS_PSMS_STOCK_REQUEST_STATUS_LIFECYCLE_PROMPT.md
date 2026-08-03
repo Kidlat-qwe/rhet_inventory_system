@@ -4,9 +4,10 @@
 
 **RHET contract (current):**
 - Create requires `branchName`
-- Ship deducts warehouse stock + `stock_request.shipped`
-- **Confirm delivery:** `POST /api/v1/integrations/stock-requests/:id/deliver` with integration key
+- RHET warehouse: multi-select Pending by branch → print checklist → Confirm ship deducts stock + `stock_request.shipped` (partial OK; OOS stays Pending)
+- **Confirm delivery (CMS only):** `POST /api/v1/integrations/stock-requests/:id/deliver` with integration key
 - Deliver emits `stock_request.delivered` + legacy `stock_request.fulfilled` (idempotent on CMS)
+- RHET UI does **not** use Mark delivered as the normal path — branch confirms in CMS first
 
 ---
 
@@ -34,12 +35,12 @@ RHET behavior:
 Path is **/deliver** (not /confirm-delivery). Keep CMS hardcoded path.
 
 ### Branch stock
-- shipped → NO CMS stock add
+- shipped → NO CMS stock add (goods in transit; RHET may print a paper checklist with receiver sign)
 - delivered / fulfilled → add once (idempotent by externalReference)
 - returned + wasDelivered true → reverse once
 
 ### Acceptance
-1. Ship on RHET → CMS Shipped; qty unchanged
+1. Ship on RHET (batch checklist) → CMS Shipped; qty unchanged
 2. Confirm received in CMS → RHET DELIVERED
 3. CMS qty += once; replay does not double-add
 4. Return from DELIVERED reverses; from SHIPPED does not

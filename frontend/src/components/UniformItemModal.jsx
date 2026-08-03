@@ -27,6 +27,7 @@ function emptyLines(types, categoryName = '') {
       itemName: buildUniformItemName(categoryName, type),
       stocks: 0,
       price: '',
+      internalSellingPrice: '',
       remarks: '',
       inventoryId: null,
       sku: '',
@@ -68,6 +69,7 @@ function linesFromItems(types, setItems, categoryName = '') {
       stocks: item.stocks ?? 0,
       previousStocks: item.stocks ?? 0,
       price: item.price ?? '',
+      internalSellingPrice: item.internalSellingPrice ?? '',
       remarks: item.remarks || '',
       inventoryId: item.inventoryId,
       sku: item.sku || '',
@@ -150,6 +152,7 @@ export function UniformItemModal({
           itemName: buildUniformItemName(category.categoryName, type),
           stocks: 0,
           price: '',
+          internalSellingPrice: '',
           remarks: '',
           inventoryId: null,
           sku: '',
@@ -203,6 +206,7 @@ export function UniformItemModal({
       uniformType: type,
       uniformSize: size,
       price: Number(lines[type]?.price || 0),
+      internalSellingPrice: Number(lines[type]?.internalSellingPrice || 0),
       stocks: Number(lines[type]?.stocks || 0),
       previousStocks: Number(lines[type]?.previousStocks || 0),
       remarks: String(lines[type]?.remarks || '').trim().slice(0, 500) || null,
@@ -295,7 +299,7 @@ export function UniformItemModal({
                       />
                       <small className="field-hint">Auto-generated from category, gender, type, and size.</small>
                     </label>
-                    <label>Per-piece price (₱) *
+                    <label>Per-piece selling price (₱) *
                       <input
                         required
                         type="number"
@@ -304,6 +308,17 @@ export function UniformItemModal({
                         disabled={isEdit && !lines[type]?.inventoryId}
                         value={lines[type]?.price ?? ''}
                         onChange={(e) => setLine(type, 'price', e.target.value)}
+                      />
+                    </label>
+                    <label>Internal selling price (₱) *
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={isEdit && !lines[type]?.inventoryId}
+                        value={lines[type]?.internalSellingPrice ?? ''}
+                        onChange={(e) => setLine(type, 'internalSellingPrice', e.target.value)}
                       />
                     </label>
                     <label>{isEdit ? 'Stock *' : 'Initial stock *'}

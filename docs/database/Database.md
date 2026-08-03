@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS public.inventory
     category_id uuid NOT NULL,
     variation character varying(180) COLLATE pg_catalog."default",
     price numeric(12, 2) NOT NULL DEFAULT 0,
+    internal_selling_price numeric(12, 2) NOT NULL DEFAULT 0,
     low_stock_threshold integer NOT NULL DEFAULT 10,
     lifecycle_status character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'ACTIVE'::character varying,
     status character varying(20) COLLATE pg_catalog."default" GENERATED ALWAYS AS (

@@ -83,71 +83,73 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
       {error && <div className="page-error">{error}</div>}
       <section className="panel recent">
         <div className="panel-head"><div><h2>All categories</h2><p>{categories.length} categories available</p></div></div>
-        {categories.length ? (
-          <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', minWidth: canManage ? '720px' : '600px' }}>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Type</th>
-                  <th>Items</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  {canManage && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((category) => {
-                  const inUse = (itemCountByCategory.get(category.categoryId) || 0) > 0
-                  return (
-                    <tr key={category.categoryId}>
-                      <td><strong>{category.categoryName}</strong></td>
-                      <td className="muted">{kindLabel(category.categoryKind)}</td>
-                      <td className="muted">{itemCountByCategory.get(category.categoryId) || 0}</td>
-                      <td><StatusBadge status={category.status} /></td>
-                      <td className="muted">{formatDate(category.createdAt)}</td>
-                      {canManage && (
-                        <td>
-                          <ActionsMenu
-                            label={`Actions for ${category.categoryName}`}
-                            disabled={busy}
-                            items={[
-                              { key: 'edit', label: 'Edit', onClick: () => setModal({ mode: 'edit', category }) },
-                              {
-                                key: 'delete',
-                                label: 'Delete',
-                                danger: true,
-                                disabled: inUse,
-                                title: inUse
-                                  ? 'Remove or move inventory items first — categories cannot be deleted from Inventory'
-                                  : 'Delete category',
-                                onClick: () => {
-                                  setError('')
-                                  setDeleteTarget(category)
-                                },
+        <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: canManage ? '720px' : '600px' }}>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Created</th>
+                {canManage && <th>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.length ? pageItems.map((category) => {
+                const inUse = (itemCountByCategory.get(category.categoryId) || 0) > 0
+                return (
+                  <tr key={category.categoryId}>
+                    <td><strong>{category.categoryName}</strong></td>
+                    <td className="muted">{kindLabel(category.categoryKind)}</td>
+                    <td className="muted">{itemCountByCategory.get(category.categoryId) || 0}</td>
+                    <td><StatusBadge status={category.status} /></td>
+                    <td className="muted">{formatDate(category.createdAt)}</td>
+                    {canManage && (
+                      <td>
+                        <ActionsMenu
+                          label={`Actions for ${category.categoryName}`}
+                          disabled={busy}
+                          items={[
+                            { key: 'edit', label: 'Edit', onClick: () => setModal({ mode: 'edit', category }) },
+                            {
+                              key: 'delete',
+                              label: 'Delete',
+                              danger: true,
+                              disabled: inUse,
+                              title: inUse
+                                ? 'Remove or move inventory items first — categories cannot be deleted from Inventory'
+                                : 'Delete category',
+                              onClick: () => {
+                                setError('')
+                                setDeleteTarget(category)
                               },
-                            ]}
-                          />
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="categories" />
-          </div>
-        ) : (
-          <EmptyState
-            title="No categories found"
-            message={canManage
-              ? 'Seed categories should load from the database. You can also add a new category.'
-              : 'No categories are available yet.'}
-            action={canManage
-              ? <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>＋ Add category</button>
-              : null}
-          />
-        )}
+                            },
+                          ]}
+                        />
+                      </td>
+                    )}
+                  </tr>
+                )
+              }) : (
+                <tr>
+                  <td colSpan={canManage ? 6 : 5}>
+                    <EmptyState
+                      title="No categories found"
+                      message={canManage
+                        ? 'Seed categories should load from the database. You can also add a new category.'
+                        : 'No categories are available yet.'}
+                      action={canManage
+                        ? <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>＋ Add category</button>
+                        : null}
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="categories" />
+        </div>
       </section>
       {canManage && modal && (
         <CategoryModal

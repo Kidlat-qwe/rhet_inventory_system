@@ -31,9 +31,8 @@ export const FULFILLMENT_RANK = {
   PROCESSING: 0,
   READY_TO_SHIP: 1,
   SHIPPED: 2,
-  RECEIVED: 3,
-  RETURN: 4,
-  RETURN_CONFIRMED: 5,
+  DELIVERED: 3,
+  RETURNED: 4,
 };
 
 /**
@@ -46,7 +45,7 @@ export function mapShopeeOrderStatusToFulfillment(rawStatus) {
 
   if (text.includes('cancel')) return 'CANCELLED';
 
-  if (text.includes('return') || text.includes('refund')) return 'RETURN';
+  if (text.includes('return') || text.includes('refund')) return 'RETURNED';
 
   if (
     text.includes('complet')
@@ -55,7 +54,7 @@ export function mapShopeeOrderStatusToFulfillment(rawStatus) {
     || text.includes('buyer has received')
     || text.includes('order received')
   ) {
-    return 'RECEIVED';
+    return 'DELIVERED';
   }
 
   // "To Ship" / "Ready To Ship" before generic "ship" / "shipping"
@@ -88,26 +87,26 @@ export function mapShopeeOrderStatusToFulfillment(rawStatus) {
 
 /**
  * CSV re-import may advance fulfillment when the export shows a newer status.
- * Never moves backward; never auto-changes RETURN / RETURN_CONFIRMED rows.
+ * Never moves backward; never auto-changes RETURNED rows.
  * CANCELLED is a side-exit (allowed from active delivery stages, not from return).
  */
 export function shouldApplyFulfillmentFromImport(currentStatus, nextStatus) {
   if (!nextStatus) return false;
   const current = currentStatus || 'PROCESSING';
-  if (current === 'RETURN' || current === 'RETURN_CONFIRMED') return false;
+  if (current === 'RETURNED') return false;
   if (current === 'CANCELLED') return false;
   if (nextStatus === current) return false;
 
   if (nextStatus === 'CANCELLED') {
-    return ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED', 'RECEIVED'].includes(current);
+    return ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED', 'DELIVERED'].includes(current);
   }
 
   const currentRank = FULFILLMENT_RANK[current];
   const nextRank = FULFILLMENT_RANK[nextStatus];
   if (currentRank === undefined || nextRank === undefined) return false;
 
-  if (nextStatus === 'RETURN') {
-    return current === 'SHIPPED' || current === 'RECEIVED';
+  if (nextStatus === 'RETURNED') {
+    return current === 'SHIPPED' || current === 'DELIVERED';
   }
 
   return nextRank > currentRank;
@@ -308,12 +307,11 @@ export function decideLineOutcome({ hasMapping }) {
 }
 
 export const FULFILLMENT_TRANSITIONS = {
-  PROCESSING: ['READY_TO_SHIP'],
+  PROCESSING: ['READY_TO_SHIP', 'SHIPPED'],
   READY_TO_SHIP: ['SHIPPED'],
-  SHIPPED: ['RECEIVED', 'RETURN'],
-  RECEIVED: ['RETURN'],
-  RETURN: [],
-  RETURN_CONFIRMED: [],
+  SHIPPED: ['DELIVERED'],
+  DELIVERED: [],
+  RETURNED: [],
   CANCELLED: [],
 };
 
@@ -615,10 +613,10 @@ export async function matchOrderLine(db, itemRow, orderMeta = {}) {
   };
 }
 
-/** True when moving into SHIPPED or later (e.g. RECEIVED) from a pre-ship status. */
+/** True when moving into SHIPPED or later (e.g. DELIVERED) from a pre-ship status. */
 export function shipmentRequiresDeduction(fromStatus, toStatus) {
   if (!toStatus) return false;
-  if (['CANCELLED', 'RETURN', 'RETURN_CONFIRMED'].includes(toStatus)) return false;
+  if (['CANCELLED', 'RETURNED'].includes(toStatus)) return false;
   const fromRank = FULFILLMENT_RANK[fromStatus] ?? -1;
   const toRank = FULFILLMENT_RANK[toStatus];
   if (toRank === undefined) return false;
@@ -1104,7 +1102,7 @@ export async function resolveOrderItem(itemId, body, admin) {
       [item.order_id],
     );
     const order = orderLock.rows[0];
-    if (['SHIPPED', 'RECEIVED'].includes(order.fulfillment_status)) {
+    if (['SHIPPED', 'DELIVERED'].includes(order.fulfillment_status)) {
       await deductOrderForShipment(db, order, adminId);
     }
 
@@ -1228,11 +1226,11 @@ export async function cancelOrder(orderId, admin) {
     if (order.order_status === 'CANCELLED' || order.fulfillment_status === 'CANCELLED') {
       throw new AppError(409, 'ORDER_ALREADY_CANCELLED', 'This order is already cancelled');
     }
-    if (order.fulfillment_status === 'RETURN' || order.fulfillment_status === 'RETURN_CONFIRMED') {
+    if (order.fulfillment_status === 'RETURNED') {
       throw new AppError(
         409,
         'INVALID_CANCEL',
-        'Return orders cannot be cancelled here — complete return inspection instead',
+        'Returned orders cannot be cancelled here',
       );
     }
 
@@ -1284,8 +1282,12 @@ export async function confirmReturn(orderId, { reusable, notes }, admin) {
     if (!orderResult.rowCount) throw new AppError(404, 'ORDER_NOT_FOUND', 'Online order was not found');
 
     const order = orderResult.rows[0];
-    if (order.fulfillment_status !== 'RETURN') {
-      throw new AppError(409, 'ORDER_NOT_IN_RETURN', 'This order is not currently in the return column');
+    if (!['SHIPPED', 'DELIVERED'].includes(order.fulfillment_status)) {
+      throw new AppError(
+        409,
+        'ORDER_NOT_RETURNABLE',
+        'Only shipped or delivered orders can be marked returned',
+      );
     }
 
     const items = await loadOrderItems(orderId, db);
@@ -1304,7 +1306,7 @@ export async function confirmReturn(orderId, { reusable, notes }, admin) {
                 movementType: 'RETURN',
                 quantity: match.quantity,
                 referenceNumber: order.external_order_id,
-                remarks: `Reusable return confirmed for ${order.channel} order ${order.external_order_id}`,
+                remarks: `Reusable return for ${order.channel} order ${order.external_order_id}`,
               },
               adminId,
               db,
@@ -1317,7 +1319,7 @@ export async function confirmReturn(orderId, { reusable, notes }, admin) {
               movementType: 'RETURN',
               quantity: item.quantity,
               referenceNumber: order.external_order_id,
-              remarks: `Reusable return confirmed for ${order.channel} order ${order.external_order_id}`,
+              remarks: `Reusable return for ${order.channel} order ${order.external_order_id}`,
             },
             adminId,
             db,
@@ -1328,7 +1330,7 @@ export async function confirmReturn(orderId, { reusable, notes }, admin) {
 
     await db.query(
       `UPDATE online_orders
-       SET fulfillment_status = 'RETURN_CONFIRMED',
+       SET fulfillment_status = 'RETURNED',
            return_reusable = $1,
            return_notes = $2,
            updated_at = NOW()

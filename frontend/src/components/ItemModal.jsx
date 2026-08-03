@@ -50,6 +50,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     stocks: item.stocks ?? 0,
     lowStockThreshold: item.lowStockThreshold ?? 20,
     price: item.price ?? 0,
+    internalSellingPrice: item.internalSellingPrice ?? 0,
   })
   const [components, setComponents] = useState(() => {
     if (Array.isArray(item.components) && item.components.length) {
@@ -263,7 +264,8 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
               <small className="field-hint">Auto-generated from category and item name.</small>
             )}
           </label>
-          <label>{isUniform ? 'Per-piece price (₱) *' : 'Selling price (₱) *'}<input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => set('price', e.target.value)} /></label>
+          <label>{isUniform ? 'Per-piece selling price (₱) *' : 'Selling price (₱) *'}<input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => set('price', e.target.value)} /></label>
+          <label>Internal selling price (₱) *<input required type="number" min="0" step="0.01" value={form.internalSellingPrice} onChange={(e) => set('internalSellingPrice', e.target.value)} /></label>
           <label>Low-stock threshold *<input required type="number" min="0" value={form.lowStockThreshold} onChange={(e) => set('lowStockThreshold', e.target.value)} /></label>
           {isLearningKit ? (
             <label>

@@ -7,9 +7,7 @@ export function MovementTable({
   emptyTitle = 'No stock movements yet',
   emptyMessage = 'Transactions will appear here once inventory stock is added, deducted, or adjusted.',
 }) {
-  if (!rows.length) {
-    return <EmptyState title={emptyTitle} message={emptyMessage} />
-  }
+  const colSpan = showReference ? 6 : 5
 
   return (
     <div
@@ -28,7 +26,7 @@ export function MovementTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((movement) => {
+          {rows.length ? rows.map((movement) => {
             const positive = movement.stockDelta > 0
             const qty = `${positive ? '+' : ''}${movement.stockDelta}`
             return (
@@ -52,7 +50,13 @@ export function MovementTable({
                 <td className="muted">{formatDate(movement.createdAt)}</td>
               </tr>
             )
-          })}
+          }) : (
+            <tr>
+              <td colSpan={colSpan}>
+                <EmptyState title={emptyTitle} message={emptyMessage} />
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

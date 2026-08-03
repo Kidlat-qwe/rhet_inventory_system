@@ -132,93 +132,95 @@ export default function AdminUsers({ users, currentAdmin, onRefresh }) {
       {error && !showAddModal && !editUser && <div className="page-error">{error}</div>}
 
       <section className="panel recent">
-        {users.length ? (
-          <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', minWidth: '860px' }}>
-              <thead>
+        <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '860px' }}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Added</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.length ? pageItems.map((user) => {
+                const isSelf = user.userId === currentAdmin?.userId
+                const busy = busyId === user.userId
+                return (
+                  <tr key={user.userId}>
+                    <td>
+                      <strong>{user.fullName}</strong>
+                      {isSelf && <small className="muted">You</small>}
+                    </td>
+                    <td>{user.email}</td>
+                    <td>
+                      <select
+                        className="role-select"
+                        value={user.role || 'USER'}
+                        disabled={busy || isSelf}
+                        onChange={(e) => changeRole(user, e.target.value)}
+                        title={isSelf ? 'You cannot change your own role' : 'Change role'}
+                      >
+                        <option value="ADMIN">Admin</option>
+                        <option value="USER">User</option>
+                      </select>
+                    </td>
+                    <td><StatusBadge status={user.status} /></td>
+                    <td className="muted">{formatDate(user.createdAt)}</td>
+                    <td>
+                      <ActionsMenu
+                        label={`Actions for ${user.fullName}`}
+                        disabled={busy}
+                        items={[
+                          {
+                            key: 'edit',
+                            label: 'Edit name',
+                            onClick: () => openEditModal(user),
+                          },
+                          {
+                            key: 'make-user',
+                            label: 'Set as User',
+                            hidden: user.role === 'USER' || isSelf,
+                            onClick: () => changeRole(user, 'USER'),
+                          },
+                          {
+                            key: 'make-admin',
+                            label: 'Set as Admin',
+                            hidden: user.role === 'ADMIN',
+                            onClick: () => changeRole(user, 'ADMIN'),
+                          },
+                          {
+                            key: 'deactivate',
+                            label: 'Deactivate',
+                            danger: true,
+                            hidden: user.status !== 'ACTIVE' || isSelf,
+                            title: isSelf ? 'You cannot deactivate your own account' : 'Disable sign-in for this user',
+                            onClick: () => changeStatus(user, 'INACTIVE'),
+                          },
+                          {
+                            key: 'activate',
+                            label: 'Activate',
+                            hidden: user.status === 'ACTIVE',
+                            onClick: () => changeStatus(user, 'ACTIVE'),
+                          },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                )
+              }) : (
                 <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Added</th>
-                  <th>Actions</th>
+                  <td colSpan={6}>
+                    <EmptyState title="No users yet" message="Click Add user to create the first account." />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((user) => {
-                  const isSelf = user.userId === currentAdmin?.userId
-                  const busy = busyId === user.userId
-                  return (
-                    <tr key={user.userId}>
-                      <td>
-                        <strong>{user.fullName}</strong>
-                        {isSelf && <small className="muted">You</small>}
-                      </td>
-                      <td>{user.email}</td>
-                      <td>
-                        <select
-                          className="role-select"
-                          value={user.role || 'USER'}
-                          disabled={busy || isSelf}
-                          onChange={(e) => changeRole(user, e.target.value)}
-                          title={isSelf ? 'You cannot change your own role' : 'Change role'}
-                        >
-                          <option value="ADMIN">Admin</option>
-                          <option value="USER">User</option>
-                        </select>
-                      </td>
-                      <td><StatusBadge status={user.status} /></td>
-                      <td className="muted">{formatDate(user.createdAt)}</td>
-                      <td>
-                        <ActionsMenu
-                          label={`Actions for ${user.fullName}`}
-                          disabled={busy}
-                          items={[
-                            {
-                              key: 'edit',
-                              label: 'Edit name',
-                              onClick: () => openEditModal(user),
-                            },
-                            {
-                              key: 'make-user',
-                              label: 'Set as User',
-                              hidden: user.role === 'USER' || isSelf,
-                              onClick: () => changeRole(user, 'USER'),
-                            },
-                            {
-                              key: 'make-admin',
-                              label: 'Set as Admin',
-                              hidden: user.role === 'ADMIN',
-                              onClick: () => changeRole(user, 'ADMIN'),
-                            },
-                            {
-                              key: 'deactivate',
-                              label: 'Deactivate',
-                              danger: true,
-                              hidden: user.status !== 'ACTIVE' || isSelf,
-                              title: isSelf ? 'You cannot deactivate your own account' : 'Disable sign-in for this user',
-                              onClick: () => changeStatus(user, 'INACTIVE'),
-                            },
-                            {
-                              key: 'activate',
-                              label: 'Activate',
-                              hidden: user.status === 'ACTIVE',
-                              onClick: () => changeStatus(user, 'ACTIVE'),
-                            },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="users" />
-          </div>
-        ) : (
-          <EmptyState title="No users yet" message="Click Add user to create the first account." />
-        )}
+              )}
+            </tbody>
+          </table>
+          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="users" />
+        </div>
       </section>
 
       {showAddModal && (

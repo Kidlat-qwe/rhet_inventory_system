@@ -26,9 +26,8 @@ const statusLabels = {
   USER: 'User',
   PROCESSING: 'Processing',
   READY_TO_SHIP: 'Ready to Ship',
-  SHIPPED: 'Shipped',
-  RETURN: 'Return',
-  RETURN_CONFIRMED: 'Return Confirmed',
+  RETURN: 'Returned',
+  RETURN_CONFIRMED: 'Returned',
 }
 
 const movementLabels = {

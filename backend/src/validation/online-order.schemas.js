@@ -14,9 +14,8 @@ export const FULFILLMENT_STATUSES = [
   'PROCESSING',
   'READY_TO_SHIP',
   'SHIPPED',
-  'RECEIVED',
-  'RETURN',
-  'RETURN_CONFIRMED',
+  'DELIVERED',
+  'RETURNED',
   'CANCELLED',
 ];
 
@@ -121,7 +120,7 @@ export const mappingListSchema = z.object({
 
 export const updateFulfillmentStatusSchema = z.object({
   body: z.object({
-    status: z.enum(['READY_TO_SHIP', 'SHIPPED', 'RECEIVED', 'RETURN']),
+    status: z.enum(['READY_TO_SHIP', 'SHIPPED', 'DELIVERED']),
   }),
   query: z.any(),
   params: z.object({ id: z.string().uuid() }),

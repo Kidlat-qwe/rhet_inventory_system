@@ -251,68 +251,70 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
       {error && !selected && mode !== 'create' && <div className="page-error">{error}</div>}
 
       <section className="panel recent">
-        {shown.length ? (
-          <div
-            className="overflow-x-auto rounded-lg table-scroll"
-            style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
-          >
-            <table style={{ width: '100%', minWidth: '1100px' }}>
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Customer</th>
-                  <th>Courier</th>
-                  <th>Items</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+        <div
+          className="overflow-x-auto rounded-lg table-scroll"
+          style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
+        >
+          <table style={{ width: '100%', minWidth: '1100px' }}>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Courier</th>
+                <th>Items</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.length ? pageItems.map((order) => (
+                <tr key={order.orderId}>
+                  <td>
+                    <strong>{order.orderNumber}</strong>
+                    <small>{order.trackingNumber || 'No tracking yet'}</small>
+                  </td>
+                  <td>
+                    <strong>{order.customerName}</strong>
+                    <small>{order.customerPhone || '—'}</small>
+                  </td>
+                  <td>{detailValue(order.courierName)}</td>
+                  <td>
+                    <strong>{(order.items || []).length}</strong>
+                    <small>
+                      {(order.items || []).slice(0, 2).map((item) => item.sku || item.itemName).filter(Boolean).join(', ')
+                        || '—'}
+                    </small>
+                  </td>
+                  <td><StatusBadge status={order.fulfillmentStatus} /></td>
+                  <td className="muted">{formatDate(order.createdAt)}</td>
+                  <td>
+                    <button type="button" className="secondary small-btn" onClick={() => openDetails(order)}>
+                      {order.fulfillmentStatus === 'PROCESSING' || order.fulfillmentStatus === 'READY_TO_SHIP'
+                        ? 'Manage'
+                        : 'View'}
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((order) => (
-                  <tr key={order.orderId}>
-                    <td>
-                      <strong>{order.orderNumber}</strong>
-                      <small>{order.trackingNumber || 'No tracking yet'}</small>
-                    </td>
-                    <td>
-                      <strong>{order.customerName}</strong>
-                      <small>{order.customerPhone || '—'}</small>
-                    </td>
-                    <td>{detailValue(order.courierName)}</td>
-                    <td>
-                      <strong>{(order.items || []).length}</strong>
-                      <small>
-                        {(order.items || []).slice(0, 2).map((item) => item.sku || item.itemName).filter(Boolean).join(', ')
-                          || '—'}
-                      </small>
-                    </td>
-                    <td><StatusBadge status={order.fulfillmentStatus} /></td>
-                    <td className="muted">{formatDate(order.createdAt)}</td>
-                    <td>
-                      <button type="button" className="secondary small-btn" onClick={() => openDetails(order)}>
-                        {order.fulfillmentStatus === 'PROCESSING' || order.fulfillmentStatus === 'READY_TO_SHIP'
-                          ? 'Manage'
-                          : 'View'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="orders" />
-          </div>
-        ) : (
-          <EmptyState
-            title={`No ${formatStatus(filter).toLowerCase()} manual orders`}
-            message={canManage
-              ? 'Create a manual order when HQ ships directly with your courier.'
-              : 'Manual orders will appear here once created.'}
-            action={canManage ? (
-              <button type="button" className="primary" onClick={openCreate}>New manual order</button>
-            ) : null}
-          />
-        )}
+              )) : (
+                <tr>
+                  <td colSpan={7}>
+                    <EmptyState
+                      title={`No ${formatStatus(filter).toLowerCase()} manual orders`}
+                      message={canManage
+                        ? 'Create a manual order when HQ ships directly with your courier.'
+                        : 'Manual orders will appear here once created.'}
+                      action={canManage ? (
+                        <button type="button" className="primary" onClick={openCreate}>New manual order</button>
+                      ) : null}
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="orders" />
+        </div>
       </section>
 
       {mode === 'create' && canManage && (

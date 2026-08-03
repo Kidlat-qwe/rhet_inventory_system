@@ -30,7 +30,7 @@ const bundleComponentBody = z.object({
 export const inventoryItemBody = z.object({
   sku: z.string().trim().min(2).max(64).transform((v) => v.toUpperCase()),
   itemName: z.string().trim().min(2).max(180), categoryId: uuid,
-  variation: optionalText(180), price: money,
+  variation: optionalText(180), price: money, internalSellingPrice: money,
   uniformGender: optionalText(10), uniformType: optionalText(20), uniformSize: optionalText(10),
   remarks: optionalText(500),
   stocks: z.coerce.number().int().min(0).default(0),
@@ -49,7 +49,7 @@ export const createInventoryBatchSchema = z.object({ body: z.object({
 export const updateInventorySchema = z.object({ body: z.object({
   sku: z.string().trim().min(2).max(64).transform((v) => v.toUpperCase()).optional(),
   itemName: z.string().trim().min(2).max(180).optional(), categoryId: uuid.optional(),
-  variation: optionalText(180), price: money.optional(),
+  variation: optionalText(180), price: money.optional(), internalSellingPrice: money.optional(),
   uniformGender: optionalText(10), uniformType: optionalText(20), uniformSize: optionalText(10),
   remarks: optionalText(500),
   lowStockThreshold: z.coerce.number().int().min(0).max(1000000).optional(),
