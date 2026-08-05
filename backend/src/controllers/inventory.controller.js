@@ -9,6 +9,24 @@ export async function list(req, res) {
 export async function get(req, res) { success(res, await inventory.getInventory(req.validated.params.id)); }
 export async function create(req, res) { success(res, await inventory.createInventory(req.validated.body, req.admin.user_id), null, 201); }
 export async function createBatch(req, res) { success(res, await inventory.createInventoryBatch(req.validated.body.items, req.admin.user_id), null, 201); }
+export async function createToolKitChild(req, res) {
+  success(
+    res,
+    await inventory.createToolKitChild(req.validated.params.id, req.validated.body, req.admin.user_id),
+    null,
+    201,
+  );
+}
+export async function removeToolKitChild(req, res) {
+  success(
+    res,
+    await inventory.removeToolKitChild(
+      req.validated.params.id,
+      req.validated.params.childId,
+      req.admin.user_id,
+    ),
+  );
+}
 export async function update(req, res) { success(res, await inventory.updateInventory(req.validated.params.id, req.validated.body, req.admin.user_id)); }
 export async function remove(req, res) {
   success(res, await inventory.deleteInventory(req.validated.params.id, req.validated.body, req.admin.user_id));

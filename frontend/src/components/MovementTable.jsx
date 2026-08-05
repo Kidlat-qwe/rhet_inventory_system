@@ -4,24 +4,26 @@ import { formatDate, formatMovementType } from '../utils/format'
 export function MovementTable({
   rows,
   showReference = false,
+  compact = false,
   emptyTitle = 'No stock movements yet',
   emptyMessage = 'Transactions will appear here once inventory stock is added, deducted, or adjusted.',
 }) {
   const colSpan = showReference ? 6 : 5
+  const minWidth = showReference ? '760px' : compact ? '520px' : '620px'
 
   return (
     <div
-      className="overflow-x-auto rounded-lg table-scroll"
+      className={`overflow-x-auto rounded-lg table-scroll${compact ? ' movement-table-compact' : ''}`}
       style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
     >
-      <table style={{ width: '100%', minWidth: showReference ? '760px' : '620px' }}>
+      <table style={{ width: '100%', minWidth }}>
         <thead>
           <tr>
             <th>Movement</th>
             <th>Item</th>
             <th>Quantity</th>
             {showReference && <th>Order / notes</th>}
-            <th>Processed by</th>
+            {!compact && <th>Processed by</th>}
             <th>When</th>
           </tr>
         </thead>
@@ -46,13 +48,13 @@ export function MovementTable({
                     {movement.remarks ? <small>{movement.remarks}</small> : null}
                   </td>
                 )}
-                <td>{movement.createdByName || movement.fullName || '—'}</td>
+                {!compact && <td>{movement.createdByName || movement.fullName || '—'}</td>}
                 <td className="muted">{formatDate(movement.createdAt)}</td>
               </tr>
             )
           }) : (
             <tr>
-              <td colSpan={colSpan}>
+              <td colSpan={compact ? colSpan - 1 : colSpan}>
                 <EmptyState title={emptyTitle} message={emptyMessage} />
               </td>
             </tr>

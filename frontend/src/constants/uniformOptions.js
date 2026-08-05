@@ -8,17 +8,41 @@ export const PE_UNIFORM_TYPES = ['Shirt', 'Pants']
 
 export const LCA_SHIRT_TYPES = ['Logo 1', 'Logo 2']
 
-// Category-type presets shown when creating a category.
-// category_kind is stored separately so the same type can be reused with unique names.
+// Top-level options shown in Add/Edit Category (Uniform groups School / PE / Shirt).
 export const CATEGORY_TYPE_OPTIONS = [
-  { value: 'SCHOOL_UNIFORM', label: 'School Uniform', categoryName: 'School Uniform' },
-  { value: 'PE_UNIFORM', label: 'PE Uniform', categoryName: 'PE Uniform' },
-  { value: 'LCA_SHIRT', label: 'Shirt', categoryName: 'Shirt' },
+  { value: 'UNIFORM', label: 'Uniform', categoryName: '' },
   { value: 'LEARNING_KIT', label: 'Learning Kit', categoryName: 'Learning Kit' },
   { value: 'OTHER', label: 'Others', categoryName: '' },
 ]
 
+/** Uniform subtype dropdown (stored as category_kind). */
+export const UNIFORM_SUBTYPE_OPTIONS = [
+  { value: 'SCHOOL_UNIFORM', label: 'School Uniform', categoryName: 'School Uniform' },
+  { value: 'PE_UNIFORM', label: 'PE Uniform', categoryName: 'PE Uniform' },
+  { value: 'LCA_SHIRT', label: 'Shirt', categoryName: 'Shirt' },
+]
+
+/** Labels for category tables (includes legacy TOOL_KIT). */
+export const CATEGORY_KIND_LABELS = {
+  SCHOOL_UNIFORM: 'School Uniform',
+  PE_UNIFORM: 'PE Uniform',
+  LCA_SHIRT: 'Shirt',
+  LEARNING_KIT: 'Learning Kit',
+  TOOL_KIT: 'Tool Kit (legacy)',
+  OTHER: 'Others',
+}
+
 const UNIFORM_KINDS = new Set(['SCHOOL_UNIFORM', 'PE_UNIFORM', 'LCA_SHIRT'])
+
+export function categoryKindLabel(kind, hasChildSkus = false) {
+  const key = String(kind || 'OTHER').toUpperCase()
+  if (key === 'OTHER' && hasChildSkus) return 'Others · Child SKUs'
+  return CATEGORY_KIND_LABELS[key] || kind || 'Others'
+}
+
+export function isUniformFamilyKind(kind) {
+  return UNIFORM_KINDS.has(String(kind || '').toUpperCase())
+}
 
 // Type dropdown options keyed by the normalized (lowercased) category name.
 const UNIFORM_TYPE_LISTS = {
@@ -69,6 +93,14 @@ const TYPE_CODES = {
   Pants: 'PANTS',
   'Logo 1': 'LOGO1',
   'Logo 2': 'LOGO2',
+  Set: 'SET',
+}
+
+/** Full uniform set (own stock — not computed from piece SKUs). */
+export const UNIFORM_SET_TYPE = 'Set'
+
+export function isUniformSetType(type = '') {
+  return String(type || '').trim().toLowerCase() === 'set'
 }
 
 const DEFAULT_FIELD_PLACEHOLDERS = {
@@ -92,6 +124,7 @@ const CATEGORY_FIELD_PLACEHOLDERS = {
   accessory: { itemName: 'e.g. School Necktie', variation: 'Color, size...' },
   other: { itemName: 'e.g. Item name', variation: 'Size, color, grade...' },
   'learning kit': { itemName: 'e.g. grade-1-learning-kit', variation: 'e.g. grade-1, sy-2026' },
+  'tool kit': { itemName: 'e.g. nc-kg-toolkits', variation: 'e.g. nc-kg-w/notebook' },
 }
 
 export function categoryKindOf(category) {
@@ -110,6 +143,10 @@ export function isLearningKitCategoryName(categoryName = '') {
   return categoryName.trim().toLowerCase() === 'learning kit'
 }
 
+export function isToolKitCategoryName(categoryName = '') {
+  return categoryName.trim().toLowerCase() === 'tool kit'
+}
+
 export function isLearningKitCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!category) return false
@@ -117,6 +154,20 @@ export function isLearningKitCategory(categoryId, categories = []) {
   if (kind === 'LEARNING_KIT') return true
   if (kind && kind !== 'OTHER') return false
   return isLearningKitCategoryName(category.categoryName)
+}
+
+export function isToolKitCategory(categoryId, categories = []) {
+  const category = categories.find((entry) => entry.categoryId === categoryId)
+  if (!category) return false
+  if (category.hasChildSkus === true) return true
+  const kind = categoryKindOf(category)
+  if (kind === 'TOOL_KIT') return true
+  if (kind && kind !== 'OTHER') return false
+  return isToolKitCategoryName(category.categoryName)
+}
+
+export function isVirtualKitCategory(categoryId, categories = []) {
+  return isLearningKitCategory(categoryId, categories) || isToolKitCategory(categoryId, categories)
 }
 
 export function isUniformCategoryName(categoryName = '') {
@@ -132,7 +183,8 @@ export function isUniformCategory(categoryId, categories = []) {
   if (!category) return false
   const kind = categoryKindOf(category)
   if (UNIFORM_KINDS.has(kind)) return true
-  if (kind === 'LEARNING_KIT' || kind === 'OTHER') return false
+  if (kind === 'LEARNING_KIT' || kind === 'TOOL_KIT' || kind === 'OTHER') return false
+  if (category.hasChildSkus) return false
   return isUniformCategoryName(category.categoryName)
 }
 
@@ -178,10 +230,16 @@ export function getUniformGendersForCategory(categoryId, categories = []) {
   return UNIFORM_GENDERS
 }
 
-/** Size options for a category (Shirt uses XS–XL + Teen). */
-export function getUniformSizesForCategory(categoryId, categories = []) {
-  if (isLcaShirtCategory(categoryId, categories)) return [...SHIRT_SIZES]
-  return [...UNIFORM_SIZES]
+/** Size options for a category (Shirt uses shirtSizes when provided). */
+export function getUniformSizesForCategory(categoryId, categories = [], sizeLists = {}) {
+  const shirtSizes = Array.isArray(sizeLists.shirtSizes) && sizeLists.shirtSizes.length
+    ? sizeLists.shirtSizes
+    : SHIRT_SIZES
+  const uniformSizes = Array.isArray(sizeLists.uniformSizes) && sizeLists.uniformSizes.length
+    ? sizeLists.uniformSizes
+    : UNIFORM_SIZES
+  if (isLcaShirtCategory(categoryId, categories)) return [...shirtSizes]
+  return [...uniformSizes]
 }
 
 export function getFieldPlaceholders(categoryId, categories = []) {
@@ -191,6 +249,7 @@ export function getFieldPlaceholders(categoryId, categories = []) {
   if (kind === 'PE_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['pe uniform']
   if (kind === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS.shirt
   if (kind === 'LEARNING_KIT') return CATEGORY_FIELD_PLACEHOLDERS['learning kit']
+  if (kind === 'TOOL_KIT') return CATEGORY_FIELD_PLACEHOLDERS['tool kit']
 
   const normalized = category?.categoryName?.toLowerCase().trim() || ''
   if (!normalized) return DEFAULT_FIELD_PLACEHOLDERS
@@ -198,6 +257,7 @@ export function getFieldPlaceholders(categoryId, categories = []) {
   if (normalized.endsWith(' uniform')) return CATEGORY_FIELD_PLACEHOLDERS.uniform
   if (isLcaShirtCategoryName(normalized)) return CATEGORY_FIELD_PLACEHOLDERS.shirt
   if (isLearningKitCategoryName(normalized)) return CATEGORY_FIELD_PLACEHOLDERS['learning kit']
+  if (isToolKitCategoryName(normalized)) return CATEGORY_FIELD_PLACEHOLDERS['tool kit']
   if (normalized.includes('bag')) return CATEGORY_FIELD_PLACEHOLDERS.bag
   if (normalized.includes('book')) return CATEGORY_FIELD_PLACEHOLDERS.book
   if (normalized.includes('accessor')) return CATEGORY_FIELD_PLACEHOLDERS.accessory
@@ -247,7 +307,8 @@ export function resolveItemVariation(form, categories) {
       throw new Error('Please select gender, type, and size for uniform items.')
     }
     const allowedTypes = getUniformTypesForCategory(form.categoryId, categories, form.uniformGender)
-    if (!allowedTypes.includes(form.uniformType)) {
+    const typeOk = isUniformSetType(form.uniformType) || allowedTypes.includes(form.uniformType)
+    if (!typeOk) {
       throw new Error('Please select a valid type for the chosen uniform category.')
     }
     return buildUniformVariation(form)

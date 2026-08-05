@@ -45,7 +45,9 @@ The Online Orders page is now an **internal delivery tracker**, table-style with
 | `RETURNED` | Return completed (was `RETURN` + `RETURN_CONFIRMED`) |
 | `CANCELLED` | Order cancelled on Shopee or cancelled in RHET (terminal) |
 
-UI board tabs: **Shipped**, **Delivered**, **Returned** only. Pre-ship statuses still appear under the Shipped tab until marked shipped. Allowed transitions: `PROCESSING → READY_TO_SHIP → SHIPPED → DELIVERED`, and `SHIPPED`/`DELIVERED → RETURNED` via confirm-return (reusable / not reusable in one step). Cancel is a side-exit to `CANCELLED` (not available from Returned).
+UI board tabs (Shopee-aligned): **All**, **Unpaid**, **To Ship**, **Shipping**, **Completed**, **Return/Refund/Cancel**.
+Internal codes: `PROCESSING`, `READY_TO_SHIP`, `SHIPPED`, `DELIVERED`, `RETURNED` + `CANCELLED` (grouped in the last tab).
+Stock deducts when status becomes **`SHIPPED` (Shipping)**. Allowed transitions: `PROCESSING → READY_TO_SHIP → SHIPPED → DELIVERED`, and `SHIPPED`/`DELIVERED → RETURNED` via confirm-return (reusable / not reusable in one step). Cancel is a side-exit to `CANCELLED` (not available from Returned).
 
 ### API — Fulfillment & returns
 

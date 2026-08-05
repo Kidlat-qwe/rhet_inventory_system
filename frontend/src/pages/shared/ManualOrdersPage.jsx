@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { useSettings } from '../../context/SettingsContext'
 import { usePagination } from '../../hooks/usePagination'
 import {
   cancelManualOrder,
@@ -41,7 +42,38 @@ function emptyLine() {
   }
 }
 
+function emptyCreateForm() {
+  return {
+    customerName: '',
+    customerPhone: '',
+    shippingAddress: '',
+    courierPreset: '',
+    courierOther: '',
+    trackingNumber: '',
+    notes: '',
+    items: [emptyLine()],
+  }
+}
+
+function resolveCourierName({ courierPreset, courierOther }) {
+  const preset = String(courierPreset || '').trim()
+  if (!preset) return null
+  if (preset === 'OTHER') {
+    const custom = String(courierOther || '').trim()
+    return custom || null
+  }
+  return preset
+}
+
 export default function ManualOrdersPage({ orders, inventory, onRefresh, canManage = false }) {
+  const settings = useSettings()
+  const courierOptions = useMemo(() => {
+    const presets = (settings.courierPresets || []).map((name) => ({
+      value: name,
+      label: name,
+    }))
+    return [...presets, { value: 'OTHER', label: 'Others' }]
+  }, [settings.courierPresets])
   const [filter, setFilter] = useState('PROCESSING')
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
@@ -49,15 +81,7 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
   const [mode, setMode] = useState('details')
   const [returnReusable, setReturnReusable] = useState('true')
   const [returnNotes, setReturnNotes] = useState('')
-  const [createForm, setCreateForm] = useState({
-    customerName: '',
-    customerPhone: '',
-    shippingAddress: '',
-    courierName: '',
-    trackingNumber: '',
-    notes: '',
-    items: [emptyLine()],
-  })
+  const [createForm, setCreateForm] = useState(emptyCreateForm)
 
   const shown = useMemo(() => {
     if (!filter) return orders
@@ -111,15 +135,7 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
     setError('')
     setMode('create')
     setSelected(null)
-    setCreateForm({
-      customerName: '',
-      customerPhone: '',
-      shippingAddress: '',
-      courierName: '',
-      trackingNumber: '',
-      notes: '',
-      items: [emptyLine()],
-    })
+    setCreateForm(emptyCreateForm())
   }
 
   function updateCreateLine(key, field, value) {
@@ -149,11 +165,16 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
         setBusyId('')
         return
       }
+      if (createForm.courierPreset === 'OTHER' && !String(createForm.courierOther || '').trim()) {
+        setError('Enter the courier name for Others.')
+        setBusyId('')
+        return
+      }
       await createManualOrder({
         customerName: createForm.customerName.trim(),
         customerPhone: createForm.customerPhone.trim() || null,
         shippingAddress: createForm.shippingAddress.trim() || null,
-        courierName: createForm.courierName.trim() || null,
+        courierName: resolveCourierName(createForm),
         trackingNumber: createForm.trackingNumber.trim() || null,
         notes: createForm.notes.trim() || null,
         items,
@@ -329,7 +350,7 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
             </div>
 
             <div className="request-detail-grid">
-              <label className="full">
+              <label>
                 Customer name *
                 <input
                   required
@@ -347,19 +368,19 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
               </label>
               <label>
                 Courier
-                <input
-                  value={createForm.courierName}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, courierName: e.target.value }))}
-                  placeholder="e.g. J&T, LBC"
-                />
-              </label>
-              <label className="full">
-                Shipping address
-                <textarea
-                  rows={2}
-                  value={createForm.shippingAddress}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, shippingAddress: e.target.value }))}
-                />
+                <select
+                  value={createForm.courierPreset}
+                  onChange={(e) => setCreateForm((prev) => ({
+                    ...prev,
+                    courierPreset: e.target.value,
+                    courierOther: e.target.value === 'OTHER' ? prev.courierOther : '',
+                  }))}
+                >
+                  <option value="">Select courier</option>
+                  {courierOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 Tracking number
@@ -368,7 +389,28 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, trackingNumber: e.target.value }))}
                 />
               </label>
-              <label>
+              {createForm.courierPreset === 'OTHER' && (
+                <label className="full">
+                  Other courier *
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    value={createForm.courierOther}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, courierOther: e.target.value }))}
+                    placeholder="Enter courier name"
+                  />
+                </label>
+              )}
+              <label className="full">
+                Shipping address
+                <textarea
+                  rows={2}
+                  value={createForm.shippingAddress}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, shippingAddress: e.target.value }))}
+                />
+              </label>
+              <label className="full">
                 Notes
                 <input
                   value={createForm.notes}
@@ -378,52 +420,54 @@ export default function ManualOrdersPage({ orders, inventory, onRefresh, canMana
             </div>
 
             <div className="integration-note">Line items</div>
-            {createForm.items.map((row) => {
-              const categoryItems = itemsByCategoryName.get(row.categoryName) || []
-              return (
-                <div key={row.key} className="request-detail-grid" style={{ marginBottom: '0.75rem' }}>
-                  <label>
-                    Category
-                    <select
-                      value={row.categoryName}
-                      onChange={(e) => updateCreateLine(row.key, 'categoryName', e.target.value)}
-                    >
-                      <option value="">Select category</option>
-                      {inventoryByCategory.map((group) => (
-                        <option key={group.categoryName} value={group.categoryName}>{group.categoryName}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Item *
-                    <select
-                      required
-                      value={row.inventoryId}
-                      onChange={(e) => updateCreateLine(row.key, 'inventoryId', e.target.value)}
-                    >
-                      <option value="">Select item</option>
-                      {categoryItems.map((item) => (
-                        <option key={item.inventoryId} value={item.inventoryId}>
-                          {item.itemName} · {item.sku} · stock {item.stocks}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Qty *
-                    <input
-                      type="number"
-                      min={1}
-                      required
-                      value={row.quantity}
-                      onChange={(e) => updateCreateLine(row.key, 'quantity', e.target.value)}
-                    />
-                  </label>
-                </div>
-              )
-            })}
+            <div className="manual-order-lines">
+              {createForm.items.map((row) => {
+                const categoryItems = itemsByCategoryName.get(row.categoryName) || []
+                return (
+                  <div key={row.key} className="manual-order-line-grid">
+                    <label>
+                      Category
+                      <select
+                        value={row.categoryName}
+                        onChange={(e) => updateCreateLine(row.key, 'categoryName', e.target.value)}
+                      >
+                        <option value="">Select category</option>
+                        {inventoryByCategory.map((group) => (
+                          <option key={group.categoryName} value={group.categoryName}>{group.categoryName}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="manual-order-line-item">
+                      Item *
+                      <select
+                        required
+                        value={row.inventoryId}
+                        onChange={(e) => updateCreateLine(row.key, 'inventoryId', e.target.value)}
+                      >
+                        <option value="">Select item</option>
+                        {categoryItems.map((item) => (
+                          <option key={item.inventoryId} value={item.inventoryId}>
+                            {item.itemName} · {item.sku} · stock {item.stocks}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="manual-order-line-qty">
+                      Qty *
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        value={row.quantity}
+                        onChange={(e) => updateCreateLine(row.key, 'quantity', e.target.value)}
+                      />
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
 
-            <div className="row-actions" style={{ marginBottom: '1rem' }}>
+            <div className="row-actions manual-order-line-actions">
               <button
                 type="button"
                 className="secondary small-btn"

@@ -39,14 +39,14 @@ export async function dashboardSummary() {
        ORDER BY months.month_start ASC`,
       [CONSUMPTION_TYPES],
     ),
-    // Items at or below low_stock_threshold (reorder candidates): stock vs threshold.
+    // Items at or below low_stock_threshold (reorder candidates): worst shortfall first.
     pool.query(`SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.low_stock_threshold, i.status, c.category_name
       FROM inventory i
       JOIN categories c ON c.category_id = i.category_id
       WHERE i.lifecycle_status = 'ACTIVE'
         AND i.stocks <= i.low_stock_threshold
-      ORDER BY i.stocks ASC, i.item_name ASC
-      LIMIT 20`),
+      ORDER BY (i.low_stock_threshold - i.stocks) DESC, i.stocks ASC, i.item_name ASC
+      LIMIT 100`),
   ]);
 
   return camelize({

@@ -5,15 +5,17 @@ import {
   getUniformTypesForCategory,
   isLcaShirtCategory,
   isLearningKitCategory,
+  isToolKitCategory,
   isUniformCategory,
   parseUniformVariation,
   generateUniqueSku,
   canGenerateSku,
   getFieldPlaceholders,
 } from '../constants/uniformOptions'
+import { useSettings } from '../context/SettingsContext'
 import { normalizeInventoryText } from '../utils/format'
 
-function newComponentRow() {
+function newLearningKitRow() {
   return {
     key: crypto.randomUUID(),
     categoryId: '',
@@ -28,6 +30,8 @@ function rowFromSavedComponent(component) {
 }
 
 export function ItemModal({ item, categories, items = [], busy, lockCategory = false, onClose, onSave }) {
+  const settings = useSettings()
+  const defaultThreshold = settings.defaultLowStockThreshold ?? 20
   const initialCategoryId = item.categoryId || categories[0]?.categoryId || ''
   const initialUniform = isUniformCategory(initialCategoryId, categories)
     ? {
@@ -48,24 +52,28 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     uniformSize: initialUniform.uniformSize,
     remarks: item.remarks || '',
     stocks: item.stocks ?? 0,
-    lowStockThreshold: item.lowStockThreshold ?? 20,
+    lowStockThreshold: item.lowStockThreshold ?? defaultThreshold,
     price: item.price ?? 0,
     internalSellingPrice: item.internalSellingPrice ?? 0,
   })
   const [components, setComponents] = useState(() => {
-    if (Array.isArray(item.components) && item.components.length) {
+    if (isLearningKitCategory(initialCategoryId, categories) && Array.isArray(item.components) && item.components.length) {
       return item.components.map(rowFromSavedComponent)
     }
-    return isLearningKitCategory(initialCategoryId, categories) ? [newComponentRow()] : []
+    return isLearningKitCategory(initialCategoryId, categories) ? [newLearningKitRow()] : []
   })
   const [localError, setLocalError] = useState('')
 
   const isUniform = isUniformCategory(form.categoryId, categories)
   const isLearningKit = isLearningKitCategory(form.categoryId, categories)
+  const isToolKit = isToolKitCategory(form.categoryId, categories)
   const isLcaShirt = isLcaShirtCategory(form.categoryId, categories)
   const uniformTypes = getUniformTypesForCategory(form.categoryId, categories, form.uniformGender)
   const uniformGenders = getUniformGendersForCategory(form.categoryId, categories)
-  const uniformSizes = getUniformSizesForCategory(form.categoryId, categories)
+  const uniformSizes = getUniformSizesForCategory(form.categoryId, categories, {
+    uniformSizes: settings.uniformSizes,
+    shirtSizes: settings.shirtSizes,
+  })
   const placeholders = getFieldPlaceholders(form.categoryId, categories)
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
 
@@ -79,15 +87,12 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     const selected = components.map((row) => row.categoryId).filter(Boolean)
     if (!selected.length) return 0
     const totals = selected.map((categoryId) => items
-      .filter((entry) => entry.categoryId === categoryId)
+      .filter((entry) => entry.categoryId === categoryId && entry.kitRole !== 'RAW_COMPONENT')
       .reduce((sum, entry) => sum + (Number(entry.stocks) || 0), 0))
     if (totals.length !== selected.length) return 0
     return Math.min(...totals)
   }, [isLearningKit, components, items])
 
-  // Create: always regenerate SKU.
-  // Edit: regenerate only for non-uniform items when name/category changes (Others, Bag, etc.).
-  // Uniform SKUs stay locked (gender/type/size driven).
   useEffect(() => {
     const lockSku = Boolean(item.inventoryId) && isUniform
     if (lockSku) return
@@ -113,13 +118,9 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
       const currentUniform = isUniformCategory(current.categoryId, categories)
       const nextTypes = getUniformTypesForCategory(value, categories, current.uniformGender)
       const keepType = nextTypes.includes(current.uniformType) ? current.uniformType : ''
-      const nextKit = isLearningKitCategory(value, categories)
+      const nextLearningKit = isLearningKitCategory(value, categories)
 
-      setComponents((rows) => {
-        if (nextKit && !rows.length) return [newComponentRow()]
-        if (!nextKit) return []
-        return rows
-      })
+      setComponents(() => (nextLearningKit ? [newLearningKitRow()] : []))
 
       if (nextUniform && !currentUniform) {
         return {
@@ -172,6 +173,11 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     e.preventDefault()
     setLocalError('')
 
+    if (isToolKit) {
+      onSave({ ...form, stocks: item.inventoryId ? form.stocks : 0, components: undefined })
+      return
+    }
+
     if (!isLearningKit) {
       onSave({ ...form, components: undefined })
       return
@@ -210,7 +216,9 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
             <p>
               {isLearningKit
                 ? 'Choose which categories this kit includes. The external system picks the concrete items (size / SKU) when requesting stock. Available kits = minimum total stock across those categories.'
-                : 'Enter the item and stock information below.'}
+                : isToolKit
+                  ? 'This category uses parent items with child SKUs. After saving, click the item name on Inventory to open its raw items page and add child SKUs. Parent stock is computed from those raw items.'
+                  : 'Enter the item and stock information below.'}
             </p>
           </div>
           <button type="button" onClick={onClose}>×</button>
@@ -267,12 +275,19 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
           <label>{isUniform ? 'Per-piece selling price (₱) *' : 'Selling price (₱) *'}<input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => set('price', e.target.value)} /></label>
           <label>Internal selling price (₱) *<input required type="number" min="0" step="0.01" value={form.internalSellingPrice} onChange={(e) => set('internalSellingPrice', e.target.value)} /></label>
           <label>Low-stock threshold *<input required type="number" min="0" value={form.lowStockThreshold} onChange={(e) => set('lowStockThreshold', e.target.value)} /></label>
-          {isLearningKit ? (
+          {isLearningKit || isToolKit ? (
             <label>
               Available kits (computed)
-              <input className="readonly-input" readOnly value={computedKitStocks ?? 0} tabIndex={-1} />
+              <input
+                className="readonly-input"
+                readOnly
+                value={isLearningKit ? (computedKitStocks ?? 0) : (item.stocks ?? 0)}
+                tabIndex={-1}
+              />
               <small className="field-hint">
-                Minimum of total stock in each included category. Concrete sizes/SKUs are chosen when an external system requests the kit.
+                {isToolKit
+                  ? 'Managed from the Inventory table: click the parent name, then add raw items. Stock = how many kits those raw items can build.'
+                  : 'Minimum of total stock in each included category. Concrete sizes/SKUs are chosen when an external system requests the kit.'}
               </small>
             </label>
           ) : (
@@ -302,7 +317,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                   (uniform: gender · type · size; non-uniform: item name / SKU). Recipe quantity is always 1.
                 </p>
               </div>
-              <button type="button" className="secondary" onClick={() => setComponents((rows) => [...rows, newComponentRow()])}>
+              <button type="button" className="secondary" onClick={() => setComponents((rows) => [...rows, newLearningKitRow()])}>
                 + Add row
               </button>
             </div>

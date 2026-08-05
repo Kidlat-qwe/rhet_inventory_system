@@ -350,12 +350,14 @@ export async function shipStockRequest(id, admin) {
     );
     if (!itemMeta.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
 
-    const isKit = inventory.isLearningKitCategory(itemMeta.rows[0]);
+    const isLearningKit = inventory.isLearningKitCategory(itemMeta.rows[0]);
+    const isToolKit = inventory.isToolKitCategory(itemMeta.rows[0]);
+    const isKit = isLearningKit || isToolKit;
     const bom = isKit ? await inventory.listBundleComponents(inventoryId, db) : [];
-    const requestComponents = isKit ? await listRequestComponents(id, db) : [];
+    const requestComponents = isLearningKit ? await listRequestComponents(id, db) : [];
     const resolvedComponents = [];
 
-    if (isKit) {
+    if (isLearningKit) {
       if (!bom.length) {
         throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Learning Kit has no bill of materials configured');
       }
@@ -413,6 +415,14 @@ export async function shipStockRequest(id, admin) {
       if (available < current.quantity) {
         throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} kit(s) can be assembled from current category stock`);
       }
+    } else if (isToolKit) {
+      if (!bom.length || !bom.every((row) => row.isPinned)) {
+        throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Tool Kit has no pinned raw items configured');
+      }
+      const available = await inventory.computeAvailableKits(bom, db);
+      if (available < current.quantity) {
+        throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} Tool Kit(s) can be assembled from raw item stock`);
+      }
     } else if (itemMeta.rows[0].stocks < current.quantity) {
       throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${itemMeta.rows[0].stocks} unit(s) are available`);
     }
@@ -434,7 +444,7 @@ export async function shipStockRequest(id, admin) {
       },
       adminId,
       db,
-      isKit ? { resolvedComponents } : {},
+      isLearningKit ? { resolvedComponents } : {},
     );
 
     const primaryMovement = movement.primary || movement;
@@ -568,24 +578,52 @@ export async function returnStockRequest(id, admin, notes = null) {
 
     wasDelivered = current.status === 'DELIVERED';
     const components = await listRequestComponents(id, db);
-    const isKit = components.length > 0;
+    const parentMeta = await inventory.getInventory(current.inventory_id, db);
+    const isLearningKitReturn = components.length > 0;
+    const isToolKitReturn = inventory.isToolKitCategory(parentMeta);
 
-    if (isKit) {
+    if (isLearningKitReturn) {
       for (const spec of components) {
         if (!spec.inventoryId) continue;
-        await inventory.createMovement(
-          spec.inventoryId,
-          {
-            movementType: 'RETURN',
-            quantity: Number(spec.quantity) || current.quantity,
-            referenceNumber: current.external_reference || current.request_id,
-            remarks: notes
-              || `Returned stock request ${current.external_reference || current.request_id}`,
-          },
-          adminId,
-          db,
-        );
+        const componentMeta = await inventory.getInventory(spec.inventoryId, db).catch(() => null);
+        const movementInput = {
+          movementType: 'RETURN',
+          quantity: Number(spec.quantity) || current.quantity,
+          referenceNumber: current.external_reference || current.request_id,
+          remarks: notes
+            || `Returned stock request ${current.external_reference || current.request_id}`,
+        };
+        if (componentMeta && inventory.isToolKitCategory(componentMeta)) {
+          await inventory.createBundleAwareMovement(
+            spec.inventoryId,
+            movementInput,
+            adminId,
+            db,
+            {},
+          );
+        } else {
+          await inventory.createMovement(
+            spec.inventoryId,
+            movementInput,
+            adminId,
+            db,
+          );
+        }
       }
+    } else if (isToolKitReturn) {
+      await inventory.createBundleAwareMovement(
+        current.inventory_id,
+        {
+          movementType: 'RETURN',
+          quantity: current.quantity,
+          referenceNumber: current.external_reference || current.request_id,
+          remarks: notes
+            || `Returned stock request ${current.external_reference || current.request_id}`,
+        },
+        adminId,
+        db,
+        {},
+      );
     } else {
       await inventory.createMovement(
         current.inventory_id,
@@ -697,7 +735,7 @@ export async function getIntegrationCatalog() {
 
   const items = [];
   for (const row of camelize(inventoryRows.rows)) {
-    if (inventory.isLearningKitCategory(row)) {
+    if (inventory.isVirtualKitCategory(row)) {
       const full = await inventory.getInventory(row.inventoryId);
       items.push({
         inventoryId: full.inventoryId,
@@ -707,8 +745,19 @@ export async function getIntegrationCatalog() {
         status: full.status,
         variation: full.variation,
         categoryName: full.categoryName,
+        categoryKind: full.categoryKind,
         stockMode: full.stockMode,
         bomComplete: full.bomComplete,
+        components: (full.components || []).map((component) => ({
+          categoryId: component.categoryId,
+          categoryName: component.categoryName,
+          inventoryId: component.inventoryId || component.componentInventoryId || null,
+          sku: component.sku || null,
+          itemName: component.itemName || null,
+          quantity: component.quantity,
+          isPinned: Boolean(component.isPinned),
+          stocks: component.isPinned ? Number(component.stocks) || 0 : Number(component.categoryStocks) || 0,
+        })),
       });
     } else {
       items.push(row);

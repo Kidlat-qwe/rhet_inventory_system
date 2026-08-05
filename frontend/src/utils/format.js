@@ -47,6 +47,24 @@ export function formatStatus(status) {
   return statusLabels[status] || status?.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || '—'
 }
 
+/** Shopee-aligned labels for online-order fulfillment_status (board + badges). */
+const onlineFulfillmentLabels = {
+  PROCESSING: 'Unpaid',
+  READY_TO_SHIP: 'To Ship',
+  SHIPPED: 'Shipping',
+  DELIVERED: 'Completed',
+  RETURNED: 'Return/Refund',
+  CANCELLED: 'Cancelled',
+  RETURN: 'Return/Refund',
+  RETURN_CONFIRMED: 'Return/Refund',
+  RECEIVED: 'Completed',
+}
+
+export function formatOnlineFulfillmentStatus(status) {
+  return onlineFulfillmentLabels[status] || formatStatus(status)
+}
+
+
 export function formatMovementType(type) {
   return movementLabels[type] || type?.replaceAll('_', ' ') || '—'
 }
@@ -54,6 +72,17 @@ export function formatMovementType(type) {
 export function formatCurrency(value) {
   const amount = Number(value) || 0
   return `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
+let appTimezone = 'Asia/Manila'
+
+export function setAppTimezone(timezone) {
+  const next = String(timezone || '').trim()
+  appTimezone = next || 'Asia/Manila'
+}
+
+export function getAppTimezone() {
+  return appTimezone
 }
 
 export function formatDate(value) {
@@ -67,10 +96,18 @@ export function formatDate(value) {
   yesterday.setDate(now.getDate() - 1)
   const isYesterday = date.toDateString() === yesterday.toDateString()
 
-  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const timeOpts = { hour: 'numeric', minute: '2-digit', timeZone: appTimezone }
+  const time = date.toLocaleTimeString(undefined, timeOpts)
   if (sameDay) return `Today, ${time}`
   if (isYesterday) return `Yesterday, ${time}`
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: appTimezone,
+  })
 }
 
 export function initials(name) {
@@ -89,12 +126,12 @@ export function greetingName(name) {
 }
 
 // Normalize free-text inventory labels (item name / variation): lowercase and
-// turn spaces into hyphens so values stay consistent for SKUs and matching.
+// turn spaces into underscores so values stay consistent for SKUs and matching.
 export function normalizeInventoryText(value = '') {
   return String(value)
     .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
 }
 
 /** Truncate long text for table cells; full value belongs in title/tooltip. */

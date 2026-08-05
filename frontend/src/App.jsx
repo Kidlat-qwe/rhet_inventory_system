@@ -3,16 +3,18 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import './App.css'
 import { EmptyState } from './components/EmptyState'
 import { Header } from './components/Header'
-// Re-enable after redeploy by setting ENABLE_HELP_ASSISTANT = true below.
 import { HelpAssistant } from './components/HelpAssistant'
 import { PageLoading } from './components/PageLoading'
+import { ProcessingModalHost } from './components/ProcessingModal'
 import { Sidebar } from './components/Sidebar'
+import { DEFAULT_SETTINGS, SettingsProvider } from './context/SettingsContext'
 import {
   AdminApiKeys,
   AdminCategories,
   AdminDashboard,
   AdminInventory,
   AdminReleaseLogs,
+  AdminSettings,
   AdminStockMovements,
   AdminStockRequests,
   AdminUsers,
@@ -39,14 +41,13 @@ import {
   fetchInventory,
   fetchMe,
   fetchMovements,
+  fetchSettings,
   fetchStockRequests,
   fetchIntegrationClients,
 } from './services/inventoryApi'
 import { fetchManualOrders } from './services/manualOrdersApi'
 import { fetchOnlineOrders } from './services/onlineOrdersApi'
-
-/** Set to true after redeploy to show the floating Help Assistant again. */
-const ENABLE_HELP_ASSISTANT = true
+import { setAppTimezone } from './utils/format'
 
 /** Movement types owned by marketplace / HQ outbound flows (Release Logs → Online orders). */
 const ONLINE_ORDER_MOVEMENT_TYPES = 'ONLINE_SALE,MANUAL_SALE,CANCELLED,RETURN,CHANNEL_ALLOCATION'
@@ -67,8 +68,10 @@ function AppShell() {
   const [manualOrders, setManualOrders] = useState([])
   const [integrationClients, setIntegrationClients] = useState([])
   const [admins, setAdmins] = useState([])
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [inventoryFocusCategoryId, setInventoryFocusCategoryId] = useState(null)
   const stockRequestsRefreshInFlight = useRef(false)
 
   const routeInfo = useMemo(() => pageFromPath(location.pathname), [location.pathname])
@@ -81,7 +84,7 @@ function AppShell() {
     try {
       const me = await fetchMe()
       const roleIsAdmin = String(me?.role || 'ADMIN').toUpperCase() === 'ADMIN'
-      const [dash, cats, inv, mov, onlineMov, requests, online, manual, adminList, clients] = await Promise.all([
+      const [dash, cats, inv, mov, onlineMov, requests, online, manual, adminList, clients, appSettings] = await Promise.all([
         fetchDashboard(),
         fetchCategories(),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
@@ -92,6 +95,7 @@ function AppShell() {
         fetchManualOrders({ limit: 100 }),
         roleIsAdmin ? fetchUsers() : Promise.resolve([]),
         roleIsAdmin ? fetchIntegrationClients() : Promise.resolve([]),
+        fetchSettings(),
       ])
       setAdmin(me)
       setDashboard(dash)
@@ -104,6 +108,8 @@ function AppShell() {
       setManualOrders(manual.data)
       setIntegrationClients(clients)
       setAdmins(adminList)
+      setSettings(appSettings || DEFAULT_SETTINGS)
+      setAppTimezone(appSettings?.timezone)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -216,7 +222,7 @@ function AppShell() {
 
   if (user === undefined) return <div className="auth-loading">Checking your session…</div>
   if (firebaseConfigured && !user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    return <Navigate to="/login" replace />
   }
 
   const content = (() => {
@@ -228,7 +234,15 @@ function AppShell() {
         case 'Dashboard':
           return <AdminDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
         case 'Inventory':
-          return <AdminInventory items={inventory} categories={categories} onRefresh={refreshQuietly} />
+          return (
+            <AdminInventory
+              items={inventory}
+              categories={categories}
+              onRefresh={refreshQuietly}
+              initialCategoryId={inventoryFocusCategoryId}
+              onInitialCategoryConsumed={() => setInventoryFocusCategoryId(null)}
+            />
+          )
         case 'Stock Requests':
           return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} admin={admin} />
         case 'Online Orders':
@@ -240,11 +254,23 @@ function AppShell() {
         case 'Stock Movements':
           return <AdminStockMovements movements={movements} />
         case 'Categories':
-          return <AdminCategories categories={categories} items={inventory} onRefresh={refreshQuietly} />
+          return (
+            <AdminCategories
+              categories={categories}
+              items={inventory}
+              onRefresh={refreshQuietly}
+              onOpenInventory={(categoryId) => {
+                setInventoryFocusCategoryId(categoryId)
+                goTo('Inventory')
+              }}
+            />
+          )
         case 'Users':
           return <AdminUsers users={admins} currentAdmin={admin} onRefresh={refreshQuietly} />
         case 'API Keys':
           return <AdminApiKeys clients={integrationClients} onRefresh={refreshQuietly} />
+        case 'Settings':
+          return <AdminSettings settings={settings} onRefresh={refreshQuietly} />
         default:
           return <EmptyState title={page} message="This page is not available." />
       }
@@ -254,7 +280,15 @@ function AppShell() {
       case 'Dashboard':
         return <UserDashboard dashboard={dashboard} admin={admin} goInventory={() => goTo('Inventory')} goMovements={() => goTo('Stock Movements')} />
       case 'Inventory':
-        return <UserInventory items={inventory} categories={categories} onRefresh={refreshQuietly} />
+        return (
+          <UserInventory
+            items={inventory}
+            categories={categories}
+            onRefresh={refreshQuietly}
+            initialCategoryId={inventoryFocusCategoryId}
+            onInitialCategoryConsumed={() => setInventoryFocusCategoryId(null)}
+          />
+        )
       case 'Stock Requests':
         return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} admin={admin} />
       case 'Online Orders':
@@ -266,52 +300,58 @@ function AppShell() {
       case 'Stock Movements':
         return <UserStockMovements movements={movements} />
       case 'Categories':
-        return <UserCategories categories={categories} onRefresh={refreshQuietly} />
+        return (
+          <UserCategories
+            categories={categories}
+            items={inventory}
+            onRefresh={refreshQuietly}
+            onOpenInventory={(categoryId) => {
+              setInventoryFocusCategoryId(categoryId)
+              goTo('Inventory')
+            }}
+          />
+        )
       default:
         return <EmptyState title="Access restricted" message="You do not have access to this page." />
     }
   })()
 
   return (
-    <div className="app">
-      <Sidebar
-        open={menu}
-        close={() => setMenu(false)}
-        admin={admin}
-        pendingRequests={stockRequests.filter((request) => request.status === 'PENDING').length}
-        attentionOrders={onlineOrders.filter((order) => order.orderStatus === 'NEEDS_ATTENTION').length}
-      />
-      {menu && <div className="mobile-overlay" onClick={() => setMenu(false)} />}
-      <main>
-        <Header
-          page={page}
-          menu={() => setMenu(true)}
-          logout={firebaseConfigured ? signOutAdmin : undefined}
+    <SettingsProvider settings={settings}>
+      <div className="app">
+        <Sidebar
+          open={menu}
+          close={() => setMenu(false)}
           admin={admin}
-          pendingRequests={stockRequests.filter((request) => request.status === 'PENDING')}
-          onOpenStockRequests={() => goTo('Stock Requests')}
+          pendingRequests={stockRequests.filter((request) => request.status === 'PENDING').length}
+          attentionOrders={onlineOrders.filter((order) => order.orderStatus === 'NEEDS_ATTENTION').length}
         />
-        <div className="content">{content}</div>
-      </main>
-      {ENABLE_HELP_ASSISTANT && <HelpAssistant admin={admin} />}
-    </div>
+        {menu && <div className="mobile-overlay" onClick={() => setMenu(false)} />}
+        <main>
+          <Header
+            page={page}
+            menu={() => setMenu(true)}
+            logout={firebaseConfigured ? signOutAdmin : undefined}
+            admin={admin}
+            pendingRequests={stockRequests.filter((request) => request.status === 'PENDING')}
+            onOpenStockRequests={() => goTo('Stock Requests')}
+          />
+          <div className="content">{content}</div>
+        </main>
+        {settings.helpAssistantEnabled !== false && <HelpAssistant admin={admin} />}
+      </div>
+    </SettingsProvider>
   )
 }
 
 function LoginRoute() {
   const [user, setUser] = useState(firebaseConfigured ? undefined : null)
-  const location = useLocation()
 
   useEffect(() => (firebaseConfigured ? observeAuth(setUser) : undefined), [])
 
   if (user === undefined) return <div className="auth-loading">Checking your session…</div>
-  if (user) {
-    const from = location.state?.from
-    if (typeof from === 'string' && from.startsWith('/') && from !== '/login') {
-      return <Navigate to={from} replace />
-    }
-    return <Navigate to="/" replace />
-  }
+  // Always land on role Dashboard after sign-in (do not restore the previous deep link).
+  if (user) return <Navigate to="/" replace />
   return <Login />
 }
 
@@ -346,12 +386,15 @@ function HomeRedirect() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginRoute />} />
-      <Route path="/admin/*" element={<AppShell />} />
-      <Route path="/user/*" element={<AppShell />} />
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="*" element={<HomeRedirect />} />
-    </Routes>
+    <>
+      <ProcessingModalHost />
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+        <Route path="/admin/*" element={<AppShell />} />
+        <Route path="/user/*" element={<AppShell />} />
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="*" element={<HomeRedirect />} />
+      </Routes>
+    </>
   )
 }

@@ -2,7 +2,7 @@ import { pool, withTransaction } from '../database/pool.js';
 import { AppError, camelize } from '../utils/api.js';
 import { calculateStockChange } from './stock-rules.js';
 
-const inventorySelect = `SELECT i.*, c.category_name, c.category_kind
+const inventorySelect = `SELECT i.*, c.category_name, c.category_kind, c.has_child_skus
   FROM inventory i JOIN categories c ON c.category_id = i.category_id`;
 
 const componentSelect = `SELECT bc.component_row_id, bc.bundle_inventory_id,
@@ -18,11 +18,16 @@ export const CATEGORY_KINDS = Object.freeze([
   'PE_UNIFORM',
   'LCA_SHIRT',
   'LEARNING_KIT',
+  'TOOL_KIT',
   'OTHER',
 ]);
 
 export function isLearningKitCategoryName(categoryName = '') {
   return String(categoryName || '').trim().toLowerCase() === 'learning kit';
+}
+
+export function isToolKitCategoryName(categoryName = '') {
+  return String(categoryName || '').trim().toLowerCase() === 'tool kit';
 }
 
 /** Prefer category_kind when present; fall back to exact name for legacy rows. */
@@ -34,20 +39,72 @@ export function isLearningKitCategory(category = {}) {
   return isLearningKitCategoryName(category.categoryName || category.category_name);
 }
 
+/** Prefer has_child_skus flag; fall back to legacy TOOL_KIT kind / name. */
+export function isToolKitCategory(category = {}) {
+  if (!category) return false;
+  if (category.hasChildSkus === true || category.has_child_skus === true) return true;
+  const kind = category.categoryKind || category.category_kind;
+  if (kind === 'TOOL_KIT') return true;
+  if (kind && kind !== 'OTHER') return false;
+  return isToolKitCategoryName(category.categoryName || category.category_name);
+}
+
+/** Learning Kit (category slots) or Tool Kit (pinned items). */
+export function isVirtualKitCategory(category = {}) {
+  return isLearningKitCategory(category) || isToolKitCategory(category);
+}
+
 export function normalizeCategoryKind(value) {
   const kind = String(value || 'OTHER').trim().toUpperCase();
   return CATEGORY_KINDS.includes(kind) ? kind : null;
 }
 
-/** Sum ACTIVE stocks in a category (used for category-slot kit availability). */
+/** Sum ACTIVE stocks in a category (used for category-slot kit availability).
+ * Excludes items that are pinned as kit raw components so Tool Kit parents
+ * are not double-counted with their children.
+ */
 export async function sumCategoryStocks(categoryId, db = pool) {
   const result = await db.query(
-    `SELECT COALESCE(SUM(stocks), 0)::int AS total
-     FROM inventory
-     WHERE category_id = $1 AND lifecycle_status = 'ACTIVE'`,
+    `SELECT COALESCE(SUM(i.stocks), 0)::int AS total
+     FROM inventory i
+     WHERE i.category_id = $1
+       AND i.lifecycle_status = 'ACTIVE'
+       AND NOT EXISTS (
+         SELECT 1 FROM inventory_bundle_components bc
+         WHERE bc.component_inventory_id = i.inventory_id
+       )`,
     [categoryId],
   );
   return Number(result.rows[0].total) || 0;
+}
+
+async function loadKitComponentInventoryIds(db = pool) {
+  const result = await db.query(
+    `SELECT DISTINCT component_inventory_id
+     FROM inventory_bundle_components
+     WHERE component_inventory_id IS NOT NULL`,
+  );
+  return new Set(result.rows.map((row) => row.component_inventory_id));
+}
+
+/** Tool Kit raw child (pinned under a parent) — normal stocked item, not a virtual kit. */
+export async function isToolKitRawComponent(inventoryId, db = pool) {
+  if (!inventoryId) return false;
+  const result = await db.query(
+    `SELECT 1 FROM inventory_bundle_components WHERE component_inventory_id = $1 LIMIT 1`,
+    [inventoryId],
+  );
+  return result.rowCount > 0;
+}
+
+/** Item whose stock is virtual (Learning Kit, or Tool Kit parent — not a raw child). */
+export async function isVirtualKitParentItem(item, db = pool) {
+  if (!item) return false;
+  if (isLearningKitCategory(item)) return true;
+  if (!isToolKitCategory(item)) return false;
+  const inventoryId = item.inventoryId || item.inventory_id;
+  if (!inventoryId) return true;
+  return !(await isToolKitRawComponent(inventoryId, db));
 }
 
 /**
@@ -117,13 +174,28 @@ async function attachComponents(items, db = pool) {
     byBundle.set(row.bundleInventoryId, list);
   }
 
+  const kitChildIds = await loadKitComponentInventoryIds(db);
+
   const attached = [];
   for (const item of items) {
     const components = byBundle.get(item.inventoryId) || [];
-    if (!isLearningKitCategory(item)) {
+
+    // Tool Kit raw children live in the same category but keep normal stock.
+    if (isToolKitCategory(item) && kitChildIds.has(item.inventoryId)) {
+      attached.push({
+        ...item,
+        components: [],
+        kitRole: 'RAW_COMPONENT',
+        stockMode: 'PHYSICAL',
+      });
+      continue;
+    }
+
+    if (!isVirtualKitCategory(item)) {
       attached.push({ ...item, components });
       continue;
     }
+
     const withCategoryTotals = [];
     for (const row of components) {
       const categoryStocks = row.isPinned
@@ -154,12 +226,58 @@ async function attachComponents(items, db = pool) {
       components: withCategoryTotals,
       computedStocks,
       bomComplete: components.length > 0,
+      kitRole: isToolKitCategory(item) ? 'PARENT' : 'KIT',
       stockMode: 'VIRTUAL_BUNDLE',
       stocks: computedStocks,
       status,
     });
   }
-  return attached;
+
+  return attachUsedByParents(attached, db);
+}
+
+/** Annotate pinned kit components with which parent kits share them. */
+async function attachUsedByParents(items, db = pool) {
+  const childIds = [];
+  for (const item of items) {
+    for (const row of item.components || []) {
+      const id = row.componentInventoryId || row.inventoryId;
+      if (id) childIds.push(id);
+    }
+  }
+  if (!childIds.length) return items;
+
+  const uniqueIds = [...new Set(childIds)];
+  const result = await db.query(
+    `SELECT bc.component_inventory_id, i.inventory_id AS parent_inventory_id, i.item_name AS parent_item_name, i.sku AS parent_sku
+     FROM inventory_bundle_components bc
+     JOIN inventory i ON i.inventory_id = bc.bundle_inventory_id
+     WHERE bc.component_inventory_id = ANY($1::uuid[])
+     ORDER BY i.item_name`,
+    [uniqueIds],
+  );
+
+  const byChild = new Map();
+  for (const row of camelize(result.rows)) {
+    const list = byChild.get(row.componentInventoryId) || [];
+    list.push({
+      inventoryId: row.parentInventoryId,
+      itemName: row.parentItemName,
+      sku: row.parentSku,
+    });
+    byChild.set(row.componentInventoryId, list);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    components: (item.components || []).map((row) => {
+      const id = row.componentInventoryId || row.inventoryId;
+      return {
+        ...row,
+        usedBy: id ? (byChild.get(id) || []) : [],
+      };
+    }),
+  }));
 }
 
 export async function listInventory(query) {
@@ -203,14 +321,21 @@ async function loadKitMeta(db, inventoryId) {
 }
 
 /** Persist computed kit availability onto inventory.stocks (status column depends on it). */
-export async function syncKitComputedStocks(bundleInventoryId, adminId, db = pool) {
+export async function syncKitComputedStocks(bundleInventoryId, adminId, db = pool, visited = new Set()) {
+  if (visited.has(bundleInventoryId)) return null;
+  visited.add(bundleInventoryId);
+
   const meta = await loadKitMeta(db, bundleInventoryId);
-  if (!meta || !isLearningKitCategory(meta)) return null;
+  if (!meta || !isVirtualKitCategory(meta)) return null;
+  if (isToolKitCategory(meta) && await isToolKitRawComponent(bundleInventoryId, db)) {
+    return null;
+  }
 
   const components = await listBundleComponents(bundleInventoryId, db);
   const computed = await computeAvailableKits(components, db);
   const previous = Number(meta.stocks) || 0;
   if (previous === computed) {
+    await syncCategorySlotDependents(meta, adminId, db, visited);
     return { inventoryId: bundleInventoryId, stocks: computed, changed: false };
   }
 
@@ -221,6 +346,7 @@ export async function syncKitComputedStocks(bundleInventoryId, adminId, db = poo
 
   const delta = computed - previous;
   if (delta !== 0) {
+    const kitLabel = isToolKitCategory(meta) ? 'Tool Kit' : 'Learning Kit';
     await db.query(
       `INSERT INTO stock_movements
         (inventory_id, movement_type, quantity, stock_delta, previous_stock, new_stock, remarks, created_by)
@@ -231,22 +357,58 @@ export async function syncKitComputedStocks(bundleInventoryId, adminId, db = poo
         delta,
         previous,
         computed,
-        'Virtual Learning Kit stock sync from components',
+        `Virtual ${kitLabel} stock sync from components`,
         adminId,
       ],
     );
   }
 
+  await syncCategorySlotDependents(meta, adminId, db, visited);
+
   return { inventoryId: bundleInventoryId, stocks: computed, changed: true, previous };
 }
 
+/** When a Tool Kit (or other virtual parent) stock changes, refresh kits that use its category as a slot. */
+async function syncCategorySlotDependents(meta, adminId, db, visited) {
+  const categoryId = meta.categoryId || meta.category_id;
+  if (!categoryId) return;
+  const deps = await db.query(
+    `SELECT DISTINCT bc.bundle_inventory_id
+     FROM inventory_bundle_components bc
+     WHERE bc.component_category_id = $1
+       AND bc.component_inventory_id IS NULL
+       AND bc.bundle_inventory_id <> $2`,
+    [categoryId, meta.inventoryId || meta.inventory_id],
+  );
+  for (const row of deps.rows) {
+    await syncKitComputedStocks(row.bundle_inventory_id, adminId, db, visited);
+  }
+}
+
 async function replaceBundleComponents(db, bundleInventoryId, components = []) {
+  const meta = await loadKitMeta(db, bundleInventoryId);
+  if (!meta) {
+    throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+  }
+  if (!isVirtualKitCategory(meta)) {
+    throw new AppError(422, 'INVALID_COMPONENT', 'Only Learning Kit and Tool Kit items support a bill of materials');
+  }
+
   const rows = components || [];
   if (!rows.length) {
     await db.query('DELETE FROM inventory_bundle_components WHERE bundle_inventory_id = $1', [bundleInventoryId]);
     return;
   }
 
+  if (isToolKitCategory(meta)) {
+    await replaceToolKitComponents(db, bundleInventoryId, rows);
+    return;
+  }
+
+  await replaceLearningKitComponents(db, bundleInventoryId, rows);
+}
+
+async function replaceLearningKitComponents(db, bundleInventoryId, rows) {
   const normalized = [];
   const seenCategories = new Set();
 
@@ -288,13 +450,68 @@ async function replaceBundleComponents(db, bundleInventoryId, components = []) {
   }
 }
 
+async function replaceToolKitComponents(db, bundleInventoryId, rows) {
+  const normalized = [];
+  const seenInventory = new Set();
+
+  for (const row of rows) {
+    const inventoryId = row.inventoryId || row.componentInventoryId;
+    if (!inventoryId) {
+      throw new AppError(422, 'INVALID_COMPONENT', 'Each Tool Kit component requires an inventory item');
+    }
+    if (inventoryId === bundleInventoryId) {
+      throw new AppError(422, 'INVALID_COMPONENT', 'A Tool Kit cannot include itself as a component');
+    }
+    if (seenInventory.has(inventoryId)) {
+      throw new AppError(422, 'INVALID_COMPONENT', 'Each raw item can only be included once in a Tool Kit');
+    }
+
+    const itemResult = await db.query(
+      `${inventorySelect} WHERE i.inventory_id = $1`,
+      [inventoryId],
+    );
+    if (!itemResult.rowCount) {
+      throw new AppError(422, 'COMPONENT_NOT_FOUND', 'One or more component inventory items were not found');
+    }
+    const componentItem = camelize(itemResult.rows[0]);
+    if (isLearningKitCategory(componentItem)) {
+      throw new AppError(422, 'INVALID_COMPONENT', 'A Tool Kit cannot include a Learning Kit as a raw item');
+    }
+    const nestedBom = await listBundleComponents(inventoryId, db);
+    if (nestedBom.length) {
+      throw new AppError(422, 'INVALID_COMPONENT', 'Cannot nest a parent Tool Kit inside another Tool Kit');
+    }
+    if (String(componentItem.lifecycleStatus || '').toUpperCase() === 'INACTIVE') {
+      throw new AppError(422, 'INVALID_COMPONENT', `Component "${componentItem.sku}" is inactive`);
+    }
+
+    seenInventory.add(inventoryId);
+    normalized.push({
+      categoryId: componentItem.categoryId,
+      componentInventoryId: inventoryId,
+      quantity: 1,
+    });
+  }
+
+  await db.query('DELETE FROM inventory_bundle_components WHERE bundle_inventory_id = $1', [bundleInventoryId]);
+  for (const row of normalized) {
+    await db.query(
+      `INSERT INTO inventory_bundle_components
+        (bundle_inventory_id, component_category_id, component_inventory_id, quantity)
+       VALUES ($1, $2, $3, $4)`,
+      [bundleInventoryId, row.categoryId, row.componentInventoryId, row.quantity],
+    );
+  }
+}
+
 async function insertInventoryRow(db, input, adminId) {
   const category = await db.query(
     'SELECT category_name, category_kind FROM categories WHERE category_id = $1',
     [input.categoryId],
   );
   if (!category.rowCount) throw new AppError(422, 'CATEGORY_NOT_FOUND', 'Category was not found');
-  const isKit = isLearningKitCategory(category.rows[0]);
+  // Tool Kit raw children are created inside a parent; they keep physical stock.
+  const isKit = input.asToolKitRawChild ? false : isVirtualKitCategory(category.rows[0]);
   const initialStocks = isKit ? 0 : input.stocks;
 
   const result = await db.query(`INSERT INTO inventory
@@ -338,6 +555,193 @@ export async function createInventory(input, adminId) {
   return withTransaction(async (db) => {
     const id = await insertInventoryRow(db, input, adminId);
     return getInventory(id, db);
+  });
+}
+
+/**
+ * Add a raw inventory item under a Tool Kit parent (create new or link existing shared SKU).
+ * - input.inventoryId → pin an existing raw item (shared across kits)
+ * - otherwise create a new raw row, unless forceCreate is false and a same-name raw exists
+ *   (then link that shared item instead)
+ */
+export async function createToolKitChild(parentInventoryId, input, adminId) {
+  return withTransaction(async (db) => {
+    const parent = await loadKitMeta(db, parentInventoryId);
+    if (!parent) throw new AppError(404, 'ITEM_NOT_FOUND', 'Tool Kit parent was not found');
+    if (!isToolKitCategory(parent)) {
+      throw new AppError(422, 'NOT_A_TOOL_KIT', 'Raw items can only be added under a Tool Kit parent');
+    }
+    if (await isToolKitRawComponent(parentInventoryId, db)) {
+      throw new AppError(422, 'NOT_A_TOOL_KIT', 'Cannot add raw items under another raw item');
+    }
+
+    let childId = input.inventoryId || input.componentInventoryId || null;
+
+    if (childId) {
+      await assertLinkableToolKitRaw(db, parent, parentInventoryId, childId);
+    } else {
+      const itemName = String(input.itemName || '').trim();
+      if (!itemName) {
+        throw new AppError(422, 'INVALID_COMPONENT', 'Item name is required when creating a raw item');
+      }
+
+      const forceCreate = Boolean(input.forceCreate);
+      if (!forceCreate) {
+        const existing = await findSharedToolKitRawByName(db, parent.categoryId, itemName);
+        if (existing) {
+          childId = existing.inventoryId;
+          await assertLinkableToolKitRaw(db, parent, parentInventoryId, childId);
+        }
+      }
+
+      if (!childId) {
+        if (!input.sku) {
+          throw new AppError(422, 'INVALID_COMPONENT', 'SKU is required when creating a raw item');
+        }
+        childId = await insertInventoryRow(db, {
+          sku: input.sku,
+          itemName,
+          categoryId: parent.categoryId,
+          variation: input.variation || null,
+          price: input.price ?? 0,
+          internalSellingPrice: input.internalSellingPrice ?? 0,
+          remarks: input.remarks || null,
+          stocks: input.stocks ?? 0,
+          lowStockThreshold: input.lowStockThreshold ?? 20,
+          asToolKitRawChild: true,
+        }, adminId);
+      }
+    }
+
+    await db.query(
+      `INSERT INTO inventory_bundle_components
+        (bundle_inventory_id, component_category_id, component_inventory_id, quantity)
+       VALUES ($1, $2, $3, 1)`,
+      [parentInventoryId, parent.categoryId, childId],
+    );
+
+    await syncKitComputedStocks(parentInventoryId, adminId, db);
+    return getInventory(parentInventoryId, db);
+  });
+}
+
+async function findSharedToolKitRawByName(db, categoryId, itemName) {
+  const normalized = String(itemName || '').trim().toLowerCase();
+  if (!normalized) return null;
+
+  // Prefer raw items already used as kit components (shared catalog).
+  const asComponent = await db.query(
+    `${inventorySelect}
+     WHERE i.category_id = $1
+       AND LOWER(TRIM(i.item_name)) = $2
+       AND i.lifecycle_status = 'ACTIVE'
+       AND EXISTS (
+         SELECT 1 FROM inventory_bundle_components bc
+         WHERE bc.component_inventory_id = i.inventory_id
+       )
+     ORDER BY i.updated_at DESC
+     LIMIT 1`,
+    [categoryId, normalized],
+  );
+  if (asComponent.rowCount) return camelize(asComponent.rows[0]);
+
+  // Also allow matching a stocked Tool Kit-category item that is not a parent kit
+  // (no BOM of its own and not already only a parent with empty BOM confusing cases).
+  const anyRaw = await db.query(
+    `${inventorySelect}
+     WHERE i.category_id = $1
+       AND LOWER(TRIM(i.item_name)) = $2
+       AND i.lifecycle_status = 'ACTIVE'
+       AND NOT EXISTS (
+         SELECT 1 FROM inventory_bundle_components bc
+         WHERE bc.bundle_inventory_id = i.inventory_id
+       )
+     ORDER BY i.updated_at DESC
+     LIMIT 1`,
+    [categoryId, normalized],
+  );
+  if (!anyRaw.rowCount) return null;
+  const row = camelize(anyRaw.rows[0]);
+  // Exclude virtual parents (Tool Kit parents have kit role when not used as component).
+  if (isToolKitCategory(row) && !(await isToolKitRawComponent(row.inventoryId, db))) {
+    // Empty-BOM parent with same name — do not treat as shared raw.
+    return null;
+  }
+  return row;
+}
+
+async function assertLinkableToolKitRaw(db, parent, parentInventoryId, childId) {
+  if (childId === parentInventoryId) {
+    throw new AppError(422, 'INVALID_COMPONENT', 'A Tool Kit cannot include itself as a raw item');
+  }
+
+  const already = await db.query(
+    `SELECT 1 FROM inventory_bundle_components
+     WHERE bundle_inventory_id = $1 AND component_inventory_id = $2
+     LIMIT 1`,
+    [parentInventoryId, childId],
+  );
+  if (already.rowCount) {
+    throw new AppError(409, 'COMPONENT_EXISTS', 'That raw item is already part of this Tool Kit');
+  }
+
+  const itemResult = await db.query(`${inventorySelect} WHERE i.inventory_id = $1`, [childId]);
+  if (!itemResult.rowCount) {
+    throw new AppError(404, 'COMPONENT_NOT_FOUND', 'Raw inventory item was not found');
+  }
+  const componentItem = camelize(itemResult.rows[0]);
+  if (isLearningKitCategory(componentItem)) {
+    throw new AppError(422, 'INVALID_COMPONENT', 'Cannot use a Learning Kit as a Tool Kit raw item');
+  }
+  if (String(componentItem.lifecycleStatus || '').toUpperCase() === 'INACTIVE') {
+    throw new AppError(422, 'INVALID_COMPONENT', `Raw item "${componentItem.sku}" is inactive`);
+  }
+  const nestedBom = await listBundleComponents(childId, db);
+  if (nestedBom.length) {
+    throw new AppError(422, 'INVALID_COMPONENT', 'Cannot nest a parent Tool Kit inside another Tool Kit');
+  }
+  if (componentItem.categoryId !== parent.categoryId) {
+    throw new AppError(422, 'INVALID_COMPONENT', 'Shared raw items must belong to the same Tool Kit category');
+  }
+}
+
+/**
+ * Remove a raw child from a Tool Kit BOM and delete the raw inventory row
+ * when it is not used by any other kit.
+ */
+export async function removeToolKitChild(parentInventoryId, childInventoryId, adminId) {
+  return withTransaction(async (db) => {
+    const parent = await loadKitMeta(db, parentInventoryId);
+    if (!parent) throw new AppError(404, 'ITEM_NOT_FOUND', 'Tool Kit parent was not found');
+    if (!isToolKitCategory(parent)) {
+      throw new AppError(422, 'NOT_A_TOOL_KIT', 'Only Tool Kit parents support removing raw items this way');
+    }
+
+    const link = await db.query(
+      `DELETE FROM inventory_bundle_components
+       WHERE bundle_inventory_id = $1 AND component_inventory_id = $2
+       RETURNING component_row_id`,
+      [parentInventoryId, childInventoryId],
+    );
+    if (!link.rowCount) {
+      throw new AppError(404, 'COMPONENT_NOT_FOUND', 'That raw item is not part of this Tool Kit');
+    }
+
+    const stillUsed = await db.query(
+      `SELECT 1 FROM inventory_bundle_components WHERE component_inventory_id = $1 LIMIT 1`,
+      [childInventoryId],
+    );
+
+    if (!stillUsed.rowCount) {
+      const childMeta = await loadKitMeta(db, childInventoryId);
+      if (childMeta) {
+        await db.query('DELETE FROM stock_movements WHERE inventory_id = $1', [childInventoryId]);
+        await db.query('DELETE FROM inventory WHERE inventory_id = $1', [childInventoryId]);
+      }
+    }
+
+    await syncKitComputedStocks(parentInventoryId, adminId, db);
+    return getInventory(parentInventoryId, db);
   });
 }
 
@@ -412,12 +816,122 @@ export async function updateInventory(id, input, adminId) {
     }
 
     const meta = await loadKitMeta(db, id);
-    if (meta && isLearningKitCategory(meta)) {
+    if (meta && isVirtualKitCategory(meta)) {
       await syncKitComputedStocks(id, adminId, db);
     }
 
     return getInventory(id, db);
   });
+}
+
+async function assertInventoryItemDeletable(db, id, { skipKitComponentCheck = false } = {}) {
+  if (!skipKitComponentCheck) {
+    const asKitComponent = await db.query(
+      `SELECT 1 FROM inventory_bundle_components
+       WHERE component_inventory_id = $1
+       LIMIT 1`,
+      [id],
+    );
+    if (asKitComponent.rowCount) {
+      throw new AppError(
+        409,
+        'ITEM_IN_KIT_BOM',
+        'Cannot delete an item that is used as a kit component. Remove it from kit BOMs first.',
+      );
+    }
+  }
+
+  const orderMatches = await db.query(
+    `SELECT 1 FROM online_order_item_matches WHERE inventory_id = $1 LIMIT 1`,
+    [id],
+  );
+  if (orderMatches.rowCount) {
+    throw new AppError(
+      409,
+      'ITEM_IN_ONLINE_ORDERS',
+      'Cannot delete an item that is mapped to online order lines.',
+    );
+  }
+
+  const orderLines = await db.query(
+    `SELECT 1 FROM online_order_items WHERE matched_inventory_id = $1 LIMIT 1`,
+    [id],
+  );
+  if (orderLines.rowCount) {
+    throw new AppError(
+      409,
+      'ITEM_IN_ONLINE_ORDERS',
+      'Cannot delete an item that is linked to online order lines.',
+    );
+  }
+
+  const manualLines = await db.query(
+    `SELECT 1 FROM manual_order_items WHERE inventory_id = $1 LIMIT 1`,
+    [id],
+  );
+  if (manualLines.rowCount) {
+    throw new AppError(
+      409,
+      'ITEM_IN_MANUAL_ORDERS',
+      'Cannot delete an item that is linked to manual order lines.',
+    );
+  }
+
+  const activeStockRequests = await db.query(
+    `SELECT 1 FROM stock_requests
+     WHERE inventory_id = $1
+       AND status IN ('PENDING', 'SHIPPED')
+     LIMIT 1`,
+    [id],
+  );
+  if (activeStockRequests.rowCount) {
+    throw new AppError(
+      409,
+      'ITEM_IN_STOCK_REQUESTS',
+      'Cannot delete an item that still has pending or shipped stock requests.',
+    );
+  }
+}
+
+async function purgeInventoryItem(db, id) {
+  // Preserve request history text (matched_sku) but drop the live FK so DELETE can proceed.
+  await db.query(
+    `UPDATE stock_requests
+     SET inventory_id = NULL,
+         movement_id = NULL,
+         updated_at = NOW()
+     WHERE inventory_id = $1`,
+    [id],
+  );
+
+  await db.query('DELETE FROM channel_sku_mappings WHERE inventory_id = $1', [id]);
+  await db.query('DELETE FROM channel_stock_snapshots WHERE inventory_id = $1', [id]);
+  await db.query('DELETE FROM channel_allocation_logs WHERE inventory_id = $1', [id]);
+  await db.query('DELETE FROM inventory_bundle_components WHERE bundle_inventory_id = $1', [id]);
+
+  await db.query(
+    `UPDATE stock_requests
+     SET movement_id = NULL
+     WHERE movement_id IN (SELECT movement_id FROM stock_movements WHERE inventory_id = $1)`,
+    [id],
+  );
+  await db.query(
+    `UPDATE online_order_items
+     SET movement_id = NULL
+     WHERE movement_id IN (SELECT movement_id FROM stock_movements WHERE inventory_id = $1)`,
+    [id],
+  );
+  await db.query('DELETE FROM stock_movements WHERE inventory_id = $1', [id]);
+
+  const deleted = await db.query(
+    `DELETE FROM inventory WHERE inventory_id = $1
+     RETURNING inventory_id, sku, item_name`,
+    [id],
+  );
+  if (!deleted.rowCount) {
+    throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+  }
+  return deleted.rows[0];
 }
 
 /**
@@ -450,113 +964,114 @@ export async function deleteInventory(id, { confirmationName }, adminId) {
       );
     }
 
-    const asKitComponent = await db.query(
+    await assertInventoryItemDeletable(db, id);
+    const deleted = await purgeInventoryItem(db, id);
+
+    return camelize({
+      ...deleted,
+      deletedBy: adminId || null,
+    });
+  });
+}
+
+/**
+ * Permanently delete a category (admin).
+ * Requires confirmationName to match category_name exactly (trimmed).
+ * Also deletes inventory items in the category when safe (same blockers as item delete).
+ * Blocked when Learning Kits still list this category as a BOM slot.
+ */
+export async function deleteCategory(id, { confirmationName }, adminId) {
+  return withTransaction(async (db) => {
+    const categoryResult = await db.query(
+      `SELECT category_id, category_name
+       FROM categories
+       WHERE category_id = $1
+       FOR UPDATE`,
+      [id],
+    );
+    if (!categoryResult.rowCount) {
+      throw new AppError(404, 'NOT_FOUND', 'Category not found');
+    }
+
+    const category = categoryResult.rows[0];
+    const expected = String(category.category_name || '').trim();
+    const provided = String(confirmationName || '').trim();
+    if (!expected || provided !== expected) {
+      throw new AppError(
+        422,
+        'CONFIRMATION_NAME_MISMATCH',
+        'Type the exact category name to confirm deletion',
+      );
+    }
+
+    const kitSlotUse = await db.query(
       `SELECT 1 FROM inventory_bundle_components
-       WHERE component_inventory_id = $1
+       WHERE component_category_id = $1
+         AND component_inventory_id IS NULL
        LIMIT 1`,
       [id],
     );
-    if (asKitComponent.rowCount) {
+    if (kitSlotUse.rowCount) {
+      throw new AppError(
+        409,
+        'CATEGORY_IN_KIT_BOM',
+        'Cannot delete a category that is still used as a Learning Kit component slot. Remove it from kit BOMs first.',
+      );
+    }
+
+    const items = await db.query(
+      `SELECT inventory_id, item_name
+       FROM inventory
+       WHERE category_id = $1
+       FOR UPDATE`,
+      [id],
+    );
+
+    const externalKitUse = await db.query(
+      `SELECT i.item_name
+       FROM inventory_bundle_components bc
+       JOIN inventory i ON i.inventory_id = bc.component_inventory_id
+       JOIN inventory parent ON parent.inventory_id = bc.bundle_inventory_id
+       WHERE i.category_id = $1
+         AND parent.category_id <> $1
+       LIMIT 1`,
+      [id],
+    );
+    if (externalKitUse.rowCount) {
       throw new AppError(
         409,
         'ITEM_IN_KIT_BOM',
-        'Cannot delete an item that is used as a Learning Kit component. Remove it from kit BOMs first.',
+        `Cannot delete category: item "${externalKitUse.rows[0].item_name}" is used in another category's kit. Unlink it first.`,
       );
     }
 
-    const orderMatches = await db.query(
-      `SELECT 1 FROM online_order_item_matches WHERE inventory_id = $1 LIMIT 1`,
-      [id],
-    );
-    if (orderMatches.rowCount) {
-      throw new AppError(
-        409,
-        'ITEM_IN_ONLINE_ORDERS',
-        'Cannot delete an item that is mapped to online order lines.',
-      );
+    for (const item of items.rows) {
+      await assertInventoryItemDeletable(db, item.inventory_id, { skipKitComponentCheck: true });
     }
 
-    const orderLines = await db.query(
-      `SELECT 1 FROM online_order_items WHERE matched_inventory_id = $1 LIMIT 1`,
-      [id],
-    );
-    if (orderLines.rowCount) {
-      throw new AppError(
-        409,
-        'ITEM_IN_ONLINE_ORDERS',
-        'Cannot delete an item that is linked to online order lines.',
-      );
-    }
-
-    const manualLines = await db.query(
-      `SELECT 1 FROM manual_order_items WHERE inventory_id = $1 LIMIT 1`,
-      [id],
-    );
-    if (manualLines.rowCount) {
-      throw new AppError(
-        409,
-        'ITEM_IN_MANUAL_ORDERS',
-        'Cannot delete an item that is linked to manual order lines.',
-      );
-    }
-
-    const activeStockRequests = await db.query(
-      `SELECT 1 FROM stock_requests
-       WHERE inventory_id = $1
-         AND status IN ('PENDING', 'SHIPPED')
-       LIMIT 1`,
-      [id],
-    );
-    if (activeStockRequests.rowCount) {
-      throw new AppError(
-        409,
-        'ITEM_IN_STOCK_REQUESTS',
-        'Cannot delete an item that still has pending or shipped stock requests.',
-      );
-    }
-
-    // Preserve request history text (matched_sku) but drop the live FK so DELETE can proceed.
+    // Clear in-category kit links (parents + shared raw children) before removing items.
     await db.query(
-      `UPDATE stock_requests
-       SET inventory_id = NULL,
-           movement_id = NULL,
-           updated_at = NOW()
-       WHERE inventory_id = $1`,
+      `DELETE FROM inventory_bundle_components
+       WHERE bundle_inventory_id IN (SELECT inventory_id FROM inventory WHERE category_id = $1)
+          OR component_inventory_id IN (SELECT inventory_id FROM inventory WHERE category_id = $1)`,
       [id],
     );
 
-    // Clean dependent rows that would otherwise block DELETE.
-    await db.query('DELETE FROM channel_sku_mappings WHERE inventory_id = $1', [id]);
-    await db.query('DELETE FROM channel_stock_snapshots WHERE inventory_id = $1', [id]);
-    await db.query('DELETE FROM channel_allocation_logs WHERE inventory_id = $1', [id]);
-    await db.query('DELETE FROM inventory_bundle_components WHERE bundle_inventory_id = $1', [id]);
-
-    // Clear remaining movement FKs that point at this item's history, then remove movements.
-    await db.query(
-      `UPDATE stock_requests
-       SET movement_id = NULL
-       WHERE movement_id IN (SELECT movement_id FROM stock_movements WHERE inventory_id = $1)`,
-      [id],
-    );
-    await db.query(
-      `UPDATE online_order_items
-       SET movement_id = NULL
-       WHERE movement_id IN (SELECT movement_id FROM stock_movements WHERE inventory_id = $1)`,
-      [id],
-    );
-    await db.query('DELETE FROM stock_movements WHERE inventory_id = $1', [id]);
+    for (const item of items.rows) {
+      await purgeInventoryItem(db, item.inventory_id);
+    }
 
     const deleted = await db.query(
-      `DELETE FROM inventory WHERE inventory_id = $1
-       RETURNING inventory_id, sku, item_name`,
+      `DELETE FROM categories WHERE category_id = $1 RETURNING category_id, category_name`,
       [id],
     );
     if (!deleted.rowCount) {
-      throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
+      throw new AppError(404, 'NOT_FOUND', 'Category not found');
     }
 
     return camelize({
       ...deleted.rows[0],
+      deletedItemCount: items.rowCount,
       deletedBy: adminId || null,
     });
   });
@@ -573,11 +1088,12 @@ async function createMovementWithClient(db, inventoryId, input, adminId) {
   );
   if (!locked.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
 
-  if (isLearningKitCategory(locked.rows[0])) {
+  if (await isVirtualKitParentItem(locked.rows[0], db)) {
+    const label = isToolKitCategory(locked.rows[0]) ? 'Tool Kit' : 'Learning Kit';
     throw new AppError(
       422,
       'VIRTUAL_KIT_STOCK',
-      'Learning Kit stock is computed from components. Adjust raw item stock instead.',
+      `${label} stock is computed from components. Adjust raw item stock instead.`,
     );
   }
 
@@ -611,15 +1127,17 @@ export async function createMovement(inventoryId, input, adminId, db) {
 
 /**
  * Kit-aware stock movement (virtual kits).
- * Learning Kits with category-slot BOM require options.resolvedComponents
- * (filled by the external stock request). Then deduct those SKUs and sync kit availability.
+ * - Learning Kits with category-slot BOM require options.resolvedComponents
+ *   (filled by the external stock request).
+ * - Tool Kits with pinned child SKUs deduct those children automatically.
  */
 export async function createBundleAwareMovement(inventoryId, input, adminId, db, options = {}) {
   const run = async (client) => {
     const meta = await loadKitMeta(client, inventoryId);
     if (!meta) throw new AppError(404, 'ITEM_NOT_FOUND', 'Inventory item was not found');
 
-    const isKit = isLearningKitCategory(meta);
+    const isKit = await isVirtualKitParentItem(meta, client);
+    const kitLabel = isToolKitCategory(meta) ? 'Tool Kit' : 'Learning Kit';
     const isChannelAllocation = input.movementType === 'CHANNEL_ALLOCATION';
     const isDeduct = input.movementType === 'RELEASED'
       || input.movementType === 'ONLINE_SALE'
@@ -649,14 +1167,14 @@ export async function createBundleAwareMovement(inventoryId, input, adminId, db,
         throw new AppError(
           422,
           'KIT_COMPONENTS_REQUIRED',
-          'Learning Kit movements need concrete component items from the stock request (category slots are filled by the requester).',
+          `${kitLabel} movements need concrete component items from the stock request (category slots are filled by the requester).`,
         );
       }
     }
 
     if (isKit) {
       if (!toMove.length) {
-        throw new AppError(422, 'KIT_COMPONENTS_REQUIRED', 'Learning Kit movement requires concrete component items');
+        throw new AppError(422, 'KIT_COMPONENTS_REQUIRED', `${kitLabel} movement requires concrete component items`);
       }
 
       if (isDeduct) {
@@ -680,11 +1198,28 @@ export async function createBundleAwareMovement(inventoryId, input, adminId, db,
 
       const componentMovements = [];
       for (const component of toMove) {
-        const movement = await createMovementWithClient(client, component.inventoryId, {
-          ...input,
-          quantity: component.quantity,
-          remarks: `${input.remarks || 'Learning Kit movement'} · component ${component.sku || component.inventoryId}`.slice(0, 500),
-        }, adminId);
+        const componentMeta = await loadKitMeta(client, component.inventoryId);
+        let movement;
+        if (componentMeta && isToolKitCategory(componentMeta)) {
+          // Nested Tool Kit parent chosen as a Learning Kit component: deduct its raw children.
+          movement = await createBundleAwareMovement(
+            component.inventoryId,
+            {
+              ...input,
+              quantity: component.quantity,
+              remarks: `${input.remarks || `${kitLabel} movement`} · tool kit ${component.sku || component.inventoryId}`.slice(0, 500),
+            },
+            adminId,
+            client,
+            {},
+          );
+        } else {
+          movement = await createMovementWithClient(client, component.inventoryId, {
+            ...input,
+            quantity: component.quantity,
+            remarks: `${input.remarks || `${kitLabel} movement`} · component ${component.sku || component.inventoryId}`.slice(0, 500),
+          }, adminId);
+        }
         componentMovements.push(movement);
       }
 

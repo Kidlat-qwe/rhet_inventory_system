@@ -168,6 +168,44 @@ export default function AdminApiKeys({ clients, onRefresh }) {
         <button type="button" className="primary" onClick={openGenerateModal}>Generate API key</button>
       </div>
 
+      <section className="panel api-keys-docs-panel" aria-label="API Keys documentation">
+        <div className="panel-head">
+          <div>
+            <h2>Documentation</h2>
+            <p>Open guides in a new tab to learn how this page and partner keys work</p>
+          </div>
+        </div>
+        <div className="api-keys-docs-list">
+          <a
+            className="api-keys-doc-link"
+            href="/docs/api-key-management.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <strong>How API Keys work</strong>
+            <span>Generate, regenerate, revoke, and what to share with partners</span>
+          </a>
+          <a
+            className="api-keys-doc-link"
+            href="/docs/partner-onboarding.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <strong>Partner onboarding overview</strong>
+            <span>High-level flow for connecting an external system to RHET</span>
+          </a>
+          <a
+            className="api-keys-doc-link"
+            href="/docs/index.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <strong>All integration docs</strong>
+            <span>Index of in-app guides for admins and partner handoff</span>
+          </a>
+        </div>
+      </section>
+
       {error && !showGenerateModal && !revealed && <div className="page-error">{error}</div>}
 
       <section className="panel recent">

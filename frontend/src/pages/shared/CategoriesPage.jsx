@@ -5,18 +5,21 @@ import { DeleteCategoryModal } from '../../components/DeleteCategoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
-import { CATEGORY_TYPE_OPTIONS } from '../../constants/uniformOptions'
+import { categoryKindLabel } from '../../constants/uniformOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { createCategory, deleteCategory, updateCategory } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
 
-function kindLabel(kind) {
-  return CATEGORY_TYPE_OPTIONS.find((option) => option.value === kind)?.label || kind || 'Others'
-}
-
-export default function CategoriesPage({ categories, items = [], canManage = false, onRefresh }) {
+export default function CategoriesPage({
+  categories,
+  items = [],
+  canManage = false,
+  onRefresh,
+  onOpenInventory,
+}) {
   const [modal, setModal] = useState(null) // { mode: 'create' } | { mode: 'edit', category }
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [createdOffer, setCreatedOffer] = useState(null) // { categoryId, categoryName }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -28,16 +31,37 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
 
   const { page, setPage, pageItems, total } = usePagination(categories, 15)
 
-  async function saveCategory({ categoryName, categoryKind }) {
+  async function saveCategory({ categoryName, categoryKind, hasChildSkus }) {
     setBusy(true)
     setError('')
     try {
       if (modal?.mode === 'edit') {
-        await updateCategory(modal.category.categoryId, { categoryName, categoryKind })
+        await updateCategory(modal.category.categoryId, { categoryName, categoryKind, hasChildSkus })
+        setModal(null)
+        await onRefresh()
       } else {
-        await createCategory({ categoryName, categoryKind })
+        const created = await createCategory({ categoryName, categoryKind, hasChildSkus })
+        setModal(null)
+        await onRefresh()
+        setCreatedOffer({
+          categoryId: created.categoryId,
+          categoryName: created.categoryName || categoryName,
+        })
       }
-      setModal(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmDeleteCategory(category, confirmationName) {
+    if (!canManage || !category?.categoryId) return
+    setBusy(true)
+    setError('')
+    try {
+      await deleteCategory(category.categoryId, confirmationName || category.categoryName)
+      setDeleteTarget(null)
       await onRefresh()
     } catch (err) {
       setError(err.message)
@@ -46,18 +70,11 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
     }
   }
 
-  async function confirmDeleteCategory(category) {
-    if (!canManage || !category?.categoryId) return
-    setBusy(true)
-    setError('')
-    try {
-      await deleteCategory(category.categoryId)
-      setDeleteTarget(null)
-      await onRefresh()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
+  function openInventoryForCreated() {
+    const categoryId = createdOffer?.categoryId
+    setCreatedOffer(null)
+    if (categoryId && typeof onOpenInventory === 'function') {
+      onOpenInventory(categoryId)
     }
   }
 
@@ -97,12 +114,12 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
             </thead>
             <tbody>
               {pageItems.length ? pageItems.map((category) => {
-                const inUse = (itemCountByCategory.get(category.categoryId) || 0) > 0
+                const itemCount = itemCountByCategory.get(category.categoryId) || 0
                 return (
                   <tr key={category.categoryId}>
                     <td><strong>{category.categoryName}</strong></td>
-                    <td className="muted">{kindLabel(category.categoryKind)}</td>
-                    <td className="muted">{itemCountByCategory.get(category.categoryId) || 0}</td>
+                    <td className="muted">{categoryKindLabel(category.categoryKind, category.hasChildSkus)}</td>
+                    <td className="muted">{itemCount}</td>
                     <td><StatusBadge status={category.status} /></td>
                     <td className="muted">{formatDate(category.createdAt)}</td>
                     {canManage && (
@@ -116,10 +133,9 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
                               key: 'delete',
                               label: 'Delete',
                               danger: true,
-                              disabled: inUse,
-                              title: inUse
-                                ? 'Remove or move inventory items first — categories cannot be deleted from Inventory'
-                                : 'Delete category',
+                              title: itemCount
+                                ? `Delete category and ${itemCount} item${itemCount === 1 ? '' : 's'} (type name to confirm)`
+                                : 'Delete category (type name to confirm)',
                               onClick: () => {
                                 setError('')
                                 setDeleteTarget(category)
@@ -163,10 +179,30 @@ export default function CategoriesPage({ categories, items = [], canManage = fal
       {canManage && deleteTarget && (
         <DeleteCategoryModal
           category={deleteTarget}
+          itemCount={itemCountByCategory.get(deleteTarget.categoryId) || 0}
           busy={busy}
           onClose={() => !busy && setDeleteTarget(null)}
           onConfirm={confirmDeleteCategory}
         />
+      )}
+      {createdOffer && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setCreatedOffer(null)}>
+          <div className="modal modal-sm">
+            <div className="modal-head">
+              <div>
+                <h2>Category created</h2>
+                <p>
+                  <strong>{createdOffer.categoryName}</strong> is ready. Open Inventory to add items now, or stay on Categories.
+                </p>
+              </div>
+              <button type="button" onClick={() => setCreatedOffer(null)}>×</button>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary" onClick={() => setCreatedOffer(null)}>Stay here</button>
+              <button type="button" className="primary" onClick={openInventoryForCreated}>Open Inventory</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

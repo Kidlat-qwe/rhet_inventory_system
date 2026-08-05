@@ -28,7 +28,8 @@ export function isUniformLikeCategory(categoryOrName = '') {
   if (categoryOrName && typeof categoryOrName === 'object') {
     const kind = categoryOrName.categoryKind || categoryOrName.category_kind;
     if (UNIFORM_KINDS.has(kind)) return true;
-    if (kind === 'LEARNING_KIT' || kind === 'OTHER') return false;
+    if (kind === 'LEARNING_KIT' || kind === 'TOOL_KIT' || kind === 'OTHER') return false;
+    if (categoryOrName.hasChildSkus || categoryOrName.has_child_skus) return false;
     return isUniformLikeCategoryName(categoryOrName.categoryName || categoryOrName.category_name || '');
   }
   return isUniformLikeCategoryName(categoryOrName);

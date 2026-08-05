@@ -4,19 +4,21 @@ Reusable presentational and modal components used across admin and user pages.
 
 | File | Purpose |
 |------|---------|
-| `Icon.jsx` | SVG icon set |
+| `Icon.jsx` | SVG icon set (`grid`, `box`, `swap`, `report`, `tag`, `users`, `settings`, `link`, `list`, `cart`, `bell`, `help`, `back`, `search`) |
 | `EmptyState.jsx` | Empty list / no-data placeholder |
 | `PageLoading.jsx` | Full-page loading indicator |
-| `StatusBadge.jsx` | Status pill with color class |
-| `MovementTable.jsx` | Stock movement history table (optional order/notes column for online logs). Always shows column headers; empty state renders inside the table body. |
-| `Sidebar.jsx` | App navigation sidebar |
+| `ProcessingModal.jsx` | Global progress modal for mutating API calls (add / update / delete). Driven by `services/api.js`. |
+| `StatusBadge.jsx` | Status pill with color class. Optional `label` overrides display text (used for Shopee-aligned online-order fulfillment labels). |
+| `MovementTable.jsx` | Stock movement history table (optional order/notes column for online logs). `compact` hides Processed by for dashboard side-by-side layout. Always shows column headers; empty state renders inside the table body. |
+| `Sidebar.jsx` | App navigation sidebar; organization name from Settings |
 | `Header.jsx` | Top bar with breadcrumbs, stock-request notifications (count badge, toast alert, **Mark all as Read**), account menu (**Forgot password** / **Log out**) |
-| `CategoryModal.jsx` | Create / edit category. **Type** (behavior) can be reused; **name** must stay unique. Stores `categoryKind`. |
-| `DeleteCategoryModal.jsx` | Admin-only delete confirm: must type the exact category name before Delete is enabled. Categories with items cannot be deleted (Inventory has no category delete). |
+| `CategoryModal.jsx` | Create / edit category. Top type: **Uniform** (subtype: School / PE / Shirt), **Learning Kit**, **Others**. Others can enable **Parent items with child SKUs**. |
+| `DeleteCategoryModal.jsx` | Admin-only delete confirm: must type the exact category name. Can delete categories that still have items (cascades item delete when safe). |
 | `DeleteInventoryModal.jsx` | Admin-only delete confirm for an inventory item: must type the exact item name. Shows SKU; completed stock requests are unlinked; blocked for online orders / active requests / kit BOM. |
-| `ItemModal.jsx` | Create / edit a single inventory item. Requires **Selling price** (`price`) and **Internal selling price** (`internalSellingPrice`). For **Shirt** (`LCA_SHIRT`), shows Gender / **Logo** / Size. Non-uniform (**Others**, etc.): editing the item name regenerates the SKU. Uniform SKUs stay locked. |
-| `UniformItemModal.jsx` | Add / edit a uniform set. School Uniform: Male/Female. **PE Uniform: Unisex only** (Shirt + Pants). Each type line requires per-piece selling price + internal selling price. LCA T-Shirt uses `ItemModal` (logo field) instead of this set modal. |
-| `HelpAssistant.jsx` | Floating help button (bottom-right). Cleared from pagination via content/pager padding. Rule-based FAQ; toggle via `ENABLE_HELP_ASSISTANT` in `App.jsx`. |
+| `ItemModal.jsx` | Create / edit a single inventory item. Requires **Selling price** and **Internal selling price**. **Learning Kit**: category-slot BOM. **Tool Kit**: parent metadata only — raw children are added from the Tool Kit raw-items page modal. For **Shirt** (`LCA_SHIRT`), shows Gender / **Logo** / Size. Non-uniform SKUs regenerate on rename; uniform SKUs stay locked. |
+| `ToolKitRawItemModal.jsx` | Popup to add a Tool Kit raw child: **Create new** or **Use existing** (shared SKU/stock across parents). Typing a name that already exists prompts to link the shared item. |
+| `UniformItemModal.jsx` | Add / edit School or PE uniform. Toggle **Per piece** (Polo+Short / Shirt+Pants, each own stock) or **Set** (one SKU with independent set stock, type `Set` / SKU code `SET`). LCA T-Shirt uses `ItemModal` instead. |
+| `HelpAssistant.jsx` | Floating help button (bottom-right). Cleared from pagination via content/pager padding. Rule-based FAQ; visibility from org Settings (`helpAssistantEnabled`). |
 | `ActionsMenu.jsx` | Floating ellipsis (•••) actions menu rendered in a portal |
 | `Pagination.jsx` | Presentational pager (pairs with the `usePagination` hook) |
 | `StockModal.jsx` | Add / deduct / adjust stock form |

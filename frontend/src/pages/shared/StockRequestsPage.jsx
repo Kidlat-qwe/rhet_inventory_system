@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { useSettings } from '../../context/SettingsContext'
 import { usePagination } from '../../hooks/usePagination'
 import {
   rejectStockRequest,
@@ -31,6 +32,7 @@ function detailValue(value) {
 }
 
 export default function StockRequestsPage({ requests, onRefresh, admin }) {
+  const settings = useSettings()
   const [filter, setFilter] = useState('PENDING')
   const [branchFilter, setBranchFilter] = useState('')
   const [branchMenuOpen, setBranchMenuOpen] = useState(false)
@@ -206,6 +208,8 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
         branchName: batchRequests[0].branchName,
         requests: batchRequests,
         printedBy: admin?.fullName || '',
+        organizationName: settings.organizationName,
+        timezone: settings.timezone,
       })
     } catch (err) {
       setError(err.message || 'Unable to open print window.')

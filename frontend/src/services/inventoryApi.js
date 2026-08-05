@@ -11,6 +11,9 @@ function queryString(params = {}) {
 
 export const fetchMe = () => api('/me').then((response) => response.data)
 export const fetchDashboard = () => api('/dashboard').then((response) => response.data)
+export const fetchSettings = () => api('/settings').then((response) => response.data)
+export const updateSettings = (body) =>
+  api('/settings', { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
 export const fetchCategories = () => api('/categories').then((response) => response.data)
 export const fetchUsers = () => api('/users').then((response) => response.data)
 
@@ -78,6 +81,12 @@ export const rejectStockRequest = (id, rejectionReason) =>
 export const createInventoryItem = (body) =>
   api('/inventory', { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 
+export const createToolKitChildItem = (parentId, body) =>
+  api(`/inventory/${parentId}/tool-kit-children`, { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
+
+export const removeToolKitChildItem = (parentId, childId) =>
+  api(`/inventory/${parentId}/tool-kit-children/${childId}`, { method: 'DELETE' }).then((response) => response.data)
+
 export const batchCreateInventory = (items) =>
   api('/inventory/batch', { method: 'POST', body: JSON.stringify({ items }) }).then((response) => response.data)
 
@@ -93,17 +102,24 @@ export const deleteInventoryItem = (id, confirmationName) =>
 export const createStockMovement = (id, body) =>
   api(`/inventory/${id}/movements`, { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 
-export const createCategory = ({ categoryName, categoryKind = 'OTHER' }) =>
-  api('/categories', { method: 'POST', body: JSON.stringify({ categoryName, categoryKind }) }).then((response) => response.data)
+export const createCategory = ({ categoryName, categoryKind = 'OTHER', hasChildSkus = false }) =>
+  api('/categories', {
+    method: 'POST',
+    body: JSON.stringify({ categoryName, categoryKind, hasChildSkus: Boolean(hasChildSkus) }),
+  }).then((response) => response.data)
 
-export const updateCategory = (categoryId, { categoryName, categoryKind }) =>
+export const updateCategory = (categoryId, { categoryName, categoryKind, hasChildSkus }) =>
   api(`/categories/${categoryId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       categoryName,
       ...(categoryKind ? { categoryKind } : {}),
+      ...(hasChildSkus !== undefined ? { hasChildSkus: Boolean(hasChildSkus) } : {}),
     }),
   }).then((response) => response.data)
 
-export const deleteCategory = (categoryId) =>
-  api(`/categories/${categoryId}`, { method: 'DELETE' }).then((response) => response.data)
+export const deleteCategory = (categoryId, confirmationName) =>
+  api(`/categories/${categoryId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmationName }),
+  }).then((response) => response.data)

@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  UNIFORM_SET_TYPE,
   buildUniformVariation,
   generateUniqueSku,
   getUniformGendersForCategory,
   getUniformSizesForCategory,
   getUniformTypesForCategory,
+  isUniformSetType,
   parseUniformVariation,
 } from '../constants/uniformOptions'
+import { useSettings } from '../context/SettingsContext'
 import { normalizeInventoryText } from '../utils/format'
 
 function buildUniformItemName(categoryName, type) {
   const name = String(categoryName || '').trim()
   const typeLabel = String(type || '').trim()
   if (!typeLabel) return normalizeInventoryText(name).slice(0, 180)
+  if (isUniformSetType(typeLabel)) {
+    return normalizeInventoryText(`${name} set`).slice(0, 180)
+  }
   // Avoid "LCA T-Shirt Shirt" when the category already includes the type word.
   if (name.toLowerCase().includes(typeLabel.toLowerCase())) {
     return normalizeInventoryText(name).slice(0, 180)
@@ -20,19 +26,23 @@ function buildUniformItemName(categoryName, type) {
   return normalizeInventoryText(`${name} ${typeLabel}`).slice(0, 180)
 }
 
+function emptyLine(type, categoryName = '') {
+  return {
+    itemName: buildUniformItemName(categoryName, type),
+    stocks: 0,
+    price: '',
+    internalSellingPrice: '',
+    remarks: '',
+    inventoryId: null,
+    sku: '',
+    previousStocks: 0,
+  }
+}
+
 function emptyLines(types, categoryName = '') {
   return types.reduce((acc, type) => ({
     ...acc,
-    [type]: {
-      itemName: buildUniformItemName(categoryName, type),
-      stocks: 0,
-      price: '',
-      internalSellingPrice: '',
-      remarks: '',
-      inventoryId: null,
-      sku: '',
-      previousStocks: 0,
-    },
+    [type]: emptyLine(type, categoryName),
   }), {})
 }
 
@@ -47,13 +57,22 @@ function resolveUniformFields(item) {
   return parseUniformVariation(item?.variation)
 }
 
-// Finds every inventory row in the same uniform "set" (same category + gender + size).
+/**
+ * Piece mates only (same category + gender + size). Excludes full-set SKUs
+ * so per-piece and set inventory stay independent.
+ */
 export function findUniformSetMates(seedItem, items = []) {
   const fields = resolveUniformFields(seedItem)
-  if (!seedItem?.categoryId || !fields.uniformGender || !fields.uniformSize) return [seedItem].filter(Boolean)
+  if (!seedItem?.categoryId || !fields.uniformGender || !fields.uniformSize) {
+    return [seedItem].filter(Boolean)
+  }
+  if (isUniformSetType(fields.uniformType)) {
+    return [seedItem].filter(Boolean)
+  }
   return items.filter((entry) => {
     if (entry.categoryId !== seedItem.categoryId) return false
     const other = resolveUniformFields(entry)
+    if (isUniformSetType(other.uniformType)) return false
     return other.uniformGender === fields.uniformGender && other.uniformSize === fields.uniformSize
   })
 }
@@ -78,10 +97,14 @@ function linesFromItems(types, setItems, categoryName = '') {
   return next
 }
 
-// Creates or edits the type rows for a uniform category as a set. School Uniform
-// pairs are Polo+Short (Male) or Blouse+Skirt (Female); PE is Shirt+Pants;
-// LCA T-Shirt is Logo 1 + Logo 2.
-// Pass `editSeed` to open in edit mode with both mates of that gender/size.
+function resolveSellMode(editSeed) {
+  if (!editSeed) return 'PIECE'
+  const fields = resolveUniformFields(editSeed)
+  return isUniformSetType(fields.uniformType) ? 'SET' : 'PIECE'
+}
+
+// Creates or edits School / PE uniform inventory.
+// Sell mode toggle: Per piece (Polo+Short / Shirt+Pants) or full Set (own stock).
 export function UniformItemModal({
   category,
   categories,
@@ -91,32 +114,44 @@ export function UniformItemModal({
   onClose,
   onSave,
 }) {
+  const settings = useSettings()
+  const defaultThreshold = settings.defaultLowStockThreshold ?? 20
   const isEdit = Boolean(editSeed?.inventoryId)
   const seedFields = resolveUniformFields(editSeed)
+  const initialMode = resolveSellMode(editSeed)
 
+  const [sellMode, setSellMode] = useState(initialMode)
   const [gender, setGender] = useState(isEdit ? seedFields.uniformGender || '' : '')
   const [size, setSize] = useState(isEdit ? seedFields.uniformSize || '' : '')
   const [lowStockThreshold, setLowStockThreshold] = useState(
-    isEdit ? (editSeed.lowStockThreshold ?? 20) : 20,
+    isEdit ? (editSeed.lowStockThreshold ?? defaultThreshold) : defaultThreshold,
   )
   const [lines, setLines] = useState({})
   const [hydrated, setHydrated] = useState(false)
 
-  const types = useMemo(
+  const isSetMode = sellMode === 'SET'
+  const pieceTypes = useMemo(
     () => getUniformTypesForCategory(category.categoryId, categories, gender),
     [category.categoryId, categories, gender],
   )
+  const types = useMemo(
+    () => (isSetMode ? [UNIFORM_SET_TYPE] : pieceTypes),
+    [isSetMode, pieceTypes],
+  )
+  const typesKey = types.join('|')
   const genders = useMemo(
     () => getUniformGendersForCategory(category.categoryId, categories),
     [category.categoryId, categories],
   )
   const sizes = useMemo(
-    () => getUniformSizesForCategory(category.categoryId, categories),
-    [category.categoryId, categories],
+    () => getUniformSizesForCategory(category.categoryId, categories, {
+      uniformSizes: settings.uniformSizes,
+      shirtSizes: settings.shirtSizes,
+    }),
+    [category.categoryId, categories, settings.uniformSizes, settings.shirtSizes],
   )
-  const isPair = types.length > 1
+  const isPair = !isSetMode && types.length > 1
 
-  // PE Uniform is Unisex-only — auto-select so the type/size form opens immediately.
   useEffect(() => {
     if (isEdit) return
     if (genders.length === 1 && gender !== genders[0]) {
@@ -129,35 +164,51 @@ export function UniformItemModal({
     [isEdit, editSeed, items],
   )
 
-  // Create mode: rebuild empty lines when the type pair changes with gender.
-  // Edit mode: hydrate once from the existing set mates.
+  // Create: rebuild empty lines only when sell mode / piece types change — not on every keystroke.
+  // Edit: hydrate once from existing rows.
   useEffect(() => {
     if (isEdit) {
       if (!hydrated && types.length) {
         const seed = setMates[0] || editSeed
-        setLines(linesFromItems(types, setMates, category.categoryName))
-        setLowStockThreshold(seed?.lowStockThreshold ?? 20)
+        if (isSetMode) {
+          setLines({
+            [UNIFORM_SET_TYPE]: {
+              itemName: normalizeInventoryText(
+                seed?.itemName || buildUniformItemName(category.categoryName, UNIFORM_SET_TYPE),
+              ),
+              stocks: seed?.stocks ?? 0,
+              previousStocks: seed?.stocks ?? 0,
+              price: seed?.price ?? '',
+              internalSellingPrice: seed?.internalSellingPrice ?? '',
+              remarks: seed?.remarks || '',
+              inventoryId: seed?.inventoryId || null,
+              sku: seed?.sku || '',
+            },
+          })
+        } else {
+          setLines(linesFromItems(types, setMates, category.categoryName))
+        }
+        setLowStockThreshold(seed?.lowStockThreshold ?? defaultThreshold)
         setHydrated(true)
       }
       return
     }
     setLines(emptyLines(types, category.categoryName))
-  }, [types, isEdit, hydrated, setMates, editSeed, category.categoryName])
+    // typesKey avoids resetting when `types` is a new array with the same contents.
+  }, [typesKey, isEdit, hydrated, setMates, editSeed, category.categoryName, isSetMode, types])
+
+  function onSellModeChange(mode) {
+    if (isEdit || mode === sellMode) return
+    setSellMode(mode)
+    setHydrated(false)
+    setLines({})
+  }
 
   const setLine = (type, key, value) =>
     setLines((current) => ({
       ...current,
       [type]: {
-        ...(current[type] || {
-          itemName: buildUniformItemName(category.categoryName, type),
-          stocks: 0,
-          price: '',
-          internalSellingPrice: '',
-          remarks: '',
-          inventoryId: null,
-          sku: '',
-          previousStocks: 0,
-        }),
+        ...(current[type] || emptyLine(type, category.categoryName)),
         [key]: value,
       },
     }))
@@ -215,26 +266,67 @@ export function UniformItemModal({
     onSave(payload, { isEdit })
   }
 
+  const priceLabel = isSetMode ? 'Set selling price (₱) *' : 'Per-piece selling price (₱) *'
+  const modeHint = (() => {
+    if (!gender) {
+      return isSetMode
+        ? 'Select gender and size for this full uniform set (own stock, not based on pieces).'
+        : 'Select a gender to see the piece types that will be created.'
+    }
+    if (isEdit) {
+      return isSetMode
+        ? `Editing set for ${gender} · ${size}. Stock is independent of per-piece items.`
+        : isPair
+          ? `Editing ${types.join(' and ')} for ${gender} · ${size}.`
+          : `Editing ${types[0] || 'item'} for ${gender} · ${size}.`
+    }
+    if (isSetMode) {
+      return `Creates one ${category.categoryName} set SKU for ${gender} · ${size} with its own stock.`
+    }
+    return isPair
+      ? `Creates ${types.join(' and ')} together for the selected gender and size.`
+      : `Creates a new ${types[0] || 'item'}.`
+  })()
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <form className={`modal uniform-modal ${isPair ? 'uniform-modal-pair' : 'uniform-modal-single'}`} onSubmit={submit}>
         <div className="modal-head">
           <div>
             <h2>{isEdit ? `Edit ${category.categoryName}` : `Add ${category.categoryName}`}</h2>
-            <p>
-              {!gender
-                ? 'Select a gender to see the types that will be created.'
-                : isEdit
-                  ? isPair
-                    ? `Editing ${types.join(' and ')} for ${gender} · ${size}.`
-                    : `Editing ${types[0] || 'item'} for ${gender} · ${size}.`
-                  : isPair
-                    ? `Creates ${types.join(' and ')} together for the selected gender and size.`
-                    : `Creates a new ${types[0] || 'item'}.`}
-            </p>
+            <p>{modeHint}</p>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </div>
+
+        <div className="kit-raw-mode-tabs" role="tablist" aria-label="Uniform sell mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isSetMode}
+            className={!isSetMode ? 'selected' : undefined}
+            disabled={isEdit}
+            onClick={() => onSellModeChange('PIECE')}
+          >
+            Per piece
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isSetMode}
+            className={isSetMode ? 'selected' : undefined}
+            disabled={isEdit}
+            onClick={() => onSellModeChange('SET')}
+          >
+            Set
+          </button>
+        </div>
+        {isEdit && (
+          <p className="field-hint uniform-mode-lock-hint">
+            Sell mode is locked for an existing item ({isSetMode ? 'Set' : 'Per piece'}).
+          </p>
+        )}
+
         <div className="form-grid form-grid-3">
           <label>Gender *
             <select
@@ -246,7 +338,7 @@ export function UniformItemModal({
               <option value="">Select gender</option>
               {genders.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
-            {isEdit && <small className="field-hint">Gender is locked for an existing set.</small>}
+            {isEdit && <small className="field-hint">Gender is locked for an existing item.</small>}
           </label>
           <label>Size *
             <select
@@ -258,7 +350,7 @@ export function UniformItemModal({
               <option value="">Select size</option>
               {sizes.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
-            {isEdit && <small className="field-hint">Size is locked for an existing set.</small>}
+            {isEdit && <small className="field-hint">Size is locked for an existing item.</small>}
           </label>
           <label>Low-stock threshold *
             <input required type="number" min="0" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} />
@@ -269,12 +361,12 @@ export function UniformItemModal({
             {types.map((type) => {
               const skuValue = skus[type] || lines[type]?.sku || ''
               const skuPlaceholder = isEdit
-                ? 'Missing from set'
+                ? 'Missing SKU'
                 : (gender && size ? 'Generating…' : 'Select gender & size first')
               return (
                 <div key={type} className="uniform-line">
                   <div className="uniform-line-head">
-                    <strong>{type}</strong>
+                    <strong>{isSetMode ? 'Full set' : type}</strong>
                   </div>
                   <div className="uniform-line-grid">
                     <label>Item name *
@@ -285,7 +377,7 @@ export function UniformItemModal({
                         disabled={isEdit && !lines[type]?.inventoryId}
                         value={lines[type]?.itemName ?? ''}
                         onChange={(e) => setLine(type, 'itemName', normalizeInventoryText(e.target.value))}
-                        placeholder="enter-item-name"
+                        placeholder={isSetMode ? 'school-uniform-set' : 'enter-item-name'}
                       />
                       <small className="field-hint">Lowercase; spaces become hyphens. SKU stays auto-generated.</small>
                     </label>
@@ -297,9 +389,13 @@ export function UniformItemModal({
                         placeholder={skuPlaceholder}
                         tabIndex={-1}
                       />
-                      <small className="field-hint">Auto-generated from category, gender, type, and size.</small>
+                      <small className="field-hint">
+                        {isSetMode
+                          ? 'Auto-generated with SET type code (own stock SKU).'
+                          : 'Auto-generated from category, gender, type, and size.'}
+                      </small>
                     </label>
-                    <label>Per-piece selling price (₱) *
+                    <label>{priceLabel}
                       <input
                         required
                         type="number"
@@ -330,6 +426,9 @@ export function UniformItemModal({
                         value={lines[type]?.stocks ?? 0}
                         onChange={(e) => setLine(type, 'stocks', e.target.value)}
                       />
+                      {isSetMode && (
+                        <small className="field-hint">Independent of per-piece stock.</small>
+                      )}
                     </label>
                     <label className="uniform-line-remarks">Remarks
                       <textarea
@@ -350,13 +449,17 @@ export function UniformItemModal({
           <p className="uniform-gender-hint">
             {genders.length === 1
               ? `PE Uniform uses ${genders[0]} only. Select a size to continue.`
-              : 'Choose Male or Female first. For School Uniform, Female uses Blouse and Skirt.'}
+              : 'Choose Male or Female first. For School Uniform, Female per-piece uses Blouse and Skirt.'}
           </p>
         )}
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
           <button className="primary" disabled={busy || !ready}>
-            {busy ? 'Saving…' : isEdit ? 'Save set' : isPair ? 'Add set' : 'Add item'}
+            {busy
+              ? 'Saving…'
+              : isEdit
+                ? (isSetMode ? 'Save set' : 'Save pieces')
+                : (isSetMode ? 'Add set' : isPair ? 'Add pieces' : 'Add item')}
           </button>
         </div>
       </form>

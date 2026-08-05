@@ -51,10 +51,14 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
 
 - `categories (1) → (many) inventory`: every item belongs to a controlled category.
 - `inventory (1) → (many) stock_movements`: the immutable transaction history for an item.
-- `inventory (1) → (many) inventory_bundle_components`: Learning Kit bill of materials — **category slots**; concrete SKUs come from stock-request `components[]`. Available kit stock is **computed** from category totals (virtual bundle).
-- `stock_requests (1) → (many) stock_request_components`: request-time component specs for Learning Kits (uniform attrs or item name/SKU).
+- `categories.has_child_skus`: when true (typically with `OTHER`), items can be parent kits with raw child SKUs (former Tool Kit behavior). Existing Tool Kit rows were migrated to `OTHER` + this flag.
+- `inventory (1) → (many) inventory_bundle_components`: Kit bill of materials.
+  - **Learning Kit**: category slots; concrete SKUs come from stock-request `components[]`. Available kits = min across category totals.
+  - **Child-SKU categories** (e.g. Tool Kit via Others + toggle): parent kits share raw child SKUs. Click the parent name to open the raw-items page. Same part can be linked to multiple parents and keeps one stock pool. Available kits = min across that kit's raw stocks.
+- `stock_requests (1) → (many) stock_request_components`: request-time component specs for Learning Kits (uniform attrs or item name/SKU). Child-SKU kit requests use the pinned BOM (no `components[]` required).
 - `users (1) → (many) stock_movements`: records the responsible authenticated user.
 - `users` also relates to inventory through `created_by` and `updated_by`.
+- `system_settings`: singleton JSON document for org defaults (branding, timezone, low-stock default, couriers, uniform sizes, Help Assistant).
 
 IDs are UUIDs, money is `NUMERIC(12,2)`, quantities are non-negative integers, identifiers and emails are unique, timestamps are timezone-aware, and foreign keys prevent orphan records. Search, status, category, update-time, and movement-history indexes cover common access paths. Timestamp updates are explicitly written by the API rather than PostgreSQL trigger functions, keeping the schema usable on Windows installations where Application Control blocks `plpgsql.dll`.
 
@@ -69,6 +73,8 @@ All paths except health require `Authorization: Bearer <Firebase ID token>`. Res
 | GET | `/health` | Load-balancer health check |
 | GET | `/api/v1/me` | Current PostgreSQL admin profile |
 | GET | `/api/v1/dashboard` | Counts, value, alerts, category summary, recent activity |
+| GET | `/api/v1/settings` | Org settings (authenticated) |
+| PATCH | `/api/v1/settings` | Update org settings (admin) |
 | GET/POST | `/api/v1/categories` | List/create categories |
 | GET/POST | `/api/v1/inventory` | Filtered, sorted list/create item |
 | GET/PATCH | `/api/v1/inventory/:id` | Read/edit/archive item metadata |

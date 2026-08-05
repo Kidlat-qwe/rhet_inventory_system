@@ -12,6 +12,7 @@ const icons = {
   bell: <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></>,
   help: <><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>,
   back: <><path d="M19 12H5M12 19l-7-7 7-7"/></>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></>,
 }
 
 export function Icon({ name, size = 20 }) {

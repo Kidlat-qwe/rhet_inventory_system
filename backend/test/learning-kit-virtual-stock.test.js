@@ -15,9 +15,24 @@ test('computeAvailableKits returns 0 for empty BOM', async () => {
   assert.equal(await computeAvailableKits([]), 0);
 });
 
-test('isLearningKitCategoryName matches Learning Kit only', () => {
-  assert.equal(isLearningKitCategoryName('Learning Kit'), true);
-  assert.equal(isLearningKitCategoryName('Backpack'), false);
+test('isToolKitCategoryName matches Tool Kit only', async () => {
+  const { isToolKitCategoryName, isVirtualKitCategory, isToolKitCategory } = await import('../src/services/inventory.service.js');
+  assert.equal(isToolKitCategoryName('Tool Kit'), true);
+  assert.equal(isToolKitCategoryName('Learning Kit'), false);
+  assert.equal(isVirtualKitCategory({ category_kind: 'TOOL_KIT' }), true);
+  assert.equal(isVirtualKitCategory({ category_kind: 'OTHER' }), false);
+  assert.equal(isToolKitCategory({ category_kind: 'OTHER', has_child_skus: true }), true);
+  assert.equal(isToolKitCategory({ category_kind: 'OTHER', hasChildSkus: true }), true);
+  assert.equal(isToolKitCategory({ category_kind: 'OTHER', has_child_skus: false }), false);
+});
+
+test('computeAvailableKits pinned BOM matches scarcest raw item', async () => {
+  const available = await computeAvailableKits([
+    { isPinned: true, stocks: 49, quantity: 1 },
+    { isPinned: true, stocks: 30, quantity: 1 },
+    { isPinned: true, stocks: 40, quantity: 1 },
+  ]);
+  assert.equal(available, 30);
 });
 
 test('deriveStockStatus follows computed kit quantity', async () => {

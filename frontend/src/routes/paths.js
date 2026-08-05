@@ -7,6 +7,7 @@ export const PAGE_BY_SLUG = {
   categories: 'Categories',
   'api-keys': 'API Keys',
   users: 'Users',
+  settings: 'Settings',
   'online-orders': 'Online Orders',
   'manual-orders': 'Manual Orders',
 }
@@ -26,6 +27,7 @@ export const ADMIN_PAGES = [
   'Categories',
   'API Keys',
   'Users',
+  'Settings',
 ]
 
 export const USER_PAGES = [

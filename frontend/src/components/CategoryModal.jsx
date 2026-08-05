@@ -1,21 +1,36 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CATEGORY_TYPE_OPTIONS } from '../constants/uniformOptions'
+import { useMemo, useState } from 'react'
+import {
+  CATEGORY_TYPE_OPTIONS,
+  UNIFORM_SUBTYPE_OPTIONS,
+  isUniformFamilyKind,
+} from '../constants/uniformOptions'
 
-function suggestedNameForType(typeValue, existingNames) {
-  const option = CATEGORY_TYPE_OPTIONS.find((entry) => entry.value === typeValue)
-  if (!option || typeValue === 'OTHER') return ''
-  const base = option.categoryName
-  if (!existingNames.has(base.toLowerCase())) return base
-  let n = 2
-  while (existingNames.has(`${base} ${n}`.toLowerCase())) n += 1
-  return `${base} ${n}`
+function resolveUiType(categoryKind) {
+  if (isUniformFamilyKind(categoryKind)) return 'UNIFORM'
+  if (categoryKind === 'LEARNING_KIT') return 'LEARNING_KIT'
+  return 'OTHER'
+}
+
+function resolveUniformSubtype(categoryKind) {
+  return isUniformFamilyKind(categoryKind) ? categoryKind : 'SCHOOL_UNIFORM'
+}
+
+function namePlaceholder(uiType, uniformSubtype) {
+  if (uiType === 'UNIFORM') {
+    const subtype = UNIFORM_SUBTYPE_OPTIONS.find((entry) => entry.value === uniformSubtype)
+    return subtype ? `e.g. ${subtype.categoryName}` : 'e.g. School Uniform'
+  }
+  if (uiType === 'LEARNING_KIT') return 'e.g. Learning Kit'
+  return 'e.g. Bag, Book, Tool Kit'
 }
 
 export function CategoryModal({ category = null, categories = [], busy, onClose, onSave }) {
   const isEdit = Boolean(category)
-  const [type, setType] = useState(category?.categoryKind || 'OTHER')
+  const initialKind = category?.categoryKind || 'OTHER'
+  const [uiType, setUiType] = useState(() => resolveUiType(initialKind))
+  const [uniformSubtype, setUniformSubtype] = useState(() => resolveUniformSubtype(initialKind))
   const [name, setName] = useState(category?.categoryName || '')
-  const [nameTouched, setNameTouched] = useState(isEdit)
+  const [hasChildSkus, setHasChildSkus] = useState(Boolean(category?.hasChildSkus) || initialKind === 'TOOL_KIT')
 
   const existingNames = useMemo(
     () => new Set(
@@ -26,21 +41,22 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
     [categories, category],
   )
 
-  const selected = CATEGORY_TYPE_OPTIONS.find((option) => option.value === type) || CATEGORY_TYPE_OPTIONS.at(-1)
+  const resolvedKind = uiType === 'UNIFORM'
+    ? uniformSubtype
+    : uiType === 'LEARNING_KIT'
+      ? 'LEARNING_KIT'
+      : 'OTHER'
+
   const resolvedName = name.trim()
   const alreadyExists = resolvedName.length >= 2 && existingNames.has(resolvedName.toLowerCase())
   const canSubmit = !alreadyExists && resolvedName.length >= 2
 
-  useEffect(() => {
-    if (isEdit || nameTouched) return
-    setName(suggestedNameForType(type, existingNames))
-  }, [type, existingNames, isEdit, nameTouched])
-
-  function onTypeChange(value) {
-    setType(value)
-    if (!nameTouched) {
-      setName(suggestedNameForType(value, existingNames))
+  function onUiTypeChange(value) {
+    setUiType(value)
+    if (value === 'UNIFORM' && !isUniformFamilyKind(uniformSubtype)) {
+      setUniformSubtype('SCHOOL_UNIFORM')
     }
+    if (value !== 'OTHER') setHasChildSkus(false)
   }
 
   function submit(e) {
@@ -48,18 +64,22 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
     if (!canSubmit) return
     onSave({
       categoryName: resolvedName,
-      categoryKind: type,
+      categoryKind: resolvedKind,
+      hasChildSkus: resolvedKind === 'OTHER' ? hasChildSkus : false,
     })
   }
 
   const typeHint = (() => {
-    if (type === 'LEARNING_KIT') {
+    if (uiType === 'UNIFORM') {
+      return 'Choose School Uniform, PE Uniform, or Shirt. Each uses Gender / Type / Size (or Logo) fields on inventory items.'
+    }
+    if (uiType === 'LEARNING_KIT') {
       return 'Learning Kit behavior: virtual stock from included categories; concrete SKUs chosen on stock request.'
     }
-    if (type === 'OTHER') {
-      return 'Free-text variation items (bags, books, accessories, etc.).'
+    if (hasChildSkus) {
+      return 'Parent items can include raw child SKUs. Parent stock is how many complete sets can be built.'
     }
-    return 'Items in this category use Gender, Type, and Size. You can reuse this type with a different unique name.'
+    return 'Free-text variation items (bags, books, accessories, tool kits without child SKUs, etc.).'
   })()
 
   return (
@@ -70,49 +90,69 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
             <h2>{isEdit ? 'Edit category' : 'Add category'}</h2>
             <p>
               {isEdit
-                ? 'Rename this merchandise category. Behavior type stays the same unless you change it below.'
-                : 'Category type can be reused. Category name must be unique.'}
+                ? 'Update this merchandise category. Behavior follows the type and options below.'
+                : 'Pick a category type, then give it a unique name.'}
             </p>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </div>
         <div className="form-grid">
           <label>Category type *
-            <select
-              value={type}
-              onChange={(e) => (isEdit ? setType(e.target.value) : onTypeChange(e.target.value))}
-            >
+            <select value={uiType} onChange={(e) => onUiTypeChange(e.target.value)}>
               {CATEGORY_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <small className="field-hint">{typeHint}</small>
           </label>
-          <label>Category name *
+          {uiType === 'UNIFORM' && (
+            <label>Uniform type *
+              <select value={uniformSubtype} onChange={(e) => setUniformSubtype(e.target.value)}>
+                {UNIFORM_SUBTYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className={uiType === 'UNIFORM' ? 'full-width' : undefined}>Category name *
             <input
-              autoFocus
               required
-              minLength="2"
+              minLength={2}
               maxLength={100}
               value={name}
-              onChange={(e) => {
-                setNameTouched(true)
-                setName(e.target.value)
-              }}
-              placeholder={selected?.categoryName || 'e.g. Bag, Book, Accessory'}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={namePlaceholder(uiType, uniformSubtype)}
             />
-            {alreadyExists && <small className="field-hint">This category name already exists. Choose a unique name.</small>}
-            {!alreadyExists && !isEdit && (
-              <small className="field-hint">
-                Tip: keep a clear unique label (e.g. “Junior School Uniform”) while reusing the School Uniform type.
-              </small>
-            )}
+            <small className="field-hint">
+              Unique display name. You can reuse a type with a different name.
+            </small>
           </label>
+          {uiType === 'OTHER' && (
+            <label className="full-width category-toggle">
+              <span className="category-toggle-row">
+                <span>
+                  <strong>Parent items with child SKUs</strong>
+                  <small className="field-hint">
+                    When enabled, each item can include raw child SKUs. Parent stock is how many complete sets can be built from those children.
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hasChildSkus}
+                  className={`toggle-switch${hasChildSkus ? ' on' : ''}`}
+                  onClick={() => setHasChildSkus((value) => !value)}
+                  disabled={busy}
+                >
+                  <span className="toggle-knob" />
+                </button>
+              </span>
+            </label>
+          )}
         </div>
+        <p className="field-hint category-type-hint">{typeHint}</p>
+        {alreadyExists && <p className="form-error">A category with this name already exists.</p>}
         <div className="modal-actions">
-          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button>
           <button className="primary" disabled={busy || !canSubmit}>
             {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add category'}
           </button>

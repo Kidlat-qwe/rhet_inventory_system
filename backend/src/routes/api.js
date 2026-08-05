@@ -2,11 +2,11 @@ import { Router } from 'express';
 import { pool } from '../database/pool.js';
 import * as controller from '../controllers/inventory.controller.js';
 import { dashboardSummary } from '../services/dashboard.service.js';
-import { CATEGORY_KINDS, normalizeCategoryKind } from '../services/inventory.service.js';
+import { CATEGORY_KINDS, deleteCategory, normalizeCategoryKind } from '../services/inventory.service.js';
 import { asyncHandler, camelize, success } from '../utils/api.js';
 import { validate } from '../middleware/validate.js';
 import { requireAdminRole } from '../middleware/auth.js';
-import { createInventoryBatchSchema, createInventorySchema, deleteInventorySchema, idParams, listInventorySchema, movementListSchema, movementSchema, updateInventorySchema } from '../validation/schemas.js';
+import { createInventoryBatchSchema, createInventorySchema, createToolKitChildSchema, deleteCategorySchema, deleteInventorySchema, idParams, listInventorySchema, movementListSchema, movementSchema, removeToolKitChildSchema, updateInventorySchema } from '../validation/schemas.js';
 import {
   createIntegrationClientSchema,
   integrationSystemCodeParams,
@@ -20,11 +20,15 @@ import {
 } from '../validation/users.schemas.js';
 import * as integrationClientController from '../controllers/integration-client.controller.js';
 import * as usersController from '../controllers/users.controller.js';
+import * as settingsController from '../controllers/settings.controller.js';
+import { updateSettingsSchema } from '../validation/settings.schemas.js';
 
 export const api = Router();
 
 api.get('/me', (req, res) => success(res, camelize(req.admin)));
 api.get('/dashboard', asyncHandler(async (_req, res) => success(res, await dashboardSummary())));
+api.get('/settings', settingsController.get);
+api.patch('/settings', requireAdminRole, validate(updateSettingsSchema), settingsController.update);
 api.get('/categories', asyncHandler(async (_req, res) => {
   const result = await pool.query('SELECT * FROM categories ORDER BY category_name'); success(res, camelize(result.rows));
 }));
@@ -53,10 +57,19 @@ api.post('/categories', asyncHandler(async (req, res) => {
       },
     });
   }
+  const hasChildSkus = kind === 'OTHER'
+    ? Boolean(req.body.hasChildSkus ?? req.body.has_child_skus)
+    : false;
+  if (hasChildSkus && kind !== 'OTHER') {
+    return res.status(422).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Parent items with child SKUs are only available for Others categories' },
+    });
+  }
   try {
     const result = await pool.query(
-      'INSERT INTO categories(category_name, category_kind) VALUES($1, $2) RETURNING *',
-      [name, kind],
+      'INSERT INTO categories(category_name, category_kind, has_child_skus) VALUES($1, $2, $3) RETURNING *',
+      [name, kind, hasChildSkus],
     );
     success(res, camelize(result.rows[0]), null, 201);
   } catch (err) {
@@ -86,19 +99,55 @@ api.patch('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(
       },
     });
   }
+  const hasChildFlag = req.body.hasChildSkus !== undefined || req.body.has_child_skus !== undefined;
+  const hasChildSkus = hasChildFlag
+    ? Boolean(req.body.hasChildSkus ?? req.body.has_child_skus)
+    : null;
+
   try {
-    const result = hasKind
-      ? await pool.query(
-        'UPDATE categories SET category_name = $1, category_kind = $2, updated_at = NOW() WHERE category_id = $3 RETURNING *',
-        [name, kind, id],
-      )
-      : await pool.query(
-        'UPDATE categories SET category_name = $1, updated_at = NOW() WHERE category_id = $2 RETURNING *',
-        [name, id],
-      );
-    if (!result.rowCount) {
+    const current = await pool.query(
+      'SELECT category_id, category_kind, has_child_skus FROM categories WHERE category_id = $1',
+      [id],
+    );
+    if (!current.rowCount) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } });
     }
+    const nextKind = kind || current.rows[0].category_kind;
+    let nextHasChild = hasChildSkus;
+    if (nextHasChild === null) {
+      nextHasChild = Boolean(current.rows[0].has_child_skus);
+    }
+    if (nextKind !== 'OTHER') nextHasChild = false;
+    if (nextHasChild === false && Boolean(current.rows[0].has_child_skus)) {
+      const bom = await pool.query(
+        `SELECT 1
+         FROM inventory_bundle_components bc
+         JOIN inventory i ON i.inventory_id = bc.bundle_inventory_id
+         WHERE i.category_id = $1
+         LIMIT 1`,
+        [id],
+      );
+      if (bom.rowCount) {
+        return res.status(409).json({
+          success: false,
+          error: {
+            code: 'CATEGORY_HAS_CHILD_SKUS',
+            message: 'Turn off “Parent items with child SKUs” only after removing all parent/child BOM links in this category',
+          },
+        });
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE categories
+       SET category_name = $1,
+           category_kind = $2,
+           has_child_skus = $3,
+           updated_at = NOW()
+       WHERE category_id = $4
+       RETURNING *`,
+      [name, nextKind, nextHasChild, id],
+    );
     success(res, camelize(result.rows[0]));
   } catch (err) {
     if (err.code === '23505') {
@@ -110,17 +159,17 @@ api.patch('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(
     throw err;
   }
 }));
-api.delete('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const inUse = await pool.query('SELECT 1 FROM inventory WHERE category_id = $1 LIMIT 1', [id]);
-  if (inUse.rowCount) return res.status(409).json({ success:false, error:{ code:'CATEGORY_IN_USE', message:'Cannot delete a category that still has inventory items' } });
-  const result = await pool.query('DELETE FROM categories WHERE category_id = $1 RETURNING category_id', [id]);
-  if (!result.rowCount) return res.status(404).json({ success:false, error:{ code:'NOT_FOUND', message:'Category not found' } });
-  success(res, { categoryId: id });
+api.delete('/categories/:id', requireAdminRole, validate(deleteCategorySchema), asyncHandler(async (req, res) => {
+  const result = await deleteCategory(req.params.id, {
+    confirmationName: req.body.confirmationName,
+  }, req.admin.user_id);
+  success(res, result);
 }));
 api.get('/inventory', validate(listInventorySchema), asyncHandler(controller.list));
 api.post('/inventory', validate(createInventorySchema), asyncHandler(controller.create));
 api.post('/inventory/batch', validate(createInventoryBatchSchema), asyncHandler(controller.createBatch));
+api.post('/inventory/:id/tool-kit-children', validate(createToolKitChildSchema), asyncHandler(controller.createToolKitChild));
+api.delete('/inventory/:id/tool-kit-children/:childId', validate(removeToolKitChildSchema), asyncHandler(controller.removeToolKitChild));
 api.get('/inventory/:id', validate(idParams), asyncHandler(controller.get));
 api.patch('/inventory/:id', validate(updateInventorySchema), asyncHandler(controller.update));
 api.delete('/inventory/:id', requireAdminRole, validate(deleteInventorySchema), asyncHandler(controller.remove));

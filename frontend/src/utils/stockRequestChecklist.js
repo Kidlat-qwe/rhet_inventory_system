@@ -94,11 +94,11 @@ export function branchDisplayName(branchName) {
   return name || 'No branch'
 }
 
-/** Format date/time in Philippine Standard Time (Asia/Manila, UTC+8). */
-export function formatManilaDateTime(value = new Date()) {
+/** Format date/time in the configured org timezone (default Asia/Manila). */
+export function formatManilaDateTime(value = new Date(), timeZone = 'Asia/Manila') {
   const date = value instanceof Date ? value : new Date(value)
   return new Intl.DateTimeFormat('en-PH', {
-    timeZone: 'Asia/Manila',
+    timeZone: timeZone || 'Asia/Manila',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -109,11 +109,11 @@ export function formatManilaDateTime(value = new Date()) {
   }).format(date)
 }
 
-/** Format date only in Asia/Manila. */
-export function formatManilaDate(value = new Date()) {
+/** Format date only in the configured org timezone (default Asia/Manila). */
+export function formatManilaDate(value = new Date(), timeZone = 'Asia/Manila') {
   const date = value instanceof Date ? value : new Date(value)
   return new Intl.DateTimeFormat('en-PH', {
-    timeZone: 'Asia/Manila',
+    timeZone: timeZone || 'Asia/Manila',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -136,15 +136,23 @@ function uniqueRequesterNames(requests) {
 
 /**
  * Build printable HTML for a branch packing checklist.
- * @param {{ branchName: string, requests: object[], printedBy?: string, printedAt?: Date, logoUrl?: string }} options
+ * @param {{ branchName: string, requests: object[], printedBy?: string, printedAt?: Date, logoUrl?: string, organizationName?: string, timezone?: string }} options
  */
-export function buildChecklistHtml({ branchName, requests, printedBy = '', printedAt = new Date(), logoUrl = '' }) {
+export function buildChecklistHtml({
+  branchName,
+  requests,
+  printedBy = '',
+  printedAt = new Date(),
+  logoUrl = '',
+  organizationName = 'RHET Inventory System',
+  timezone = 'Asia/Manila',
+}) {
   const branch = branchDisplayName(branchName)
-  const when = formatManilaDateTime(printedAt)
-  const dispatcherDate = formatManilaDate(printedAt)
+  const when = formatManilaDateTime(printedAt, timezone)
   const dispatcherName = String(printedBy || '').trim() || '—'
   const requesterNames = uniqueRequesterNames(requests)
   const requesterDisplay = requesterNames.length ? requesterNames.join(', ') : '—'
+  const brandName = String(organizationName || '').trim() || 'RHET Inventory System'
   const logoSrc = logoUrl
     || (typeof window !== 'undefined' ? `${window.location.origin}/rhet-logo.png` : '/rhet-logo.png')
   const refs = requests
@@ -233,7 +241,7 @@ export function buildChecklistHtml({ branchName, requests, printedBy = '', print
     .head-meta strong { color: #172b54; }
     .summary {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 10px;
       margin: 0 0 18px;
     }
@@ -281,32 +289,36 @@ export function buildChecklistHtml({ branchName, requests, printedBy = '', print
     .warn { color: #a15c12; font-weight: 700; }
     .signs {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-top: 36px;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 20px;
     }
     .sign-box {
       border: 1px solid #d7dee6;
-      border-radius: 8px;
-      padding: 12px 14px 16px;
-      min-height: 110px;
+      border-radius: 6px;
+      padding: 8px 10px 10px;
+      min-height: 0;
     }
     .sign-box > strong {
       display: block;
-      font-size: 12px;
-      margin-bottom: 8px;
+      font-size: 10px;
+      margin-bottom: 4px;
       color: #172b54;
     }
     .sign-on-line {
-      margin-top: 28px;
+      margin-top: 14px;
       border-bottom: 1px solid #9aa3b2;
       text-align: center;
-      padding: 0 8px 3px;
-      min-height: 26px;
+      padding: 0 6px 2px;
+      min-height: 18px;
+    }
+    .sign-on-line.write-in {
+      margin-top: 18px;
+      min-height: 20px;
     }
     .sign-on-line .sign-value {
       display: inline-block;
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 700;
       color: #172b54;
       line-height: 1.2;
@@ -314,47 +326,46 @@ export function buildChecklistHtml({ branchName, requests, printedBy = '', print
     .sign-meta {
       display: block;
       text-align: center;
-      margin-top: 6px;
-      font-size: 10px;
+      margin-top: 4px;
+      font-size: 9px;
       color: #6d7788;
     }
     .sign-note {
       display: block;
       color: #6d7788;
-      font-size: 10px;
-      line-height: 1.45;
-      margin-top: 10px;
+      font-size: 8px;
+      line-height: 1.35;
+      margin-top: 6px;
     }
     .footnote {
-      margin-top: 18px;
+      margin-top: 12px;
       color: #6d7788;
-      font-size: 10px;
-      line-height: 1.5;
+      font-size: 9px;
+      line-height: 1.45;
       border-top: 1px solid #eef1f5;
-      padding-top: 10px;
+      padding-top: 8px;
     }
     @media print {
       body { padding: 10mm 12mm; }
       .summary div { background: #fff; }
       th { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .signs { grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 16px; }
+    }
+    @media (max-width: 720px) {
+      .signs { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <div class="sheet-head">
     <div class="brand-block">
-      <img class="brand-logo" src="${escapeHtml(logoSrc)}" alt="RHET logo" />
-      <p class="brand-mark">RHET Inventory System</p>
+      <img class="brand-logo" src="${escapeHtml(logoSrc)}" alt="${escapeHtml(brandName)} logo" />
+      <p class="brand-mark">${escapeHtml(brandName)}</p>
       <h1>Dispatch checklist</h1>
-    </div>
-    <div class="head-meta">
-      <div><strong>Printed (Asia/Manila)</strong><br/>${escapeHtml(when)}</div>
-      ${printedBy ? `<div style="margin-top:8px"><strong>Printed by</strong><br/>${escapeHtml(printedBy)}</div>` : ''}
     </div>
   </div>
   <div class="summary">
     <div><span>Branch</span><strong>${escapeHtml(branch)}</strong></div>
-    <div><span>Lines</span><strong>${requests.length}</strong></div>
     <div><span>References</span><strong>${escapeHtml(refs || '—')}</strong></div>
   </div>
   <table>
@@ -381,6 +392,11 @@ export function buildChecklistHtml({ branchName, requests, printedBy = '', print
       <span class="sign-note">Signature</span>
     </div>
     <div class="sign-box">
+      <strong>Courier / pickup</strong>
+      <div class="sign-on-line write-in"></div>
+      <span class="sign-note">Print name and sign on paper. Person who picks up from warehouse and delivers to the designated receiver.</span>
+    </div>
+    <div class="sign-box">
       <strong>Designated receiver</strong>
       <div class="sign-on-line">
         <span class="sign-value">${escapeHtml(requesterDisplay)}</span>
@@ -390,7 +406,8 @@ export function buildChecklistHtml({ branchName, requests, printedBy = '', print
   </div>
   <p class="footnote">
     Soft copy for courier pickup. Warehouse stock is deducted only after Confirm ship in RHET Inventory.
-    Paper receiver sign supports handoff; system delivery is confirmed by the branch in CMS.
+    Courier and receiver sign on paper for handoff; system delivery is confirmed by the branch in CMS.
+    Printed ${escapeHtml(when)}.
   </p>
 </body>
 </html>`

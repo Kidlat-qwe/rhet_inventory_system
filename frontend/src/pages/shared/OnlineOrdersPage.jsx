@@ -13,7 +13,7 @@ import {
   resolveOnlineOrderItem,
   updateOnlineOrderFulfillmentStatus,
 } from '../../services/onlineOrdersApi'
-import { formatCurrency, formatDate, formatStatus } from '../../utils/format'
+import { formatCurrency, formatDate, formatOnlineFulfillmentStatus, formatStatus } from '../../utils/format'
 
 const EMPTY_MANUAL_ITEM = {
   externalSku: '',
@@ -23,28 +23,31 @@ const EMPTY_MANUAL_ITEM = {
   unitPrice: 0,
 }
 
-// Delivery board tabs for Online Orders. Pre-ship statuses (Processing /
-// Ready to ship) still exist in the API for CSV sync, but the board shows
-// Shipped / Delivered / Returned only. Cancelled orders are filtered out of
-// these tabs.
-const FULFILLMENT_COLUMNS = [
-  'SHIPPED',
-  'DELIVERED',
-  'RETURNED',
+// Shopee Seller Centre–aligned board tabs. Internal codes stay the same;
+// stock still deducts when status becomes SHIPPED (Shipping).
+const FULFILLMENT_TABS = [
+  { key: 'ALL', label: 'All' },
+  { key: 'UNPAID', label: 'Unpaid', statuses: ['PROCESSING'] },
+  { key: 'TO_SHIP', label: 'To Ship', statuses: ['READY_TO_SHIP'] },
+  { key: 'SHIPPING', label: 'Shipping', statuses: ['SHIPPED'] },
+  { key: 'COMPLETED', label: 'Completed', statuses: ['DELIVERED'] },
+  { key: 'RETURN_REFUND_CANCEL', label: 'Return/Refund/Cancel', statuses: ['RETURNED', 'CANCELLED'] },
 ]
 
 const NEXT_FULFILLMENT_ACTION = {
-  PROCESSING: { status: 'SHIPPED', label: 'Mark shipped' },
-  READY_TO_SHIP: { status: 'SHIPPED', label: 'Mark shipped' },
-  SHIPPED: { status: 'DELIVERED', label: 'Mark delivered' },
+  PROCESSING: { status: 'READY_TO_SHIP', label: 'Mark To Ship' },
+  READY_TO_SHIP: { status: 'SHIPPED', label: 'Mark Shipping' },
+  SHIPPED: { status: 'DELIVERED', label: 'Mark Completed' },
 }
 
-function matchesFulfillmentTab(order, tab) {
-  const status = order?.fulfillmentStatus
-  if (tab === 'SHIPPED') {
-    return ['PROCESSING', 'READY_TO_SHIP', 'SHIPPED'].includes(status)
-  }
-  return status === tab
+function matchesFulfillmentTab(order, tabKey) {
+  const tab = FULFILLMENT_TABS.find((entry) => entry.key === tabKey)
+  if (!tab || tab.key === 'ALL') return true
+  return tab.statuses.includes(order?.fulfillmentStatus)
+}
+
+function fulfillmentTabLabel(tabKey) {
+  return FULFILLMENT_TABS.find((entry) => entry.key === tabKey)?.label || formatStatus(tabKey)
 }
 
 function detailValue(value) {
@@ -77,7 +80,7 @@ function formatMatchedSku(line) {
 }
 
 export default function OnlineOrdersPage({ orders, inventory, onRefresh, canManage = false }) {
-  const [filter, setFilter] = useState('SHIPPED')
+  const [filter, setFilter] = useState('ALL')
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(null)
@@ -99,7 +102,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
   const fileInputRef = useRef(null)
 
   const shown = useMemo(() => {
-    if (!filter) return orders
+    if (!filter || filter === 'ALL') return orders
     return orders.filter((order) => matchesFulfillmentTab(order, filter))
   }, [orders, filter])
 
@@ -111,9 +114,11 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
   )
 
   const tabCounts = useMemo(() => Object.fromEntries(
-    FULFILLMENT_COLUMNS.map((status) => [
-      status,
-      orders.filter((order) => matchesFulfillmentTab(order, status)).length,
+    FULFILLMENT_TABS.map((tab) => [
+      tab.key,
+      tab.key === 'ALL'
+        ? orders.length
+        : orders.filter((order) => matchesFulfillmentTab(order, tab.key)).length,
     ]),
   ), [orders])
 
@@ -405,8 +410,8 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
         <div>
           <h1>Online orders</h1>
           <p>
-            Fulfillment board for Shopee CSV/XLSX imports. Stock is deducted when an order is marked
-            <strong> Shipped</strong> (mapped lines only). Map unmatched items before shipping.
+            Shopee-style fulfillment board for CSV/XLSX imports. Stock is deducted when an order moves to
+            <strong> Shipping</strong> (mapped lines only). Map unmatched items before marking Shipping.
           </p>
         </div>
         {canManage && (
@@ -429,15 +434,15 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
       </div>
 
       <div className="quick-filters">
-        {FULFILLMENT_COLUMNS.map((status) => (
+        {FULFILLMENT_TABS.map((tab) => (
           <button
-            key={status}
+            key={tab.key}
             type="button"
-            className={filter === status ? 'selected' : ''}
-            onClick={() => { setFilter(status); setPage(1) }}
+            className={filter === tab.key ? 'selected' : ''}
+            onClick={() => { setFilter(tab.key); setPage(1) }}
           >
-            <span>{tabCounts[status] || 0}</span>
-            {formatStatus(status)}
+            <span>{tabCounts[tab.key] || 0}</span>
+            {tab.label}
           </button>
         ))}
         {attentionCount > 0 && (
@@ -477,7 +482,12 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                     {order.attentionCount > 0 && <small>{order.attentionCount} need attention</small>}
                   </td>
                   <td>{formatCurrency(order.totalAmount)}</td>
-                  <td><StatusBadge status={order.fulfillmentStatus} /></td>
+                  <td>
+                    <StatusBadge
+                      status={order.fulfillmentStatus}
+                      label={formatOnlineFulfillmentStatus(order.fulfillmentStatus)}
+                    />
+                  </td>
                   <td><StatusBadge status={order.orderStatus} /></td>
                   <td className="muted">{formatDate(order.orderPlacedAt || order.createdAt)}</td>
                   <td>
@@ -495,7 +505,9 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                 <tr>
                   <td colSpan={9}>
                     <EmptyState
-                      title={`No orders in ${formatStatus(filter).toLowerCase()}`}
+                      title={filter === 'ALL'
+                        ? 'No online orders yet'
+                        : `No orders in ${fulfillmentTabLabel(filter).toLowerCase()}`}
                       message={canManage ? 'Import a Shopee CSV/XLSX export or add an order manually to start tracking fulfillment.' : 'Online orders will appear here once they are imported.'}
                     />
                   </td>
@@ -565,7 +577,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
                       <td><StatusBadge status={row.resultingFulfillmentStatus} /></td>
                       <td>
                         {row.isNew ? 'New order' : row.fulfillmentWillChange
-                          ? `${formatStatus(row.currentFulfillmentStatus)} → ${formatStatus(row.proposedFulfillmentStatus)}`
+                          ? `${formatOnlineFulfillmentStatus(row.currentFulfillmentStatus)} → ${formatOnlineFulfillmentStatus(row.proposedFulfillmentStatus)}`
                           : 'Update details'}
                       </td>
                     </tr>
@@ -672,7 +684,10 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
             </div>
 
             <div className="request-detail-status online-order-detail-status">
-              <StatusBadge status={selected.fulfillmentStatus} />
+              <StatusBadge
+                status={selected.fulfillmentStatus}
+                label={formatOnlineFulfillmentStatus(selected.fulfillmentStatus)}
+              />
               <StatusBadge status={selected.orderStatus} />
               <span className="muted">Placed {formatDate(selected.orderPlacedAt || selected.createdAt)}</span>
             </div>
@@ -872,7 +887,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
             {canManage && showReturnForm && canMarkReturn && (
               <div className="request-detail-grid online-order-meta-grid" style={{ marginTop: '1rem' }}>
                 <div className="full">
-                  <span>Mark as returned</span>
+                  <span>Mark as Return/Refund</span>
                   <p className="field-hint">
                     Choose whether the returned item(s) can be resold. Reusable returns restore RHET stock;
                     the Shopee channel quantity is not affected either way.
@@ -911,7 +926,7 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
               )}
               {canManage && canMarkReturn && !showReturnForm && (
                 <button type="button" className="secondary" disabled={Boolean(busyId)} onClick={() => { setError(''); setShowReturnForm(true) }}>
-                  Mark as returned
+                  Mark as Return/Refund
                 </button>
               )}
               {canManage && selected.orderStatus !== 'CANCELLED' && selected.fulfillmentStatus !== 'CANCELLED' && selected.fulfillmentStatus !== 'RETURNED' && (

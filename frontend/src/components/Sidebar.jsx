@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom'
+import { useSettings } from '../context/SettingsContext'
 import { pathForPage } from '../routes/paths'
 import { formatStatus, initials } from '../utils/format'
 import { Icon } from './Icon'
 
 export function Sidebar({ open, close, admin, pendingRequests, attentionOrders = 0 }) {
+  const settings = useSettings()
   const isAdmin = String(admin?.role || 'ADMIN').toUpperCase() === 'ADMIN'
   const workspaceLinks = [
     ['Dashboard', 'grid'],
@@ -15,7 +17,7 @@ export function Sidebar({ open, close, admin, pendingRequests, attentionOrders =
     ['Stock Movements', 'swap'],
   ]
   const managementLinks = isAdmin
-    ? [['Categories', 'tag'], ['API Keys', 'link'], ['Users', 'users']]
+    ? [['Categories', 'tag'], ['API Keys', 'link'], ['Users', 'users'], ['Settings', 'settings']]
     : [['Categories', 'tag']]
 
   function linkClass({ isActive }) {
@@ -26,7 +28,7 @@ export function Sidebar({ open, close, admin, pendingRequests, attentionOrders =
     <aside className={`sidebar ${open ? 'open' : ''}`}>
       <div className="brand">
         <img className="brand-logo" src="/rhet-logo.png" alt="RHET logo" />
-        <div><strong>RHET Inventory System</strong><span>Merchandise Management</span></div>
+        <div><strong>{settings.organizationName || 'RHET Inventory System'}</strong><span>Merchandise Management</span></div>
         <button type="button" className="close-menu" onClick={close}>×</button>
       </div>
       <nav>

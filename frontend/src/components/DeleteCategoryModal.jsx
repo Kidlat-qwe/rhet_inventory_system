@@ -3,17 +3,19 @@ import { useState } from 'react'
 /**
  * Admin-only confirm before deleting a category.
  * User must type the exact category name to enable Delete.
+ * When the category has items, those items are deleted with the category (if safe).
  */
-export function DeleteCategoryModal({ category, busy, onClose, onConfirm }) {
+export function DeleteCategoryModal({ category, itemCount = 0, busy, onClose, onConfirm }) {
   const [typedName, setTypedName] = useState('')
   const expected = String(category?.categoryName || '').trim()
   const matches = typedName.trim() === expected
   const canDelete = Boolean(expected) && matches && !busy
+  const count = Number(itemCount) || 0
 
   function submit(e) {
     e.preventDefault()
     if (!canDelete) return
-    onConfirm(category)
+    onConfirm(category, typedName.trim())
   }
 
   return (
@@ -31,7 +33,17 @@ export function DeleteCategoryModal({ category, busy, onClose, onConfirm }) {
           <div className="delete-category-warning">
             You are about to permanently delete{' '}
             <strong>{expected || 'this category'}</strong>.
-            Categories that still have inventory items cannot be deleted.
+            {count > 0 ? (
+              <>
+                {' '}
+                This will also permanently delete{' '}
+                <strong>{count} inventory item{count === 1 ? '' : 's'}</strong> in this category
+                (and their stock history). Items linked to online/manual orders, pending stock requests,
+                or used outside this category as kit components cannot be deleted — the whole delete will fail.
+              </>
+            ) : (
+              <> Categories with no items are removed immediately after confirmation.</>
+            )}
           </div>
 
           <label>

@@ -134,6 +134,19 @@ const ALL_TOPICS = [
     },
   },
   {
+    id: 'settings',
+    roles: ['ADMIN'],
+    q: 'Where do I change org defaults (threshold, couriers, sizes)?',
+    answer: {
+      steps: [
+        'Go to **Settings** (Admin only) under Management.',
+        'Update organization name, timezone, default low-stock threshold, courier presets, and uniform/shirt sizes.',
+        'Toggle **Help Assistant** on or off for all signed-in users.',
+        'Click **Save settings**. New inventory items and Manual Orders pick up the new defaults immediately.',
+      ],
+    },
+  },
+  {
     id: 'notifications',
     q: 'How do notifications work?',
     answer: {

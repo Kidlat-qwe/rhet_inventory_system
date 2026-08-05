@@ -21,10 +21,20 @@ export const listInventorySchema = z.object({
 const money = z.coerce.number().min(0).max(9999999999.99);
 
 const bundleComponentBody = z.object({
-  categoryId: uuid,
-  // Category-only BOM on the kit. Concrete SKUs come from the external stock request.
+  // Learning Kit: categoryId required (slot). Tool Kit: inventoryId/componentInventoryId required (pinned).
+  categoryId: uuid.optional(),
+  inventoryId: uuid.optional(),
   componentInventoryId: uuid.optional().nullable(),
   quantity: z.coerce.number().int().positive().default(1).refine((v) => v === 1, 'Component quantity must be 1'),
+}).superRefine((row, ctx) => {
+  const pinnedId = row.inventoryId || row.componentInventoryId;
+  if (!row.categoryId && !pinnedId) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Each component requires categoryId (Learning Kit) or inventoryId (Tool Kit)',
+      path: ['categoryId'],
+    });
+  }
 });
 
 export const inventoryItemBody = z.object({
@@ -39,6 +49,46 @@ export const inventoryItemBody = z.object({
 });
 
 export const createInventorySchema = z.object({ body: inventoryItemBody, query: z.any(), params: z.any() });
+
+/** Create a new raw child SKU under a Tool Kit parent, or link an existing shared raw item.
+ * - Pass inventoryId to link an existing raw SKU.
+ * - Or pass itemName (+ sku/stocks…). Same-name raw items are auto-linked unless forceCreate=true.
+ */
+export const createToolKitChildSchema = z.object({
+  body: z.object({
+    inventoryId: uuid.optional(),
+    componentInventoryId: uuid.optional(),
+    forceCreate: z.boolean().optional().default(false),
+    sku: z.string().trim().min(2).max(64).transform((v) => v.toUpperCase()).optional(),
+    itemName: z.string().trim().min(2).max(180).optional(),
+    variation: optionalText(180),
+    price: money.default(0),
+    internalSellingPrice: money.default(0),
+    remarks: optionalText(500),
+    stocks: z.coerce.number().int().min(0).default(0),
+    lowStockThreshold: z.coerce.number().int().min(0).max(1000000).default(20),
+  }).superRefine((body, ctx) => {
+    if (body.inventoryId || body.componentInventoryId) return;
+    if (!body.itemName) {
+      ctx.addIssue({ code: 'custom', message: 'itemName is required when inventoryId is not provided', path: ['itemName'] });
+    }
+    if (body.forceCreate && !body.sku) {
+      ctx.addIssue({ code: 'custom', message: 'sku is required when creating a new raw item', path: ['sku'] });
+    }
+    // New create path (no existing match handled server-side) still needs sku from client.
+    if (!body.forceCreate && !body.sku && body.itemName) {
+      // sku optional when server may auto-link by name; required only if creating
+    }
+  }),
+  query: z.any(),
+  params: z.object({ id: uuid }),
+});
+
+export const removeToolKitChildSchema = z.object({
+  body: z.any(),
+  query: z.any(),
+  params: z.object({ id: uuid, childId: uuid }),
+});
 
 // Transactional creation of a uniform set: the two paired type rows (e.g. Polo
 // and Short) are inserted together so a half-created pair can never persist.
@@ -61,6 +111,15 @@ export const updateInventorySchema = z.object({ body: z.object({
 export const deleteInventorySchema = z.object({
   body: z.object({
     confirmationName: z.string().trim().min(1).max(180),
+  }),
+  query: z.any(),
+  params: z.object({ id: uuid }),
+});
+
+/** Admin hard-delete category: body must repeat the exact category name. */
+export const deleteCategorySchema = z.object({
+  body: z.object({
+    confirmationName: z.string().trim().min(1).max(100),
   }),
   query: z.any(),
   params: z.object({ id: uuid }),
