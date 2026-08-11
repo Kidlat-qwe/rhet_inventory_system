@@ -20,6 +20,10 @@
 .actions-dropdown .danger-action{color:#b84b45}
 .actions-dropdown .danger-action:hover{background:#fdebea}
 .status.expired{background:#fdebea;color:#b84b45}
+.status.error{color:#bd4d46;background:#fde9e8}
+.status.error i{background:#d65b53}
+.status.ineligible{color:#737b88;background:#eef0f2}
+.status.ineligible i{background:#9aa1ac}
 .api-key-modal{width:min(680px,100%);max-width:100%}
 .kit-raw-mode-tabs{display:flex;gap:8px;margin:0 23px 14px}
 .kit-raw-mode-tabs button{
@@ -1304,11 +1308,19 @@ tr.row-selected{background:#f5f8ff}
   text-decoration:none;
   color:inherit;
   min-width:0;
+  text-align:left;
+  width:100%;
+  cursor:pointer;
+  font:inherit;
   transition:border-color .15s ease, background .15s ease;
 }
 .api-keys-doc-link:hover{
   border-color:#a9c0cc;
   background:var(--navy-tint);
+}
+.api-keys-doc-link:focus-visible{
+  outline:2px solid #284f9c;
+  outline-offset:2px;
 }
 .api-keys-doc-link strong{
   font-size:13px;

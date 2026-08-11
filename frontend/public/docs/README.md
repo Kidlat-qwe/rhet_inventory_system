@@ -1,6 +1,8 @@
 # In-app integration docs
 
-Static HTML guides served from the Vite `public/docs` folder. Linked from **Admin → API Keys** and open in a new browser tab.
+Static HTML guides under `public/docs` (local direct URLs) and bundled copies under `src/docs` (opened from **Admin → API Keys** via `openIntegrationDoc.js`).
+
+Production SPAs often rewrite `/docs/*.html` to the React app, so the API Keys page opens bundled HTML in a new tab instead of linking to `/docs/...`.
 
 | File | Purpose |
 |------|---------|

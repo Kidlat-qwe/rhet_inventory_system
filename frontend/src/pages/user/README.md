@@ -11,7 +11,7 @@ User role entry points. Each file wraps a shared page and forwards all props unc
 | `userManualOrders.jsx` | `ManualOrdersPage` with `canManage` (create, fulfill, return — same as admin) |
 | `userReleaseLogs.jsx` | `ReleaseLogsPage` |
 | `userStockMovements.jsx` | `StockMovementsPage` |
-| `userCategories.jsx` | `CategoriesPage` |
+| `userCategories.jsx` | `CategoriesPage` with `canCreate` (add category; edit/delete remain admin-only) |
 
 Users do not receive API Keys, Users, or Settings routes (those remain admin-only).
 

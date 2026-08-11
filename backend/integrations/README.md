@@ -11,6 +11,8 @@ Machine-to-machine API for any external app to request stock from RHET Inventory
 | **[docs/external-system-integrations/API_KEY_MANAGEMENT.md](../../docs/external-system-integrations/API_KEY_MANAGEMENT.md)** | Generate / rotate / revoke integration keys |
 | **[docs/external-system-integrations/NEW_PARTNER_PASTE_PROMPT.md](../../docs/external-system-integrations/NEW_PARTNER_PASTE_PROMPT.md)** | Paste into partner Cursor / ticket |
 | **[docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md](../../docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md)** | Full API — auth, catalog, Learning Kits, webhooks |
+| **[docs/external-system-integrations/SCORING_SHIPPING_MANUAL_ORDERS.md](../../docs/external-system-integrations/SCORING_SHIPPING_MANUAL_ORDERS.md)** | Scoring Shipping → Manual Orders (non-Shopee) |
+| **[docs/external-system-integrations/SCORING_SHIPPING_PASTE_PROMPT.md](../../docs/external-system-integrations/SCORING_SHIPPING_PASTE_PROMPT.md)** | Paste into Scoring Cursor |
 
 ## Repo notes (internal)
 

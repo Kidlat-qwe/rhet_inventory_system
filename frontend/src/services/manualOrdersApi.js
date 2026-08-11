@@ -21,6 +21,12 @@ export const createManualOrder = (body) =>
 export const updateManualOrder = (id, body) =>
   api(`/manual-orders/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
 
+export const replaceManualOrderItems = (orderId, items) =>
+  api(`/manual-orders/${orderId}/items`, {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
+  }).then((response) => response.data)
+
 export const updateManualOrderFulfillmentStatus = (orderId, status) =>
   api(`/manual-orders/${orderId}/fulfillment-status`, {
     method: 'POST',

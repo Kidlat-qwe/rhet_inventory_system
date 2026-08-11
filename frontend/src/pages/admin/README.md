@@ -12,7 +12,7 @@ Admin role entry points. Workspace pages re-export shared implementations; API K
 | `adminReleaseLogs.jsx` | Wrapper → `ReleaseLogsPage` |
 | `adminStockMovements.jsx` | Wrapper → `StockMovementsPage` |
 | `adminCategories.jsx` | Wrapper → `CategoriesPage` |
-| `adminApiKeys.jsx` | Full implementation. Includes clickable docs (new tab) for how API Keys work, partner onboarding, and docs index under `/docs/`. |
+| `adminApiKeys.jsx` | Full implementation. Docs open via bundled HTML (`src/docs/openIntegrationDoc.js`) so guides work on deployed SPA hosts, not only localhost. |
 | `adminUsers.jsx` | Full implementation (add, edit name, change role, activate/deactivate) |
 | `adminSettings.jsx` | Org settings UI: card sections for branding, inventory default, couriers, uniform/shirt sizes, Help Assistant switch; sticky save bar with dirty-state. |
 

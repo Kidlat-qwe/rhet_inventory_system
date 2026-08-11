@@ -17,7 +17,11 @@ export async function requireIntegrationAuth(req, _res, next) {
     return next(new AppError(401, 'INTEGRATION_UNAUTHORIZED', 'The integration API key is invalid or inactive'));
   }
 
-  req.integration = { sourceSystem: client.system_code, clientId: client.client_id };
+  req.integration = {
+    sourceSystem: client.system_code,
+    clientId: client.client_id,
+    webhookUrl: client.webhook_url || null,
+  };
 
   try {
     await recordIntegrationActivity(client.system_code);

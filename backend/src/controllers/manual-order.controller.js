@@ -24,6 +24,13 @@ export const update = asyncHandler(async (req, res) => {
   success(res, await service.updateManualOrder(req.validated.params.id, req.validated.body));
 });
 
+export const replaceItems = asyncHandler(async (req, res) => {
+  success(res, await service.replaceManualOrderItems(
+    req.validated.params.id,
+    req.validated.body.items,
+  ));
+});
+
 export const updateFulfillmentStatus = asyncHandler(async (req, res) => {
   success(res, await service.updateFulfillmentStatus(
     req.validated.params.id,
@@ -33,7 +40,7 @@ export const updateFulfillmentStatus = asyncHandler(async (req, res) => {
 });
 
 export const cancel = asyncHandler(async (req, res) => {
-  success(res, await service.cancelManualOrder(req.validated.params.id));
+  success(res, await service.cancelManualOrder(req.validated.params.id, req.admin));
 });
 
 export const confirmReturn = asyncHandler(async (req, res) => {

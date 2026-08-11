@@ -172,3 +172,75 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
 
   return { delivered: true, status: response.status, processedBy: processedByName, processedByUserId };
 }
+
+const MANUAL_ORDER_EVENTS = new Set([
+  'manual_order.created',
+  'manual_order.shipped',
+  'manual_order.delivered',
+  'manual_order.error',
+]);
+
+/**
+ * Notify Scoring (or other partner) when a Manual Order status changes.
+ * Uses order.webhook_url only (no PSMS fallback — different product).
+ */
+export async function dispatchManualOrderWebhook(order, event, processor = null) {
+  const url = order.webhook_url || order.webhookUrl;
+  if (!url) return { skipped: true };
+  if (!MANUAL_ORDER_EVENTS.has(event)) {
+    throw new Error(`Unknown manual order webhook event: ${event}`);
+  }
+
+  let processedByName = processor?.displayName || resolveProcessedByDisplayName(order);
+  const processedByUserId = processor?.userId || resolveProcessedByUserId(order);
+
+  if ((event === 'manual_order.shipped' || event === 'manual_order.delivered' || event === 'manual_order.error')
+    && !processedByName) {
+    processedByName = 'Inventory Admin';
+  }
+
+  const payload = {
+    event,
+    orderId: order.order_id || order.orderId,
+    orderNumber: order.order_number || order.orderNumber,
+    externalReference: order.external_reference || order.externalReference,
+    sourceSystem: order.source_system || order.sourceSystem,
+    fulfillmentStatus: order.fulfillment_status || order.fulfillmentStatus,
+    customerName: order.customer_name || order.customerName,
+    customerPhone: order.customer_phone || order.customerPhone,
+    shippingAddress: order.shipping_address || order.shippingAddress,
+    courierName: order.courier_name || order.courierName,
+    trackingNumber: order.tracking_number || order.trackingNumber,
+    studentName: order.student_name || order.studentName,
+    programName: order.program_name || order.programName,
+    paymentDate: order.payment_date || order.paymentDate,
+    notes: order.notes,
+    shippedAt: order.shipped_at || order.shippedAt,
+    processedBy: processedByName || null,
+    processedByName: processedByName || null,
+    processedByUserId: processedByUserId || null,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (env.NODE_ENV !== 'production') {
+    console.log('[webhook] POST', url, JSON.stringify({
+      event: payload.event,
+      externalReference: payload.externalReference,
+      fulfillmentStatus: payload.fulfillmentStatus,
+      processedBy: payload.processedBy,
+    }));
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Manual order webhook failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+
+  return { delivered: true, status: response.status, processedBy: processedByName, processedByUserId };
+}

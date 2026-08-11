@@ -26,8 +26,30 @@ const statusLabels = {
   USER: 'User',
   PROCESSING: 'Processing',
   READY_TO_SHIP: 'Ready to Ship',
+  ERROR: 'Error',
+  INELIGIBLE: 'Ineligible',
   RETURN: 'Returned',
   RETURN_CONFIRMED: 'Returned',
+}
+
+/** Scoring Shipping Management–aligned labels for manual-order fulfillment. */
+const manualFulfillmentLabels = {
+  PENDING: 'Pending',
+  PROCESSING: 'Processing',
+  SHIPPED: 'Shipped',
+  DELIVERED: 'Delivered',
+  ERROR: 'Error',
+  INELIGIBLE: 'Ineligible',
+  NEEDS_ATTENTION: 'Needs attention',
+  RETURN: 'Return',
+  RETURN_CONFIRMED: 'Return confirmed',
+  RECEIVED: 'Delivered',
+  CANCELLED: 'Error',
+  READY_TO_SHIP: 'Processing',
+}
+
+export function formatManualFulfillmentStatus(status) {
+  return manualFulfillmentLabels[status] || formatStatus(status)
 }
 
 const movementLabels = {

@@ -9,8 +9,10 @@ Guides for partner systems that request stock from the **RHET Centralized Invent
 | You are… | Start here |
 |---|---|
 | **New partner** (HR, vendor, another campus app, etc.) | **[NEW_PARTNER_ONBOARDING.md](./NEW_PARTNER_ONBOARDING.md)** |
+| **Scoring Shipping Management** (non-Shopee → Manual Orders) | **[SCORING_SHIPPING_MANUAL_ORDERS.md](./SCORING_SHIPPING_MANUAL_ORDERS.md)** |
 | **RHET admin** issuing / rotating keys | **[API_KEY_MANAGEMENT.md](./API_KEY_MANAGEMENT.md)** |
 | **Implementing in Cursor** on a new partner repo | **[NEW_PARTNER_PASTE_PROMPT.md](./NEW_PARTNER_PASTE_PROMPT.md)** |
+| **Implementing Scoring shipping in Cursor** | **[SCORING_SHIPPING_PASTE_PROMPT.md](./SCORING_SHIPPING_PASTE_PROMPT.md)** |
 | **Need full API + Learning Kits detail** | **[STOCK_REQUEST_INTEGRATION.md](./STOCK_REQUEST_INTEGRATION.md)** |
 | **CMS / PSMS** (already connected) | CMS section below |
 

@@ -87,6 +87,11 @@ All paths except health require `Authorization: Bearer <Firebase ID token>`. Res
 | POST | `/api/v1/online-orders/items/:id/resolve` | Map Shopee SKU to inventory (visibility only, no deduction) (admin) |
 | POST | `/api/v1/online-orders/:id/fulfillment-status` | Move an order to the next fulfillment column (admin) |
 | POST | `/api/v1/online-orders/:id/confirm-return` | Confirm a return as reusable/not reusable (admin) |
+| GET | `/api/v1/manual-orders` | List Manual Orders (Scoring Shipping Management–aligned statuses) |
+| POST | `/api/v1/manual-orders` | Create HQ / non-Shopee courier order |
+| PUT | `/api/v1/manual-orders/:id/items` | Map inventory lines before ship |
+| POST | `/api/v1/manual-orders/:id/fulfillment-status` | Advance status (`PROCESSING` → `SHIPPED` deducts stock; no Ready-to-ship) |
+| POST | `/api/v1/integrations/manual-orders` | Scoring/partner header-only Manual Order create (`X-Integration-Key`) |
 | GET | `/api/v1/channel-allocations` | List per-item RHET vs Shopee allocated quantities |
 | POST | `/api/v1/channel-allocations/allocate` | Allocate RHET stock to a sales channel (admin) |
 | POST | `/api/v1/channel-allocations/deallocate` | Pull unsold allocated stock back into RHET (admin) |
@@ -200,6 +205,7 @@ For API-only local development, set `AUTH_BYPASS=true`. Do not use it in a deplo
 Partner systems that request warehouse stock should follow:
 
 - **[docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md](docs/external-system-integrations/STOCK_REQUEST_INTEGRATION.md)** — full guide (auth, catalog, stock requests, Learning Kits, webhooks)
+- **[docs/external-system-integrations/SCORING_SHIPPING_MANUAL_ORDERS.md](docs/external-system-integrations/SCORING_SHIPPING_MANUAL_ORDERS.md)** — Scoring Shipping Management → Manual Orders (non-Shopee)
 - **[docs/external-system-integrations/README.md](docs/external-system-integrations/README.md)** — index
 
 ## 16. Deployment recommendations

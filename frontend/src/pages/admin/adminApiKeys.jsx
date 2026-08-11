@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { INTEGRATION_DOC_LINKS, openIntegrationDoc } from '../../docs/openIntegrationDoc'
 import { usePagination } from '../../hooks/usePagination'
 import { baseUrl } from '../../services/api'
 import { createIntegrationClient, regenerateIntegrationApiKey, revokeIntegrationApiKey } from '../../services/inventoryApi'
@@ -15,9 +16,19 @@ export default function AdminApiKeys({ clients, onRefresh }) {
   const [expiration, setExpiration] = useState('none')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [docError, setDocError] = useState('')
   const [revealed, setRevealed] = useState(null)
   const [copiedField, setCopiedField] = useState('')
   const { page, setPage, pageItems, total } = usePagination(clients, 15)
+
+  function openDoc(file) {
+    setDocError('')
+    try {
+      openIntegrationDoc(file)
+    } catch (err) {
+      setDocError(err.message || 'Unable to open documentation.')
+    }
+  }
 
   function deriveSystemCode(name) {
     return name
@@ -175,34 +186,19 @@ export default function AdminApiKeys({ clients, onRefresh }) {
             <p>Open guides in a new tab to learn how this page and partner keys work</p>
           </div>
         </div>
+        {docError && <div className="page-error" style={{ margin: '0 18px 12px' }}>{docError}</div>}
         <div className="api-keys-docs-list">
-          <a
-            className="api-keys-doc-link"
-            href="/docs/api-key-management.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <strong>How API Keys work</strong>
-            <span>Generate, regenerate, revoke, and what to share with partners</span>
-          </a>
-          <a
-            className="api-keys-doc-link"
-            href="/docs/partner-onboarding.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <strong>Partner onboarding overview</strong>
-            <span>High-level flow for connecting an external system to RHET</span>
-          </a>
-          <a
-            className="api-keys-doc-link"
-            href="/docs/index.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <strong>All integration docs</strong>
-            <span>Index of in-app guides for admins and partner handoff</span>
-          </a>
+          {INTEGRATION_DOC_LINKS.map((doc) => (
+            <button
+              key={doc.id}
+              type="button"
+              className="api-keys-doc-link"
+              onClick={() => openDoc(doc.file)}
+            >
+              <strong>{doc.title}</strong>
+              <span>{doc.description}</span>
+            </button>
+          ))}
         </div>
       </section>
 

@@ -1,4 +1,5 @@
 import * as service from '../services/stock-request.service.js';
+import * as manualOrderService from '../services/manual-order.service.js';
 import { AppError, asyncHandler, success } from '../utils/api.js';
 
 export const submit = asyncHandler(async (req, res) => {
@@ -45,4 +46,53 @@ export const deliver = asyncHandler(async (req, res) => {
     branchName: body.branchName,
     notes: body.notes,
   }));
+});
+
+/** Scoring Shipping Management → Manual Orders (header-only). */
+export const createManualOrder = asyncHandler(async (req, res) => {
+  const body = req.validated.body;
+  const data = await manualOrderService.createManualOrderFromIntegration({
+    ...body,
+    items: [],
+    sourceSystem: req.integration.sourceSystem,
+    webhookUrl: body.webhookUrl || req.integration.webhookUrl || null,
+  });
+  success(res, data, {}, 201);
+});
+
+export const getManualOrder = asyncHandler(async (req, res) => {
+  const order = await manualOrderService.getManualOrder(req.validated.params.id);
+  if (order.sourceSystem) {
+    const owner = String(order.sourceSystem).toUpperCase();
+    const caller = String(req.integration.sourceSystem || '').toUpperCase();
+    if (owner !== caller) {
+      throw new AppError(403, 'ORDER_FORBIDDEN', 'This manual order belongs to a different integration system');
+    }
+  } else {
+    throw new AppError(403, 'ORDER_NOT_INTEGRATION', 'This manual order was not created by an integration partner');
+  }
+  success(res, order);
+});
+
+export const getManualOrderByReference = asyncHandler(async (req, res) => {
+  success(res, await manualOrderService.getManualOrderByExternalReference(
+    req.validated.params.reference,
+    req.integration.sourceSystem,
+  ));
+});
+
+export const updateManualOrderFulfillment = asyncHandler(async (req, res) => {
+  success(res, await manualOrderService.updateFulfillmentFromIntegration(
+    req.validated.params.id,
+    req.validated.body.status,
+    req.integration.sourceSystem,
+  ));
+});
+
+export const updateManualOrderFulfillmentByReference = asyncHandler(async (req, res) => {
+  success(res, await manualOrderService.updateFulfillmentFromIntegrationByReference(
+    req.validated.params.reference,
+    req.validated.body.status,
+    req.integration.sourceSystem,
+  ));
 });

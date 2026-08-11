@@ -14,9 +14,11 @@ export default function CategoriesPage({
   categories,
   items = [],
   canManage = false,
+  canCreate = false,
   onRefresh,
   onOpenInventory,
 }) {
+  const allowCreate = Boolean(canCreate || canManage)
   const [modal, setModal] = useState(null) // { mode: 'create' } | { mode: 'edit', category }
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [createdOffer, setCreatedOffer] = useState(null) // { categoryId, categoryName }
@@ -32,6 +34,8 @@ export default function CategoriesPage({
   const { page, setPage, pageItems, total } = usePagination(categories, 15)
 
   async function saveCategory({ categoryName, categoryKind, hasChildSkus }) {
+    if (modal?.mode === 'edit' && !canManage) return
+    if (modal?.mode !== 'edit' && !allowCreate) return
     setBusy(true)
     setError('')
     try {
@@ -86,10 +90,12 @@ export default function CategoriesPage({
           <p>
             {canManage
               ? 'Manage merchandise categories used across inventory items. Delete is only available here (not on Inventory).'
-              : 'Browse merchandise categories used across inventory items.'}
+              : allowCreate
+                ? 'Browse categories and add new ones. Edit and delete remain admin-only.'
+                : 'Browse merchandise categories used across inventory items.'}
           </p>
         </div>
-        {canManage && (
+        {allowCreate && (
           <div>
             <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>
               ＋ Add category
@@ -152,10 +158,10 @@ export default function CategoriesPage({
                   <td colSpan={canManage ? 6 : 5}>
                     <EmptyState
                       title="No categories found"
-                      message={canManage
+                      message={allowCreate
                         ? 'Seed categories should load from the database. You can also add a new category.'
                         : 'No categories are available yet.'}
-                      action={canManage
+                      action={allowCreate
                         ? <button type="button" className="primary" onClick={() => setModal({ mode: 'create' })}>＋ Add category</button>
                         : null}
                     />
@@ -167,7 +173,7 @@ export default function CategoriesPage({
           <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="categories" />
         </div>
       </section>
-      {canManage && modal && (
+      {allowCreate && modal && (modal.mode !== 'edit' || canManage) && (
         <CategoryModal
           category={modal.mode === 'edit' ? modal.category : null}
           categories={categories}

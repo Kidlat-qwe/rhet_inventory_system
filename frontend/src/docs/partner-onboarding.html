@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Partner onboarding overview — RHET Inventory</title>
+  <style>
+    :root { --navy:#15303f; --muted:#747d8e; --line:#e7e9ee; --bg:#f6f7f9; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI",Arial,Helvetica,sans-serif; background:var(--bg); color:#202634; line-height:1.55; }
+    header, footer { background:#fff; border-bottom:1px solid var(--line); padding:18px 20px; }
+    footer { border-top:1px solid var(--line); border-bottom:0; color:var(--muted); font-size:12px; padding:16px 20px 28px; }
+    .wrap { max-width:820px; margin:0 auto; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand img { width:40px; height:40px; border-radius:50%; border:1px solid #e6ebf2; }
+    .brand strong { display:block; font-size:14px; color:var(--navy); }
+    .brand span { display:block; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+    main { padding:28px 20px 48px; }
+    h1 { margin:0 0 8px; font-size:26px; color:var(--navy); }
+    .lead { margin:0 0 22px; color:var(--muted); font-size:14px; }
+    h2 { margin:26px 0 10px; font-size:17px; color:var(--navy); }
+    p, li { font-size:14px; }
+    ol, ul { padding-left:20px; }
+    li { margin:6px 0; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:14px 0; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; background:#f3f5f8; padding:2px 6px; border-radius:4px; }
+    a { color:#2a5a76; }
+    .doc-nav { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+    .doc-nav a {
+      display:inline-flex; padding:8px 12px; border-radius:7px; border:1px solid var(--line);
+      background:#fff; text-decoration:none; font-size:12px; font-weight:600; color:var(--navy);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap brand">
+      <img src="/rhet-logo.png" alt="RHET logo" />
+      <div>
+        <strong>RHET Inventory System</strong>
+        <span>Partner onboarding</span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <h1>Partner onboarding overview</h1>
+      <p class="lead">
+        High-level steps for connecting an external system so it can request stock from RHET Inventory.
+      </p>
+
+      <div class="card">
+        <ol>
+          <li>RHET admin generates an API key on the <strong>API Keys</strong> page.</li>
+          <li>Partner stores <code>INVENTORY_API_URL</code> and <code>INVENTORY_INTEGRATION_KEY</code> on their <strong>backend</strong>.</li>
+          <li>Partner implements catalog fetch and stock-request create against <code>/api/v1/integrations</code>.</li>
+          <li>Partner exposes an HTTPS webhook for RHET status callbacks (shipped / delivered / rejected, etc.).</li>
+          <li>Smoke-test with a small request before production traffic.</li>
+        </ol>
+      </div>
+
+      <h2>Typical flow</h2>
+      <p>
+        Partner backend → <code>POST /stock-requests</code> with <code>X-Integration-Key</code>
+        → RHET warehouse fulfills → RHET notifies partner webhook → partner confirms delivery when applicable.
+      </p>
+
+      <h2>Related</h2>
+      <div class="doc-nav">
+        <a href="/docs/api-key-management.html">How API Keys work</a>
+        <a href="/docs/index.html">Docs index</a>
+      </div>
+      <p style="margin-top:16px;font-size:13px;color:#747d8e">
+        Full engineering contracts also live in the repository under
+        <code>docs/external-system-integrations/</code> (Markdown for developers).
+      </p>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">RHET Centralized Inventory · Public docs</div>
+  </footer>
+</body>
+</html>

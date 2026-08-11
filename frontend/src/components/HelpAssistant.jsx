@@ -48,14 +48,13 @@ const ALL_TOPICS = [
   },
   {
     id: 'categories',
-    roles: ['ADMIN'],
     q: 'How do I create a Category?',
     answer: {
       steps: [
-        'Go to **Categories** from the sidebar (Admin only).',
+        'Go to **Categories** from the sidebar.',
         'Click **＋ Add category**.',
         'Enter a unique Category Name and choose the Category Type (e.g. School Uniform, Workbooks, Learning Kit, etc.).',
-        'Click **Save**. Items can now be created under this category.',
+        'Click **Save**. Items can now be created under this category. Edit and delete remain admin-only.',
       ],
     },
   },
@@ -67,7 +66,6 @@ const ALL_TOPICS = [
       steps: [
         'Categories can only be deleted from the **Categories** page — not from Inventory.',
         'Open **Categories**, click **···** on the row → **Delete**.',
-        'Delete is disabled while the category still has inventory items. Remove or move those items first.',
         'In the confirmation modal, **type the exact category name** to enable Delete.',
         'Click **Delete category**. This cannot be undone.',
       ],
@@ -104,6 +102,18 @@ const ALL_TOPICS = [
         'Import a Shopee CSV export using the **Import CSV** button, or create a manual order.',
         'Orders marked **Needs Attention** require you to check for inventory issues.',
         'Fulfilling an order automatically deducts stock from the matched inventory item.',
+      ],
+    },
+  },
+  {
+    id: 'manual-orders',
+    q: 'How do Manual Orders (non-Shopee) work?',
+    answer: {
+      steps: [
+        'Go to **Manual Orders** — tabs match Scoring Shipping Management (Pending, Processing, Shipped, Delivered, Error, Ineligible, Needs attention).',
+        'There is no Ready-to-ship step: from **Processing**, use **Update Status** → **Shipped** to deduct warehouse stock.',
+        'For Scoring pushes with notes only, open the order → **Map items** using the remarks, then mark **Shipped**.',
+        'Shopee marketplace orders stay on **Online Orders**, not Manual Orders.',
       ],
     },
   },
