@@ -120,7 +120,7 @@ Errors:
 | `GET` | `/catalog` | Active categories + inventory items |
 | `GET` | `/availability` | Check one SKU by attributes |
 | `POST` | `/stock-requests` | Submit one or many line items |
-| `POST` | `/stock-returns` | CMS Return Stock — restock warehouse immediately (`PSMS-RET-*`) |
+| `POST` | `/stock-returns` | CMS Return Stock → RHET Pending inspection (`PSMS-RET-*`) |
 | `GET` | `/stock-requests/:requestId` | Read status by RHET UUID |
 
 ---
@@ -255,12 +255,20 @@ Same top-level fields as `/stock-requests`, plus:
 RHET behavior:
 
 - Matches items like Request Stock (uniform: gender + type + size; other: itemName and/or sku).
-- On success: warehouse stock **increases** (`RETURN` movement), rows stored as `requestKind: RETURN`, `status: RETURNED`.
-- All-or-nothing. Unmatched item or Learning Kit / Tool Kit → **422**, nothing restocked.
-- Idempotent replay of the same `externalReference`s → **200** with existing rows (no second restock).
-- Webhook: `stock_return.accepted` only (do **not** treat as `stock_request.*`).
+- On success: rows stored as `requestKind: RETURN`, `status: PENDING` (HQ inspection queue). **No warehouse movement yet.**
+- All-or-nothing. Unmatched item or Learning Kit / Tool Kit → **422**, nothing stored.
+- Idempotent replay of the same `externalReference`s → **200** with existing rows (no second webhook / restock).
+- Never emit `stock_request.*` for these lines.
+- Reusable → warehouse qty **increases** (`RETURN` movement) then `status: RETURNED`. Not reusable → `RETURNED` only (no restock).
 
-Response `201` (new) / `200` (replay): array of lines (`requestId`, `status: RETURNED`, `requestKind: RETURN`, `matchedSku`, `batchReference`, `externalReference`).
+Webhooks (match `PSMS-RET-*` / `requestKind: RETURN` only):
+
+| Event | When | Status | Notes |
+|---|---|---|---|
+| `stock_return.received` | Create accepted into HQ inspection | `PENDING` | CMS keeps row in **Pending**; branch qty stays deducted. No `returnReusable`. |
+| `stock_return.accepted` | HQ inspected (reusable **or** not) | `RETURNED` | Always includes `returnReusable` (`true`/`false`). CMS moves to **Returned**. Never re-credit branch qty. |
+
+Response `201` (new) / `200` (replay): array of lines (`requestId`, `status: PENDING` until inspected, `requestKind: RETURN`, `matchedSku`, `batchReference`, `externalReference`).
 
 ---
 
@@ -468,7 +476,11 @@ RHET POSTs JSON to `webhookUrl` (or RHET fallback env if omitted).
 | Event | When | Your typical action |
 |---|---|---|
 | `stock_request.created` | Stored in RHET | Mark local row as synced / pending RHET |
-| `stock_request.fulfilled` | Approved; RHET stock deducted | Mark approved; **increase local/branch stock** if that is your rule |
+| `stock_request.shipped` | RHET shipped; warehouse deducted | Mark shipped; do **not** add branch stock yet |
+| `stock_request.delivered` / `stock_request.fulfilled` | Branch confirmed receipt | **Increase local/branch stock** once |
+| `stock_request.returned` | Staff marked return on a shipped/delivered **request** | Reverse branch stock if `wasDelivered` |
+| `stock_return.received` | CMS Return Stock accepted into RHET Pending | Keep branch deduction; wait for HQ inspection |
+| `stock_return.accepted` | HQ inspected the return | `returnReusable` true = HQ restocked; false = not reusable. Do not skip CMS branch reverse |
 | `stock_request.rejected` | Rejected in RHET | Mark rejected; show `rejectionReason` |
 
 Example fulfilled payload (kit or normal item — kit-level fields):

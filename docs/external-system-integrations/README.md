@@ -58,23 +58,25 @@ Use these when changing the **existing** CMS merchandise / stock-request flow. D
 | **[CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md)** | **Paste** — required `branchName` (campus display name) on every `POST /stock-requests` |
 | **[CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md)** | **Paste** — Pending → Shipped → Delivered → Returned (cut out FULFILLED) |
 | **[CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md](./CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md)** | **Paste** — send `batchReference` so multi-item carts group on RHET Manage/invoice |
-| **[STOCK_REQUEST_INTEGRATION.md](./STOCK_REQUEST_INTEGRATION.md)** § stock-returns | RHET `POST /stock-returns` for CMS Return Stock (`PSMS-RET-*`) |
+| **[CMS_PSMS_RETURN_STOCK_INSPECTION_PROMPT.md](./CMS_PSMS_RETURN_STOCK_INSPECTION_PROMPT.md)** | **Paste** — Return Stock: treat PENDING 201 as success; `stock_return.received` then `accepted` |
+| **[STOCK_REQUEST_INTEGRATION.md](./STOCK_REQUEST_INTEGRATION.md)** § stock-returns | RHET `POST /stock-returns` → Pending inspection, then Returned (reusable / not reusable) |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
 ### CMS quick path
 
 1. [CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md) — **required now** — Shipped / Delivered / Returned webhooks (no FULFILLED).
 2. [CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md](./CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md) — **required now** — `batchReference` for multi-item carts (RHET grouping + invoice).
-3. [CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md) — required `branchName`.
-4. [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
-5. [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form.
-6. [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Create Merchandise fields.
-7. [CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md](./CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md) — Item name on non-uniform Stocks tables.
-8. [CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md](./CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md) — multi-item Workbooks deduct/fulfill.
-9. [CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md](./CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md) — blank Workbooks Stocks row after multi-item approve.
-10. [CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md](./CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md) — Learning Kits.
-11. [CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md](./CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md) — live catalog dropdowns.
-12. [CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md](./CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md) — Shirt / LCA_SHIRT Gender+Logo+Size via categoryKind.
+3. [CMS_PSMS_RETURN_STOCK_INSPECTION_PROMPT.md](./CMS_PSMS_RETURN_STOCK_INSPECTION_PROMPT.md) — **required now** if Return Stock is live — PENDING 201 is success; HQ inspect webhooks.
+4. [CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md) — required `branchName`.
+5. [CMS_PSMS_PASTE_BUNDLE.md](./CMS_PSMS_PASTE_BUNDLE.md) — stock-request API alignment.
+6. [CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md](./CMS_PSMS_REQUEST_STOCK_UI_PROMPT.md) — Request Stock form.
+7. [CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md](./CMS_PSMS_CREATE_MERCHANDISE_UI_PROMPT.md) — Create Merchandise fields.
+8. [CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md](./CMS_PSMS_NON_UNIFORM_ITEM_NAME_COLUMN_PROMPT.md) — Item name on non-uniform Stocks tables.
+9. [CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md](./CMS_PSMS_NON_UNIFORM_MULTI_ITEM_DEDUCT_PROMPT.md) — multi-item Workbooks deduct/fulfill.
+10. [CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md](./CMS_PSMS_WORKBOOKS_BLANK_STOCK_ROW_PROMPT.md) — blank Workbooks Stocks row after multi-item approve.
+11. [CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md](./CMS_PSMS_LEARNING_KIT_REQUEST_PROMPT.md) — Learning Kits.
+12. [CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md](./CMS_PSMS_CATALOG_DRIVEN_DROPDOWNS_PROMPT.md) — live catalog dropdowns.
+13. [CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md](./CMS_PSMS_SHIRT_CATEGORYKIND_REQUEST_STOCK_PROMPT.md) — Shirt / LCA_SHIRT Gender+Logo+Size via categoryKind.
 
 ---
 

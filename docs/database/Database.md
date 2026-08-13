@@ -241,12 +241,15 @@ CREATE TABLE IF NOT EXISTS public.stock_requests
     status character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'PENDING'::character varying,
     -- Allowed: PENDING | SHIPPED | DELIVERED | RETURNED | REJECTED
     request_kind character varying(20) NOT NULL DEFAULT 'REQUEST',
-    -- REQUEST = HQ restock; RETURN = CMS branch Return Stock (warehouse already increased)
+    -- REQUEST = HQ restock; RETURN = CMS branch Return Stock (Pending until staff inspects reusable / not reusable)
     inventory_id uuid,
     matched_sku character varying(64) COLLATE pg_catalog."default",
     movement_id uuid,
     webhook_url character varying(500) COLLATE pg_catalog."default",
     rejection_reason character varying(500) COLLATE pg_catalog."default",
+    return_reusable boolean,
+    -- When status is RETURNED: true = warehouse restocked; false = not reusable, no restock
+    return_notes character varying(500) COLLATE pg_catalog."default",
     failure_reason character varying(500) COLLATE pg_catalog."default",
     processed_by uuid,
     processed_at timestamp with time zone,

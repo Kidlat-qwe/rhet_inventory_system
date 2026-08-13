@@ -38,6 +38,15 @@ export function groupMatchesTab(group, filter) {
   return true
 }
 
+/** Returned tab categories: All / Reusable / Not reusable. */
+export function groupMatchesReturnOutcome(group, outcomeFilter) {
+  if (!outcomeFilter || outcomeFilter === 'ALL') return true
+  const returned = (group?.requests || []).filter((row) => String(row.status || '').toUpperCase() === 'RETURNED')
+  if (outcomeFilter === 'REUSABLE') return returned.some((row) => row.returnReusable === true)
+  if (outcomeFilter === 'NOT_REUSABLE') return returned.some((row) => row.returnReusable === false)
+  return true
+}
+
 function uniqueItemLabels(requests) {
   const labels = []
   const seen = new Set()
@@ -110,6 +119,9 @@ export function buildStockRequestGroups(requests = []) {
         pendingCount: pending.length,
         shippedCount: shipped.length,
         deliveredCount: delivered.length,
+        returnedCount: group.requests.filter((row) => row.status === 'RETURNED').length,
+        reusableCount: group.requests.filter((row) => row.status === 'RETURNED' && row.returnReusable === true).length,
+        notReusableCount: group.requests.filter((row) => row.status === 'RETURNED' && row.returnReusable === false).length,
         shippableCount: pending.filter((row) => canShipRequest(row)).length,
         status: rollupGroupStatus(group.requests),
         requestedTotal: requestedGroupTotal(group.requests),

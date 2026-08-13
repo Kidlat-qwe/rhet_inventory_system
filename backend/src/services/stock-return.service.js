@@ -6,32 +6,15 @@ import { resolveInventoryItem } from './inventory-resolver.service.js';
 import { dispatchStockReturnWebhook } from './webhook.service.js';
 import { loadStockRequestRowsByIds } from './stock-request.service.js';
 
-async function resolveIntegrationActorId(db) {
-  const result = await db.query(
-    `SELECT user_id
-     FROM users
-     WHERE status = 'ACTIVE'
-     ORDER BY CASE WHEN role = 'ADMIN' THEN 0 ELSE 1 END, created_at ASC
-     LIMIT 1`,
-  );
-  if (!result.rowCount) {
-    throw new AppError(
-      500,
-      'NO_SYSTEM_USER',
-      'Cannot record a branch return: no active RHET user exists for the stock movement',
-    );
-  }
-  return result.rows[0].user_id;
-}
-
 function itemRefs(items, batchReference) {
   return items.map((item, index) => String(item.externalReference || '').trim()
     || `${batchReference}-${index + 1}`);
 }
 
 /**
- * CMS Return Stock → restock RHET warehouse immediately.
- * One POST = one cart (batchReference). All-or-nothing.
+ * CMS Return Stock → Pending inspection on RHET (no warehouse movement yet).
+ * Staff later marks reusable / not reusable; only reusable restocks.
+ * One POST = one cart (batchReference). All-or-nothing match.
  * Idempotent on (sourceSystem, externalReference) when every line already exists as RETURN.
  */
 export async function createStockReturnsFromPsms(input) {
@@ -75,8 +58,6 @@ export async function createStockReturnsFromPsms(input) {
   const createdIds = [];
 
   await withTransaction(async (db) => {
-    const actorId = await resolveIntegrationActorId(db);
-
     for (const [index, item] of items.entries()) {
       const externalReference = refs[index];
       const resolved = await resolveInventoryItem(db, {
@@ -111,9 +92,9 @@ export async function createStockReturnsFromPsms(input) {
           source_system, external_reference, batch_reference, request_kind, request_date,
           requested_by, branch_name, reason,
           category_name, gender, item_type, size_label, quantity, status,
-          inventory_id, matched_sku, webhook_url, processed_at
-        ) VALUES ($1,$2,$3,'RETURN',$4,$5,$6,$7,$8,$9,$10,$11,$12,'RETURNED',$13,$14,$15,NOW())
-        RETURNING *`,
+          inventory_id, matched_sku, webhook_url
+        ) VALUES ($1,$2,$3,'RETURN',$4,$5,$6,$7,$8,$9,$10,$11,$12,'PENDING',$13,$14,$15)
+        RETURNING request_id`,
         [
           sourceSystem,
           externalReference,
@@ -132,34 +113,14 @@ export async function createStockReturnsFromPsms(input) {
           input.webhookUrl || null,
         ],
       );
-      const row = inserted.rows[0];
-
-      const movement = await inventory.createMovement(
-        resolved.item.inventory_id,
-        {
-          movementType: 'RETURN',
-          quantity: item.quantity,
-          referenceNumber: externalReference,
-          remarks: `${sourceSystem} branch return from ${input.requestedBy} (${input.branchName}): ${input.reason}`,
-        },
-        actorId,
-        db,
-      );
-      const movementId = movement.movementId || movement.movement_id || null;
-      await db.query(
-        `UPDATE stock_requests
-         SET movement_id = $1, updated_at = NOW()
-         WHERE request_id = $2`,
-        [movementId, row.request_id],
-      );
-      createdIds.push(row.request_id);
+      createdIds.push(inserted.rows[0].request_id);
     }
   });
 
   const data = await loadStockRequestRowsByIds(createdIds);
   for (const row of data) {
     try {
-      await dispatchStockReturnWebhook(row, 'stock_return.accepted', {
+      await dispatchStockReturnWebhook(row, 'stock_return.received', {
         displayName: row.requestedBy || row.requested_by || 'Branch Admin',
       });
     } catch (error) {

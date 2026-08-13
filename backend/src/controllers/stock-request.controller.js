@@ -39,7 +39,10 @@ export async function markReturned(req, res) {
   success(res, await service.returnStockRequest(
     req.validated.params.id,
     req.admin,
-    req.validated.body?.notes || null,
+    {
+      reusable: req.validated.body?.reusable !== false,
+      notes: req.validated.body?.notes || null,
+    },
   ));
 }
 

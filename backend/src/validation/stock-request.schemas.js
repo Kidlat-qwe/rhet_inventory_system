@@ -104,6 +104,8 @@ export const rejectStockRequestSchema = z.object({
 
 export const returnStockRequestSchema = z.object({
   body: z.object({
+    // Default true keeps older callers (always restocked). Online-orders pattern.
+    reusable: z.coerce.boolean().optional().default(true),
     notes: optionalText(500),
   }).default({}),
   query: z.any(),

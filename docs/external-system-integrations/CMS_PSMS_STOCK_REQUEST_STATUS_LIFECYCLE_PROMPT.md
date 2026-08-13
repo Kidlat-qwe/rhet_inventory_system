@@ -38,6 +38,7 @@ Path is **/deliver** (not /confirm-delivery). Keep CMS hardcoded path.
 - shipped → NO CMS stock add (goods in transit; RHET may print a paper checklist with receiver sign)
 - delivered / fulfilled → add once (idempotent by externalReference)
 - returned + wasDelivered true → reverse once
+- CMS Return Stock: RHET webhook `stock_return.received` (Pending inspection) then `stock_return.accepted` after HQ check. `returnReusable` is RHET warehouse only (true = HQ restocked; false = not reusable). Do **not** use it to skip CMS branch reverse.
 
 ### Acceptance
 1. Ship on RHET (batch checklist) → CMS Shipped; qty unchanged

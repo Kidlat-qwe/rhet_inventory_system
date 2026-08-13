@@ -25,19 +25,35 @@ import {
   componentItemLabel,
   componentSkuLabel,
 } from '../../utils/stockRequestChecklist'
-import { buildStockRequestGroups, groupMatchesTab } from '../../utils/stockRequestGroups'
+import { buildStockRequestGroups, groupMatchesReturnOutcome, groupMatchesTab } from '../../utils/stockRequestGroups'
 import { formatInvoiceMoney, openInvoicePrintWindow } from '../../utils/stockRequestInvoice'
 
 const STATUS_TABS = ['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'REJECTED']
+const RETURN_OUTCOME_FILTERS = [
+  { key: 'ALL', label: 'All' },
+  { key: 'REUSABLE', label: 'Reusable' },
+  { key: 'NOT_REUSABLE', label: 'Not reusable' },
+]
 
 function detailValue(value) {
   if (value === null || value === undefined || value === '') return '—'
   return value
 }
 
+function returnOutcomeLabel(request) {
+  if (request?.returnReusable === false) return 'Not reusable — stock not restored'
+  if (request?.returnReusable === true) return 'Reusable — stock restored to RHET'
+  return null
+}
+
+function returnNotesDisplay(request) {
+  return request?.returnNotes || (request?.status === 'RETURNED' ? request?.rejectionReason : null) || null
+}
+
 export default function StockRequestsPage({ requests, onRefresh, admin }) {
   const settings = useSettings()
   const [filter, setFilter] = useState('PENDING')
+  const [returnOutcomeFilter, setReturnOutcomeFilter] = useState('ALL')
   const [branchFilter, setBranchFilter] = useState('')
   const [branchMenuOpen, setBranchMenuOpen] = useState(false)
   const [branchMenuCoords, setBranchMenuCoords] = useState({ top: 0, left: 0 })
@@ -49,6 +65,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
   const [mode, setMode] = useState('manage')
   const [lineForAction, setLineForAction] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [returnReusable, setReturnReusable] = useState('true')
   const [returnNotes, setReturnNotes] = useState('')
   const [pickedVerified, setPickedVerified] = useState(false)
   const [invoicePreview, setInvoicePreview] = useState(null)
@@ -77,10 +94,11 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     [requestsForBranch],
   )
 
-  const shownGroups = useMemo(
-    () => groups.filter((group) => groupMatchesTab(group, filter)),
-    [groups, filter],
-  )
+  const shownGroups = useMemo(() => {
+    const tabGroups = groups.filter((group) => groupMatchesTab(group, filter))
+    if (filter !== 'RETURNED') return tabGroups
+    return tabGroups.filter((group) => groupMatchesReturnOutcome(group, returnOutcomeFilter))
+  }, [groups, filter, returnOutcomeFilter])
 
   const tabCounts = useMemo(() => {
     const counts = {}
@@ -88,6 +106,15 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
       counts[status] = groups.filter((group) => groupMatchesTab(group, status)).length
     }
     return counts
+  }, [groups])
+
+  const returnOutcomeCounts = useMemo(() => {
+    const returned = groups.filter((group) => groupMatchesTab(group, 'RETURNED'))
+    return {
+      ALL: returned.length,
+      REUSABLE: returned.filter((group) => groupMatchesReturnOutcome(group, 'REUSABLE')).length,
+      NOT_REUSABLE: returned.filter((group) => groupMatchesReturnOutcome(group, 'NOT_REUSABLE')).length,
+    }
   }, [groups])
 
   const { page, setPage, pageItems, total } = usePagination(shownGroups, 15)
@@ -133,6 +160,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     setSelectedShipIds(new Set())
     setMode('manage')
     setLineForAction(null)
+    if (filter !== 'RETURNED') setReturnOutcomeFilter('ALL')
   }, [filter, branchFilter])
 
   useEffect(() => {
@@ -318,10 +346,16 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     setBusyId(lineForAction.requestId)
     setError('')
     try {
-      await returnStockRequest(lineForAction.requestId, returnNotes.trim())
+      await returnStockRequest(lineForAction.requestId, {
+        reusable: (selectedGroup?.requestKind === 'RETURN' || lineForAction?.requestKind === 'RETURN')
+          ? returnReusable === 'true'
+          : true,
+        notes: returnNotes.trim(),
+      })
       setMode('manage')
       setLineForAction(null)
       setReturnNotes('')
+      setReturnReusable('true')
       await onRefresh()
     } catch (err) {
       setError(err.message)
@@ -364,7 +398,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
           <h1>Stock requests</h1>
           <p>
             Each CMS cart is one request group. Open Manage, check the lines for this shipment, preview the invoice,
-            then confirm ship. Unchecked or out-of-stock lines stay pending for a later shipment.
+            then confirm ship. CMS Return Stock arrives on Pending for inspection, then moves to Returned as reusable or not reusable.
           </p>
         </div>
       </div>
@@ -381,6 +415,21 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
           </button>
         ))}
       </div>
+      {filter === 'RETURNED' && (
+        <div className="quick-filters sub-filters">
+          {RETURN_OUTCOME_FILTERS.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              className={returnOutcomeFilter === entry.key ? 'selected' : ''}
+              onClick={() => { setReturnOutcomeFilter(entry.key); setPage(1) }}
+            >
+              <span>{returnOutcomeCounts[entry.key] || 0}</span>
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && !selectedGroup && <div className="page-error">{error}</div>}
 
@@ -469,8 +518,22 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                   <td className="reason-cell">{group.reason}</td>
                   <td>
                     <StatusBadge status={group.status} />
-                    {group.requestKind === 'RETURN' && <small>Warehouse restocked</small>}
-                    {group.status === 'PARTIAL' && (
+                    {group.requestKind === 'RETURN' && group.status === 'PENDING' && (
+                      <small>Awaiting return check</small>
+                    )}
+                    {group.requestKind === 'RETURN' && group.status === 'PARTIAL' && (
+                      <small>{group.pendingCount} to check · {group.returnedCount || 0} inspected</small>
+                    )}
+                    {group.requestKind === 'RETURN' && group.status === 'RETURNED' && (
+                      <small>
+                        {group.reusableCount && group.notReusableCount
+                          ? `${group.reusableCount} reusable · ${group.notReusableCount} not reusable`
+                          : group.notReusableCount
+                            ? 'Not reusable'
+                            : 'Reusable'}
+                      </small>
+                    )}
+                    {group.requestKind !== 'RETURN' && group.status === 'PARTIAL' && (
                       <small>{group.pendingCount} pending · {group.shippedCount} shipped</small>
                     )}
                   </td>
@@ -481,7 +544,9 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                       className={group.pendingCount > 0 ? 'primary small-btn' : 'secondary small-btn'}
                       onClick={() => openManage(group)}
                     >
-                      {group.pendingCount > 0 || group.shippedCount > 0 ? 'Manage' : 'View'}
+                      {group.requestKind === 'RETURN' && group.pendingCount > 0
+                        ? 'Inspect'
+                        : (group.pendingCount > 0 || group.shippedCount > 0 ? 'Manage' : 'View')}
                     </button>
                   </td>
                 </tr>
@@ -492,7 +557,11 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                       title={branchFilter
                         ? `No ${formatStatus(filter).toLowerCase()} request groups for this branch`
                         : `No ${formatStatus(filter).toLowerCase()} request groups`}
-                      message="External merchandise requests will appear here grouped by CMS cart."
+                      message={filter === 'RETURNED'
+                        ? 'After you inspect a CMS return, it moves here. Use Reusable / Not reusable to filter.'
+                        : filter === 'PENDING'
+                          ? 'Stock requests and CMS returns awaiting inspection appear here, grouped by cart.'
+                          : 'External merchandise requests will appear here grouped by CMS cart.'}
                     />
                   </td>
                 </tr>
@@ -508,7 +577,11 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
           <div className="modal request-group-modal">
             <div className="modal-head">
               <div>
-                <h2>{isBranchReturn ? 'Branch stock return' : 'Manage stock request'}</h2>
+                <h2>
+                  {isBranchReturn
+                    ? (selectedGroup.pendingCount > 0 ? 'Check returned items' : 'Branch stock return')
+                    : 'Manage stock request'}
+                </h2>
                 <p>
                   {selectedGroup.requestedBy} · {selectedGroup.branchName || 'No branch'} · {selectedGroup.sourceSystem}
                 </p>
@@ -519,7 +592,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             <div className="request-detail-status">
               <StatusBadge status={selectedGroup.status} />
               <span className="muted">
-                {selectedGroup.lineCount} line{selectedGroup.lineCount === 1 ? '' : 's'} · {isBranchReturn ? 'Returned' : 'Requested'} {formatDate(selectedGroup.createdAt)}
+                {selectedGroup.lineCount} line{selectedGroup.lineCount === 1 ? '' : 's'} · {isBranchReturn ? 'Branch return' : 'Requested'} {formatDate(selectedGroup.createdAt)}
                 {!isBranchReturn && selectedGroup.receivedAt ? ` · Received ${formatDate(selectedGroup.receivedAt)}` : ''}
               </span>
             </div>
@@ -549,7 +622,9 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
 
             {isBranchReturn && (
               <div className="integration-note">
-                CMS Return Stock already deducted branch qty. RHET increased warehouse stock when this return was accepted.
+                {selectedGroup.pendingCount > 0
+                  ? 'CMS already deducted branch qty. Check each item: reusable restores warehouse stock; not reusable records the return only.'
+                  : 'Inspection complete. Reusable lines were added back to warehouse stock with a RETURN movement.'}
               </div>
             )}
 
@@ -618,7 +693,12 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                           <td>{formatCurrency(request.internalSellingPrice)}</td>
                           <td><strong>{formatCurrency(amount)}</strong></td>
                           <td>
-                            {request.status === 'PENDING' && issue ? (
+                            {isBranchReturn && request.status === 'PENDING' ? (
+                              <>
+                                <StatusBadge status={request.status} />
+                                <small>Awaiting return check</small>
+                              </>
+                            ) : request.status === 'PENDING' && issue ? (
                               <span className="batch-status warn">{issue.title}</span>
                             ) : (
                               <>
@@ -629,10 +709,32 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                                     {request.deliveryConfirmedBy ? ` · ${request.deliveryConfirmedBy}` : ''}
                                   </small>
                                 ) : null}
+                                {request.status === 'RETURNED' && returnOutcomeLabel(request) ? (
+                                  <small>
+                                    {returnOutcomeLabel(request)}
+                                    {returnNotesDisplay(request) ? ` · ${returnNotesDisplay(request)}` : ''}
+                                  </small>
+                                ) : null}
                               </>
                             )}
                           </td>
                           <td>
+                            {isBranchReturn && request.status === 'PENDING' && (
+                              <button
+                                type="button"
+                                className="primary small-btn"
+                                disabled={Boolean(busyId) || invoiceBusy}
+                                onClick={() => {
+                                  setError('')
+                                  setReturnReusable('true')
+                                  setReturnNotes('')
+                                  setLineForAction(request)
+                                  setMode('return')
+                                }}
+                              >
+                                Check item
+                              </button>
+                            )}
                             {!isBranchReturn && request.status === 'PENDING' && (
                               <button
                                 type="button"
@@ -654,6 +756,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                                 disabled={Boolean(busyId) || invoiceBusy}
                                 onClick={() => {
                                   setError('')
+                                  setReturnNotes('')
                                   setLineForAction(request)
                                   setMode('return')
                                 }}
@@ -873,20 +976,39 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
           <form className="modal small" onSubmit={confirmReturn}>
             <div className="modal-head">
               <div>
-                <h2>Mark returned</h2>
-                <p>{lineForAction.requestedBy} · {lineForAction.branchName || '—'} · Qty {lineForAction.quantity}</p>
+                <h2>{isBranchReturn ? 'Check returned item' : 'Mark returned'}</h2>
+                <p>
+                  {requestItemLabel(lineForAction)} · Qty {lineForAction.quantity}
+                  {lineForAction.branchName ? ` · ${lineForAction.branchName}` : ''}
+                </p>
               </div>
               <button type="button" onClick={() => { if (!busyId) { setMode('manage'); setLineForAction(null) } }}>×</button>
             </div>
-            <div className="integration-note warn">
-              Warehouse stock will be restocked. If this was already delivered, CMS should reverse branch stock.
-            </div>
+            {isBranchReturn ? (
+              <>
+                <div className="integration-note warn">
+                  Reusable adds this quantity back to warehouse stock and writes a RETURN movement.
+                  Not reusable keeps warehouse qty unchanged.
+                </div>
+                <label>
+                  Outcome
+                  <select value={returnReusable} onChange={(e) => setReturnReusable(e.target.value)}>
+                    <option value="true">Reusable — add back to RHET stock</option>
+                    <option value="false">Not reusable — do not add to stock</option>
+                  </select>
+                </label>
+              </>
+            ) : (
+              <div className="integration-note warn">
+                Warehouse stock will be restocked. If this was already delivered, CMS should reverse branch stock.
+              </div>
+            )}
             <label>
               Notes
               <textarea
                 value={returnNotes}
                 onChange={(e) => setReturnNotes(e.target.value)}
-                placeholder="Optional return notes"
+                placeholder={isBranchReturn ? 'Inspection notes (optional)' : 'Optional return notes'}
               />
             </label>
             {error && <div className="page-error">{error}</div>}
@@ -895,7 +1017,9 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                 Back
               </button>
               <button className="primary" disabled={busyId === lineForAction.requestId}>
-                {busyId === lineForAction.requestId ? 'Saving…' : 'Confirm return'}
+                {busyId === lineForAction.requestId
+                  ? 'Saving…'
+                  : (isBranchReturn ? 'Confirm check' : 'Confirm return')}
               </button>
             </div>
           </form>

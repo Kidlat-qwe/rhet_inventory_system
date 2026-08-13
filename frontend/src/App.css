@@ -1769,6 +1769,14 @@ tr.row-selected{background:#f5f8ff}
   .settings-field-compact{max-width:none}
   .settings-stack .settings-input-suffix{max-width:none}
 }
+.quick-filters.sub-filters{
+  margin-top:-8px;
+  margin-bottom:14px;
+}
+.quick-filters.sub-filters button{
+  font-size:12px;
+  padding:6px 12px;
+}
 @media(max-width:760px){
   .settings-card-head,
   .settings-card-body{padding-left:14px;padding-right:14px}

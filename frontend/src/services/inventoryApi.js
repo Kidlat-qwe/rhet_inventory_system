@@ -69,11 +69,18 @@ export const shipStockRequest = (id) =>
 export const deliverStockRequest = (id) =>
   api(`/stock-requests/${id}/deliver`, { method: 'POST' }).then((response) => response.data)
 
-export const returnStockRequest = (id, notes = '') =>
-  api(`/stock-requests/${id}/return`, {
+export const returnStockRequest = (id, notesOrOptions = '', reusable = true) => {
+  const options = typeof notesOrOptions === 'object' && notesOrOptions !== null
+    ? notesOrOptions
+    : { notes: notesOrOptions, reusable }
+  return api(`/stock-requests/${id}/return`, {
     method: 'POST',
-    body: JSON.stringify({ notes: notes || null }),
+    body: JSON.stringify({
+      reusable: options.reusable !== false,
+      notes: options.notes || null,
+    }),
   }).then((response) => response.data)
+}
 
 export const rejectStockRequest = (id, rejectionReason) =>
   api(`/stock-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ rejectionReason }) }).then((response) => response.data)

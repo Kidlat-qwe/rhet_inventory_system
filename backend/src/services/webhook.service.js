@@ -14,6 +14,14 @@ export function looksLikeUuid(value) {
   return typeof value === 'string' && UUID_RE.test(value.trim());
 }
 
+/** CMS Return Stock lines (PSMS-RET-* / requestKind RETURN). Never emit stock_request.*. */
+export function isCmsBranchReturn(request = {}) {
+  const kind = String(request.request_kind || request.requestKind || '').toUpperCase();
+  if (kind === 'RETURN') return true;
+  const ref = String(request.external_reference || request.externalReference || '').trim();
+  return /(?:^|-)RET-/i.test(ref);
+}
+
 /** Build processor context from authenticated admin row (req.admin). */
 export function processorFromAdmin(admin) {
   if (!admin) return null;
@@ -95,14 +103,15 @@ export async function dispatchStockReturnWebhook(request, event = 'stock_return.
     || request.requested_by
     || 'Branch Admin';
 
+  const accepted = event === 'stock_return.accepted';
   const payload = {
     event,
     requestId: request.request_id || request.requestId,
-    requestKind: request.request_kind || request.requestKind || 'RETURN',
+    requestKind: 'RETURN',
     externalReference: request.external_reference || request.externalReference,
     batchReference: request.batch_reference || request.batchReference || null,
     sourceSystem: request.source_system || request.sourceSystem,
-    status: request.status || 'RETURNED',
+    status: accepted ? 'RETURNED' : 'PENDING',
     requestedBy: request.requested_by || request.requestedBy,
     branchName: request.branch_name || request.branchName || null,
     reason: request.reason,
@@ -113,10 +122,15 @@ export async function dispatchStockReturnWebhook(request, event = 'stock_return.
     quantity: request.quantity,
     matchedSku: request.matched_sku || request.matchedSku,
     inventoryId: request.inventory_id || request.inventoryId,
-    processedBy: processedByName,
-    processedByName: processedByName,
     timestamp: new Date().toISOString(),
   };
+
+  if (accepted) {
+    payload.returnReusable = request.return_reusable === true || request.returnReusable === true;
+    payload.returnNotes = request.return_notes || request.returnNotes || null;
+    payload.processedBy = processedByName;
+    payload.processedByName = processedByName;
+  }
 
   if (env.NODE_ENV !== 'production') {
     console.log('[webhook] POST', url, JSON.stringify({
@@ -144,6 +158,14 @@ export async function dispatchStockReturnWebhook(request, event = 'stock_return.
 }
 
 export async function dispatchStockRequestWebhook(request, event, processor = null) {
+  if (isCmsBranchReturn(request)) {
+    console.warn('[webhook] skipped stock_request.* for CMS branch return', {
+      event,
+      externalReference: request.external_reference || request.externalReference,
+    });
+    return { skipped: true, reason: 'CMS_BRANCH_RETURN' };
+  }
+
   const url = request.webhook_url || env.PSMS_WEBHOOK_URL;
   if (!url) return { skipped: true };
 
@@ -182,6 +204,8 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
     deliveryNotes: request.delivery_notes || request.deliveryNotes || request.notes || null,
     deliveredAt: request.delivered_at || request.deliveredAt || null,
     wasDelivered: request.was_delivered ?? request.wasDelivered ?? null,
+    returnReusable: request.return_reusable ?? request.returnReusable ?? null,
+    returnNotes: request.return_notes || request.returnNotes || null,
     processedAt: request.processed_at || request.processedAt,
     timestamp: new Date().toISOString(),
   };

@@ -5,6 +5,8 @@ import * as inventory from './inventory.service.js';
 import { resolveInventoryItem } from './inventory-resolver.service.js';
 import {
   dispatchStockRequestWebhook,
+  dispatchStockReturnWebhook,
+  isCmsBranchReturn,
   looksLikeUuid,
   processorFromAdmin,
   resolveProcessedByDisplayName,
@@ -136,8 +138,12 @@ async function recordWebhookAttempt(requestId, status, errorMessage) {
 
 async function notify(request, event, processor = null) {
   try {
+    if (isCmsBranchReturn(request)) {
+      return { skipped: true, reason: 'CMS_BRANCH_RETURN' };
+    }
     const result = await dispatchStockRequestWebhook(request, event, processor);
     if (result?.skipped) {
+      if (result.reason === 'CMS_BRANCH_RETURN') return result;
       await recordWebhookAttempt(
         request.request_id,
         'SKIPPED',
@@ -329,12 +335,75 @@ export async function loadStockRequestRowsByIds(ids, db = pool) {
   return withComponents.map(shapeStockRequest);
 }
 
+async function restockStockRequestLine(db, current, adminId, notes) {
+  if (!current.inventory_id) {
+    throw new AppError(422, 'ITEM_NOT_MATCHED', 'Cannot restock a request with no matched inventory item');
+  }
+
+  const components = await listRequestComponents(current.request_id, db);
+  const parentMeta = await inventory.getInventory(current.inventory_id, db);
+  const isLearningKitReturn = components.length > 0;
+  const isToolKitReturn = inventory.isToolKitCategory(parentMeta);
+  const remarks = notes
+    || `Reusable return for ${current.external_reference || current.request_id}`;
+  let movementId = null;
+
+  if (isLearningKitReturn) {
+    for (const spec of components) {
+      if (!spec.inventoryId) continue;
+      const componentMeta = await inventory.getInventory(spec.inventoryId, db).catch(() => null);
+      const movementInput = {
+        movementType: 'RETURN',
+        quantity: Number(spec.quantity) || current.quantity,
+        referenceNumber: current.external_reference || current.request_id,
+        remarks,
+      };
+      const movement = componentMeta && inventory.isToolKitCategory(componentMeta)
+        ? await inventory.createBundleAwareMovement(spec.inventoryId, movementInput, adminId, db, {})
+        : await inventory.createMovement(spec.inventoryId, movementInput, adminId, db);
+      movementId = movement?.movementId || movement?.movement_id || movementId;
+    }
+  } else if (isToolKitReturn) {
+    const movement = await inventory.createBundleAwareMovement(
+      current.inventory_id,
+      {
+        movementType: 'RETURN',
+        quantity: current.quantity,
+        referenceNumber: current.external_reference || current.request_id,
+        remarks,
+      },
+      adminId,
+      db,
+      {},
+    );
+    movementId = movement?.movementId || movement?.movement_id || null;
+  } else {
+    const movement = await inventory.createMovement(
+      current.inventory_id,
+      {
+        movementType: 'RETURN',
+        quantity: current.quantity,
+        referenceNumber: current.external_reference || current.request_id,
+        remarks,
+      },
+      adminId,
+      db,
+    );
+    movementId = movement?.movementId || movement?.movement_id || null;
+  }
+
+  return movementId;
+}
+
 /** Deduct warehouse stock and mark SHIPPED inside an open transaction. */
 export async function shipStockRequestInDb(db, id, adminId) {
   const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
   if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
 
   const current = locked.rows[0];
+  if (String(current.request_kind || '').toUpperCase() === 'RETURN') {
+    throw new AppError(409, 'INVALID_STATUS_TRANSITION', 'Branch return lines cannot be shipped');
+  }
   if (current.status !== 'PENDING') {
     throw new AppError(409, 'REQUEST_NOT_PENDING', `Request is already ${current.status.toLowerCase()}`);
   }
@@ -519,6 +588,13 @@ export async function deliverStockRequest(id, options = {}) {
 
   // Idempotent: CMS confirm-delivery may retry after RHET is already DELIVERED.
   const current = await getStockRequest(id);
+  if (isCmsBranchReturn(current)) {
+    throw new AppError(
+      409,
+      'INVALID_STATUS_TRANSITION',
+      'Branch returns cannot be marked delivered',
+    );
+  }
   if (String(current.status || '').toUpperCase() === 'DELIVERED') {
     if (confirmedBy || notes || branchName) {
       await pool.query(
@@ -582,103 +658,58 @@ export async function deliverStockRequest(id, options = {}) {
   return shapeStockRequest(withComponents);
 }
 
-export async function returnStockRequest(id, admin, notes = null) {
+export async function returnStockRequest(id, admin, options = {}) {
   const adminId = typeof admin === 'object' ? admin.user_id : admin;
   const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
+  const notes = typeof options === 'string' ? options : (options?.notes || null);
   let wasDelivered = false;
+  let isBranchReturn = false;
+  let reusable = true;
 
   await withTransaction(async (db) => {
     const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
     if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
 
     const current = locked.rows[0];
-    if (current.status !== 'SHIPPED' && current.status !== 'DELIVERED') {
-      throw new AppError(
-        409,
-        'INVALID_STATUS_TRANSITION',
-        `Cannot return a request in ${current.status.toLowerCase()} status`,
-      );
-    }
+    isBranchReturn = String(current.request_kind || '').toUpperCase() === 'RETURN';
 
-    if (!current.inventory_id) {
-      throw new AppError(422, 'ITEM_NOT_MATCHED', 'Cannot restock a request with no matched inventory item');
-    }
-
-    wasDelivered = current.status === 'DELIVERED';
-    const components = await listRequestComponents(id, db);
-    const parentMeta = await inventory.getInventory(current.inventory_id, db);
-    const isLearningKitReturn = components.length > 0;
-    const isToolKitReturn = inventory.isToolKitCategory(parentMeta);
-
-    if (isLearningKitReturn) {
-      for (const spec of components) {
-        if (!spec.inventoryId) continue;
-        const componentMeta = await inventory.getInventory(spec.inventoryId, db).catch(() => null);
-        const movementInput = {
-          movementType: 'RETURN',
-          quantity: Number(spec.quantity) || current.quantity,
-          referenceNumber: current.external_reference || current.request_id,
-          remarks: notes
-            || `Returned stock request ${current.external_reference || current.request_id}`,
-        };
-        if (componentMeta && inventory.isToolKitCategory(componentMeta)) {
-          await inventory.createBundleAwareMovement(
-            spec.inventoryId,
-            movementInput,
-            adminId,
-            db,
-            {},
-          );
-        } else {
-          await inventory.createMovement(
-            spec.inventoryId,
-            movementInput,
-            adminId,
-            db,
-          );
-        }
+    if (isBranchReturn) {
+      reusable = options?.reusable !== false;
+      if (current.status !== 'PENDING') {
+        throw new AppError(
+          409,
+          'INVALID_STATUS_TRANSITION',
+          `This branch return is already ${String(current.status || '').toLowerCase()}`,
+        );
       }
-    } else if (isToolKitReturn) {
-      await inventory.createBundleAwareMovement(
-        current.inventory_id,
-        {
-          movementType: 'RETURN',
-          quantity: current.quantity,
-          referenceNumber: current.external_reference || current.request_id,
-          remarks: notes
-            || `Returned stock request ${current.external_reference || current.request_id}`,
-        },
-        adminId,
-        db,
-        {},
-      );
     } else {
-      await inventory.createMovement(
-        current.inventory_id,
-        {
-          movementType: 'RETURN',
-          quantity: current.quantity,
-          referenceNumber: current.external_reference || current.request_id,
-          remarks: notes
-            || `Returned stock request ${current.external_reference || current.request_id}`,
-        },
-        adminId,
-        db,
-      );
+      reusable = true;
+      if (current.status !== 'SHIPPED' && current.status !== 'DELIVERED') {
+        throw new AppError(
+          409,
+          'INVALID_STATUS_TRANSITION',
+          `Cannot return a request in ${current.status.toLowerCase()} status`,
+        );
+      }
+      wasDelivered = current.status === 'DELIVERED';
+    }
+
+    let movementId = null;
+    if (reusable) {
+      movementId = await restockStockRequestLine(db, current, adminId, notes);
     }
 
     await db.query(
       `UPDATE stock_requests
        SET status = 'RETURNED',
-           rejection_reason = CASE
-             WHEN $1::text IS NULL OR $1 = '' THEN rejection_reason
-             WHEN rejection_reason IS NULL OR rejection_reason = '' THEN $1
-             ELSE rejection_reason || ' | ' || $1
-           END,
-           processed_by = COALESCE(processed_by, $2),
+           return_reusable = $1,
+           return_notes = $2,
+           movement_id = COALESCE($3, movement_id),
+           processed_by = COALESCE(processed_by, $4),
+           processed_at = COALESCE(processed_at, NOW()),
            updated_at = NOW()
-       WHERE request_id = $3`,
-      [notes || null, adminId, id],
+       WHERE request_id = $5`,
+      [reusable, notes || null, movementId, adminId, id],
     );
   });
 
@@ -690,13 +721,50 @@ export async function returnStockRequest(id, admin, notes = null) {
 
   const shaped = shapeStockRequest(withComponents);
   shaped.wasDelivered = wasDelivered;
-  await notify({ ...withComponents, was_delivered: wasDelivered, wasDelivered }, 'stock_request.returned', resolvedProcessor);
+
+  if (isBranchReturn) {
+    try {
+      await dispatchStockReturnWebhook({
+        ...withComponents,
+        return_reusable: reusable,
+        returnReusable: reusable,
+        return_notes: notes,
+        returnNotes: notes,
+      }, 'stock_return.accepted', resolvedProcessor);
+    } catch (error) {
+      console.error('Stock return inspect webhook failed', id, error.message);
+    }
+  } else {
+    await notify({
+      ...withComponents,
+      was_delivered: wasDelivered,
+      wasDelivered,
+      return_reusable: reusable,
+      returnReusable: reusable,
+      return_notes: notes,
+      returnNotes: notes,
+    }, 'stock_request.returned', resolvedProcessor);
+  }
+
   return shaped;
 }
 
 export async function rejectStockRequest(id, admin, rejectionReason) {
   const adminId = typeof admin === 'object' ? admin.user_id : admin;
   const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
+
+  const existingKind = await pool.query(
+    'SELECT request_kind, status FROM stock_requests WHERE request_id = $1',
+    [id],
+  );
+  if (!existingKind.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
+  if (String(existingKind.rows[0].request_kind || '').toUpperCase() === 'RETURN') {
+    throw new AppError(
+      409,
+      'INVALID_STATUS_TRANSITION',
+      'Branch returns cannot be rejected. Inspect the item as reusable or not reusable instead',
+    );
+  }
 
   const result = await pool.query(
     `UPDATE stock_requests

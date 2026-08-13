@@ -82,6 +82,7 @@ export function getStockIssue(request) {
 }
 
 export function canShipRequest(request) {
+  if (String(request?.requestKind || '').toUpperCase() === 'RETURN') return false
   return request?.status === 'PENDING' && !getStockIssue(request)
 }
 
