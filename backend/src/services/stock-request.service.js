@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { pool, withTransaction } from '../database/pool.js';
 import { AppError, camelize } from '../utils/api.js';
 import * as inventory from './inventory.service.js';
@@ -10,9 +11,11 @@ import {
   resolveProcessedByUserId,
 } from './webhook.service.js';
 
-const requestSelect = `SELECT sr.*,
+export const requestSelect = `SELECT sr.*,
     i.item_name,
     i.stocks AS current_stocks,
+    i.internal_selling_price,
+    i.price AS catalog_price,
     a.full_name AS processed_by_name,
     a.email AS processed_by_email
   FROM stock_requests sr
@@ -159,10 +162,12 @@ async function notify(request, event, processor = null) {
 export async function createStockRequestsFromPsms(input) {
   const created = [];
   const sourceSystem = input.sourceSystem || 'PSMS';
+  const batchReference = String(input.batchReference || '').trim()
+    || `${sourceSystem}-BATCH-${randomUUID()}`;
 
   for (const [index, item] of input.items.entries()) {
     const externalReference = item.externalReference
-      || `${input.batchReference || sourceSystem}-${Date.now()}-${index + 1}`;
+      || `${batchReference}-${index + 1}`;
 
     const categoryLookup = await pool.query(
       'SELECT category_id, category_name, category_kind FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
@@ -180,14 +185,15 @@ export async function createStockRequestsFromPsms(input) {
 
     const result = await pool.query(
       `INSERT INTO stock_requests (
-        source_system, external_reference, request_date, requested_by, branch_name, reason,
+        source_system, external_reference, batch_reference, request_date, requested_by, branch_name, reason,
         category_name, gender, item_type, size_label, quantity, status,
         inventory_id, matched_sku, webhook_url
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'PENDING',$12,$13,$14)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'PENDING',$13,$14,$15)
       RETURNING *`,
       [
         sourceSystem,
         externalReference,
+        batchReference,
         input.requestDate,
         input.requestedBy,
         input.branchName,
@@ -311,158 +317,171 @@ export async function getStockRequest(id) {
   return shapeStockRequest(withComponents);
 }
 
-export async function shipStockRequest(id, admin) {
+export async function loadStockRequestRowsByIds(ids, db = pool) {
+  const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+  if (!uniqueIds.length) return [];
+  const result = await db.query(
+    `${requestSelect} WHERE sr.request_id = ANY($1::uuid[])`,
+    [uniqueIds],
+  );
+  const withComponents = await attachRequestComponents(result.rows, db);
+  return withComponents.map(shapeStockRequest);
+}
+
+/** Deduct warehouse stock and mark SHIPPED inside an open transaction. */
+export async function shipStockRequestInDb(db, id, adminId) {
+  const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
+  if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
+
+  const current = locked.rows[0];
+  if (current.status !== 'PENDING') {
+    throw new AppError(409, 'REQUEST_NOT_PENDING', `Request is already ${current.status.toLowerCase()}`);
+  }
+
+  let inventoryId = current.inventory_id;
+  let matchedSku = current.matched_sku;
+
+  if (!inventoryId) {
+    const resolved = await resolveInventoryItem(db, {
+      categoryName: current.category_name,
+      gender: current.gender,
+      type: current.item_type,
+      size: current.size_label,
+      itemName: current.item_name,
+    });
+    if (resolved.error) throw new AppError(422, 'ITEM_NOT_MATCHED', resolved.error);
+    inventoryId = resolved.item.inventory_id;
+    matchedSku = resolved.item.sku;
+  }
+
+  const itemMeta = await db.query(
+    `SELECT i.stocks, c.category_name, c.category_kind
+     FROM inventory i
+     JOIN categories c ON c.category_id = i.category_id
+     WHERE i.inventory_id = $1
+     FOR UPDATE OF i`,
+    [inventoryId],
+  );
+  if (!itemMeta.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
+
+  const isLearningKit = inventory.isLearningKitCategory(itemMeta.rows[0]);
+  const isToolKit = inventory.isToolKitCategory(itemMeta.rows[0]);
+  const isKit = isLearningKit || isToolKit;
+  const bom = isKit ? await inventory.listBundleComponents(inventoryId, db) : [];
+  const requestComponents = isLearningKit ? await listRequestComponents(id, db) : [];
+  const resolvedComponents = [];
+
+  if (isLearningKit) {
+    if (!bom.length) {
+      throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Learning Kit has no bill of materials configured');
+    }
+
+    for (const slot of bom) {
+      const matching = requestComponents.filter(
+        (row) => String(row.categoryName || '').toLowerCase() === String(slot.categoryName || '').toLowerCase(),
+      );
+      if (!matching.length) {
+        throw new AppError(
+          422,
+          'KIT_COMPONENT_REQUIRED',
+          `Learning Kit requires component specs for category "${slot.categoryName}" (provided by the requesting system)`,
+        );
+      }
+    }
+
+    for (const spec of requestComponents) {
+      const allowed = bom.some(
+        (slot) => String(slot.categoryName || '').toLowerCase() === String(spec.categoryName || '').toLowerCase(),
+      );
+      if (!allowed) {
+        throw new AppError(422, 'KIT_COMPONENT_INVALID', `Component category "${spec.categoryName}" is not part of this Learning Kit`);
+      }
+
+      let componentId = spec.inventoryId;
+      let componentSku = spec.matchedSku;
+      if (!componentId) {
+        const resolved = await resolveInventoryItem(db, {
+          categoryName: spec.categoryName,
+          gender: spec.gender,
+          type: spec.itemType,
+          size: spec.sizeLabel,
+          itemName: spec.itemName,
+        });
+        if (resolved.error) throw new AppError(422, 'ITEM_NOT_MATCHED', resolved.error);
+        componentId = resolved.item.inventory_id;
+        componentSku = resolved.item.sku;
+        await db.query(
+          `UPDATE stock_request_components
+           SET inventory_id = $1, matched_sku = $2, failure_reason = NULL
+           WHERE request_component_id = $3`,
+          [componentId, componentSku, spec.requestComponentId],
+        );
+      }
+
+      resolvedComponents.push({
+        inventoryId: componentId,
+        quantity: Number(spec.quantity),
+        sku: componentSku,
+      });
+    }
+
+    const available = await inventory.computeAvailableKits(bom, db);
+    if (available < current.quantity) {
+      throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} kit(s) can be assembled from current category stock`);
+    }
+  } else if (isToolKit) {
+    if (!bom.length || !bom.every((row) => row.isPinned)) {
+      throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Tool Kit has no pinned raw items configured');
+    }
+    const available = await inventory.computeAvailableKits(bom, db);
+    if (available < current.quantity) {
+      throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} Tool Kit(s) can be assembled from raw item stock`);
+    }
+  } else if (itemMeta.rows[0].stocks < current.quantity) {
+    throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${itemMeta.rows[0].stocks} unit(s) are available`);
+  }
+
+  await db.query(
+    `UPDATE stock_requests
+     SET inventory_id = $1, matched_sku = $2, processed_by = $3, processed_at = NOW(), updated_at = NOW()
+     WHERE request_id = $4`,
+    [inventoryId, matchedSku, adminId, id],
+  );
+
+  const movement = await inventory.createBundleAwareMovement(
+    inventoryId,
+    {
+      movementType: 'RELEASED',
+      quantity: current.quantity,
+      referenceNumber: current.external_reference || current.request_id,
+      remarks: `${current.source_system} shipped to branch for ${current.requested_by}: ${current.reason}`,
+    },
+    adminId,
+    db,
+    isLearningKit ? { resolvedComponents } : {},
+  );
+
+  const primaryMovement = movement.primary || movement;
+  const firstComponent = (movement.components || [])[0];
+  const movementId = primaryMovement.movementId
+    || primaryMovement.movement_id
+    || firstComponent?.movementId
+    || firstComponent?.movement_id
+    || null;
+
+  await db.query(
+    `UPDATE stock_requests
+     SET status = 'SHIPPED', movement_id = $1, updated_at = NOW()
+     WHERE request_id = $2`,
+    [movementId, id],
+  );
+
+  return current;
+}
+
+export async function finalizeShippedRequest(id, admin) {
   const adminId = typeof admin === 'object' ? admin.user_id : admin;
   const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
-
-  await withTransaction(async (db) => {
-    const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
-    if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
-
-    const current = locked.rows[0];
-    if (current.status !== 'PENDING') {
-      throw new AppError(409, 'REQUEST_NOT_PENDING', `Request is already ${current.status.toLowerCase()}`);
-    }
-
-    let inventoryId = current.inventory_id;
-    let matchedSku = current.matched_sku;
-
-    if (!inventoryId) {
-      const resolved = await resolveInventoryItem(db, {
-        categoryName: current.category_name,
-        gender: current.gender,
-        type: current.item_type,
-        size: current.size_label,
-        itemName: current.item_name,
-      });
-      if (resolved.error) throw new AppError(422, 'ITEM_NOT_MATCHED', resolved.error);
-      inventoryId = resolved.item.inventory_id;
-      matchedSku = resolved.item.sku;
-    }
-
-    const itemMeta = await db.query(
-      `SELECT i.stocks, c.category_name, c.category_kind
-       FROM inventory i
-       JOIN categories c ON c.category_id = i.category_id
-       WHERE i.inventory_id = $1
-       FOR UPDATE OF i`,
-      [inventoryId],
-    );
-    if (!itemMeta.rowCount) throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
-
-    const isLearningKit = inventory.isLearningKitCategory(itemMeta.rows[0]);
-    const isToolKit = inventory.isToolKitCategory(itemMeta.rows[0]);
-    const isKit = isLearningKit || isToolKit;
-    const bom = isKit ? await inventory.listBundleComponents(inventoryId, db) : [];
-    const requestComponents = isLearningKit ? await listRequestComponents(id, db) : [];
-    const resolvedComponents = [];
-
-    if (isLearningKit) {
-      if (!bom.length) {
-        throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Learning Kit has no bill of materials configured');
-      }
-
-      for (const slot of bom) {
-        const matching = requestComponents.filter(
-          (row) => String(row.categoryName || '').toLowerCase() === String(slot.categoryName || '').toLowerCase(),
-        );
-        if (!matching.length) {
-          throw new AppError(
-            422,
-            'KIT_COMPONENT_REQUIRED',
-            `Learning Kit requires component specs for category "${slot.categoryName}" (provided by the requesting system)`,
-          );
-        }
-      }
-
-      for (const spec of requestComponents) {
-        const allowed = bom.some(
-          (slot) => String(slot.categoryName || '').toLowerCase() === String(spec.categoryName || '').toLowerCase(),
-        );
-        if (!allowed) {
-          throw new AppError(422, 'KIT_COMPONENT_INVALID', `Component category "${spec.categoryName}" is not part of this Learning Kit`);
-        }
-
-        let componentId = spec.inventoryId;
-        let componentSku = spec.matchedSku;
-        if (!componentId) {
-          const resolved = await resolveInventoryItem(db, {
-            categoryName: spec.categoryName,
-            gender: spec.gender,
-            type: spec.itemType,
-            size: spec.sizeLabel,
-            itemName: spec.itemName,
-          });
-          if (resolved.error) throw new AppError(422, 'ITEM_NOT_MATCHED', resolved.error);
-          componentId = resolved.item.inventory_id;
-          componentSku = resolved.item.sku;
-          await db.query(
-            `UPDATE stock_request_components
-             SET inventory_id = $1, matched_sku = $2, failure_reason = NULL
-             WHERE request_component_id = $3`,
-            [componentId, componentSku, spec.requestComponentId],
-          );
-        }
-
-        resolvedComponents.push({
-          inventoryId: componentId,
-          quantity: Number(spec.quantity),
-          sku: componentSku,
-        });
-      }
-
-      const available = await inventory.computeAvailableKits(bom, db);
-      if (available < current.quantity) {
-        throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} kit(s) can be assembled from current category stock`);
-      }
-    } else if (isToolKit) {
-      if (!bom.length || !bom.every((row) => row.isPinned)) {
-        throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Tool Kit has no pinned raw items configured');
-      }
-      const available = await inventory.computeAvailableKits(bom, db);
-      if (available < current.quantity) {
-        throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${available} Tool Kit(s) can be assembled from raw item stock`);
-      }
-    } else if (itemMeta.rows[0].stocks < current.quantity) {
-      throw new AppError(409, 'INSUFFICIENT_STOCK', `Only ${itemMeta.rows[0].stocks} unit(s) are available`);
-    }
-
-    await db.query(
-      `UPDATE stock_requests
-       SET inventory_id = $1, matched_sku = $2, processed_by = $3, processed_at = NOW(), updated_at = NOW()
-       WHERE request_id = $4`,
-      [inventoryId, matchedSku, adminId, id],
-    );
-
-    const movement = await inventory.createBundleAwareMovement(
-      inventoryId,
-      {
-        movementType: 'RELEASED',
-        quantity: current.quantity,
-        referenceNumber: current.external_reference || current.request_id,
-        remarks: `${current.source_system} shipped to branch for ${current.requested_by}: ${current.reason}`,
-      },
-      adminId,
-      db,
-      isLearningKit ? { resolvedComponents } : {},
-    );
-
-    const primaryMovement = movement.primary || movement;
-    const firstComponent = (movement.components || [])[0];
-    const movementId = primaryMovement.movementId
-      || primaryMovement.movement_id
-      || firstComponent?.movementId
-      || firstComponent?.movement_id
-      || null;
-
-    await db.query(
-      `UPDATE stock_requests
-       SET status = 'SHIPPED', movement_id = $1, updated_at = NOW()
-       WHERE request_id = $2`,
-      [movementId, id],
-    );
-  });
-
   const enriched = await enrichProcessorIdentity(await loadRequestRow(id), adminId);
   const [withComponents] = await attachRequestComponents([enriched]);
   const resolvedProcessor = processor?.displayName
@@ -470,6 +489,14 @@ export async function shipStockRequest(id, admin) {
     : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email });
   await notify(withComponents, 'stock_request.shipped', resolvedProcessor);
   return shapeStockRequest(withComponents);
+}
+
+export async function shipStockRequest(id, admin) {
+  const adminId = typeof admin === 'object' ? admin.user_id : admin;
+  await withTransaction(async (db) => {
+    await shipStockRequestInDb(db, id, adminId);
+  });
+  return finalizeShippedRequest(id, admin);
 }
 
 /** @deprecated Prefer shipStockRequest — kept for older clients during transition. */

@@ -177,7 +177,7 @@ X-Integration-Key: YOUR_KEY
 | `reason` | Yes | 5–500 chars |
 | `items` | Yes | 1–50 lines |
 | `requestDate` | No | Defaults to today |
-| `batchReference` | No | Optional batch id |
+| `batchReference` | Strongly recommended | Shared cart id so RHET groups multi-item submits for Manage / invoicing |
 | `webhookUrl` | Recommended | Your callback |
 
 ### Each `items[]` row

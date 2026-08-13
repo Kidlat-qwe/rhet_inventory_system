@@ -35,14 +35,16 @@ const ALL_TOPICS = [
   },
   {
     id: 'stock-requests',
-    q: 'How do I approve or reject a Stock Request?',
+    q: 'How do I manage or invoice a Stock Request?',
     answer: {
       steps: [
         'Go to **Stock Requests** from the sidebar.',
-        'Pending requests from external systems (e.g. CMS) appear here.',
-        'Click a request row to open its detail.',
-        'Click **Approve** to release stock from the warehouse, or **Reject** to decline.',
-        'The external system is notified via webhook automatically.',
+        'Each CMS cart appears as one **request group** (multiple items stay together).',
+        'Click **Manage** to see every line, internal selling price, and stock issues.',
+        'Check the lines for **this shipment**. Unchecked ready lines stay Pending for shipment 2+. Out-of-stock lines cannot be selected.',
+        'Tick **Items picked & verified**, then **Preview invoice**. Print if needed.',
+        'Click **Confirm ship & save invoice** to deduct warehouse stock. Remaining Pending lines get a later invoice.',
+        'Use **Reject** or **Return** on a single line when needed. Branch delivery is confirmed in CMS.',
       ],
     },
   },

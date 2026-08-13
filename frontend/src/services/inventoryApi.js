@@ -78,6 +78,24 @@ export const returnStockRequest = (id, notes = '') =>
 export const rejectStockRequest = (id, rejectionReason) =>
   api(`/stock-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ rejectionReason }) }).then((response) => response.data)
 
+export const previewStockRequestInvoice = (requestIds) =>
+  api('/stock-requests/invoices/preview', {
+    method: 'POST',
+    body: JSON.stringify({ requestIds }),
+  }).then((response) => response.data)
+
+export const issueStockRequestInvoiceAndShip = (requestIds) =>
+  api('/stock-requests/invoices', {
+    method: 'POST',
+    body: JSON.stringify({ requestIds }),
+  }).then((response) => response.data)
+
+export const fetchStockRequestInvoices = (params = {}) =>
+  api(`/stock-requests/invoices${queryString(params)}`).then((response) => response.data || [])
+
+export const fetchStockRequestInvoice = (invoiceId) =>
+  api(`/stock-requests/invoices/${invoiceId}`).then((response) => response.data)
+
 export const createInventoryItem = (body) =>
   api('/inventory', { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 

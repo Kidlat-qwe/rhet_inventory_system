@@ -6,11 +6,13 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { useSettings } from '../../context/SettingsContext'
 import { usePagination } from '../../hooks/usePagination'
 import {
+  fetchStockRequestInvoices,
+  issueStockRequestInvoiceAndShip,
+  previewStockRequestInvoice,
   rejectStockRequest,
   returnStockRequest,
-  shipStockRequest,
 } from '../../services/inventoryApi'
-import { formatDate, formatStatus } from '../../utils/format'
+import { formatCurrency, formatDate, formatStatus } from '../../utils/format'
 import {
   branchDisplayName,
   canShipRequest,
@@ -23,6 +25,8 @@ import {
   componentItemLabel,
   componentSkuLabel,
 } from '../../utils/stockRequestChecklist'
+import { buildStockRequestGroups, groupMatchesTab } from '../../utils/stockRequestGroups'
+import { formatInvoiceMoney, openInvoicePrintWindow } from '../../utils/stockRequestInvoice'
 
 const STATUS_TABS = ['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'REJECTED']
 
@@ -39,16 +43,18 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
   const [branchMenuCoords, setBranchMenuCoords] = useState({ top: 0, left: 0 })
   const branchHeaderRef = useRef(null)
   const [busyId, setBusyId] = useState('')
-  const [batchBusy, setBatchBusy] = useState(false)
+  const [invoiceBusy, setInvoiceBusy] = useState(false)
   const [error, setError] = useState('')
-  const [selected, setSelected] = useState(null)
-  const [mode, setMode] = useState('details')
+  const [selectedGroupKey, setSelectedGroupKey] = useState('')
+  const [mode, setMode] = useState('manage')
+  const [lineForAction, setLineForAction] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [returnNotes, setReturnNotes] = useState('')
-  const [selectedIds, setSelectedIds] = useState(() => new Set())
-  const [batchRequests, setBatchRequests] = useState(null)
   const [pickedVerified, setPickedVerified] = useState(false)
-  const [batchResult, setBatchResult] = useState(null)
+  const [invoicePreview, setInvoicePreview] = useState(null)
+  const [issuedInvoice, setIssuedInvoice] = useState(null)
+  const [groupInvoices, setGroupInvoices] = useState([])
+  const [selectedShipIds, setSelectedShipIds] = useState(() => new Set())
 
   const branchOptions = useMemo(() => {
     const map = new Map()
@@ -66,39 +72,67 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     return requests.filter((request) => normalizeBranchKey(request.branchName) === branchFilter)
   }, [requests, branchFilter])
 
-  const shown = useMemo(
-    () => (filter ? requestsForBranch.filter((request) => request.status === filter) : requestsForBranch),
-    [requestsForBranch, filter],
+  const groups = useMemo(
+    () => buildStockRequestGroups(requestsForBranch),
+    [requestsForBranch],
   )
 
-  const { page, setPage, pageItems, total } = usePagination(shown, 15)
-
-  const stockIssue = useMemo(() => getStockIssue(selected), [selected])
-  const variation = selected ? requestVariation(selected) : ''
-
-  const selectedPending = useMemo(() => {
-    if (filter !== 'PENDING') return []
-    return shown.filter((request) => selectedIds.has(request.requestId))
-  }, [filter, shown, selectedIds])
-
-  const selectionBranchKey = useMemo(() => {
-    if (!selectedPending.length) return ''
-    return normalizeBranchKey(selectedPending[0].branchName)
-  }, [selectedPending])
-
-  const pageSelectableIds = useMemo(
-    () => (filter === 'PENDING' ? pageItems.map((request) => request.requestId) : []),
-    [filter, pageItems],
+  const shownGroups = useMemo(
+    () => groups.filter((group) => groupMatchesTab(group, filter)),
+    [groups, filter],
   )
 
-  const allPageSelected = pageSelectableIds.length > 0
-    && pageSelectableIds.every((id) => selectedIds.has(id))
+  const tabCounts = useMemo(() => {
+    const counts = {}
+    for (const status of STATUS_TABS) {
+      counts[status] = groups.filter((group) => groupMatchesTab(group, status)).length
+    }
+    return counts
+  }, [groups])
+
+  const { page, setPage, pageItems, total } = usePagination(shownGroups, 15)
+  const selectedGroup = useMemo(
+    () => groups.find((group) => group.key === selectedGroupKey) || null,
+    [groups, selectedGroupKey],
+  )
+
+  const shippableLines = useMemo(
+    () => (selectedGroup?.requests || []).filter((request) => canShipRequest(request)),
+    [selectedGroup],
+  )
+
+  const selectedShippableLines = useMemo(
+    () => shippableLines.filter((request) => selectedShipIds.has(request.requestId)),
+    [shippableLines, selectedShipIds],
+  )
+
+  const selectedShipmentTotal = useMemo(
+    () => selectedShippableLines.reduce(
+      (sum, request) => sum + Number(request.quantity || 0) * Number(request.internalSellingPrice || 0),
+      0,
+    ),
+    [selectedShippableLines],
+  )
+
+  const allShippableSelected = shippableLines.length > 0
+    && shippableLines.every((request) => selectedShipIds.has(request.requestId))
 
   useEffect(() => {
-    setSelectedIds(new Set())
-    setBatchRequests(null)
-    setBatchResult(null)
+    if (!selectedGroup) return
+    const shippableIds = new Set(
+      selectedGroup.requests.filter((request) => canShipRequest(request)).map((request) => request.requestId),
+    )
+    setSelectedShipIds((prev) => new Set([...prev].filter((id) => shippableIds.has(id))))
+  }, [selectedGroup])
+
+  useEffect(() => {
+    setSelectedGroupKey('')
+    setInvoicePreview(null)
+    setIssuedInvoice(null)
     setPickedVerified(false)
+    setSelectedShipIds(new Set())
+    setMode('manage')
+    setLineForAction(null)
   }, [filter, branchFilter])
 
   useEffect(() => {
@@ -106,6 +140,25 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
       setBranchFilter('')
     }
   }, [branchFilter, branchOptions])
+
+  useEffect(() => {
+    if (!selectedGroup?.batchReference) {
+      setGroupInvoices([])
+      return undefined
+    }
+    let cancelled = false
+    fetchStockRequestInvoices({
+      batchReference: selectedGroup.batchReference,
+      sourceSystem: selectedGroup.sourceSystem || 'PSMS',
+    })
+      .then((rows) => {
+        if (!cancelled) setGroupInvoices(Array.isArray(rows) ? rows : [])
+      })
+      .catch(() => {
+        if (!cancelled) setGroupInvoices([])
+      })
+    return () => { cancelled = true }
+  }, [selectedGroup?.batchReference, selectedGroup?.sourceSystem, selectedGroup?.shippedCount, selectedGroup?.pendingCount])
 
   const branchFilterLabel = useMemo(() => {
     if (!branchFilter) return 'Branch'
@@ -140,24 +193,36 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     setBranchMenuOpen(false)
   }
 
-  function openDetails(request) {
+  function openManage(group) {
     setError('')
     setRejectReason('')
     setReturnNotes('')
-    setMode('details')
-    setSelected(request)
+    setPickedVerified(false)
+    setInvoicePreview(null)
+    setIssuedInvoice(null)
+    setMode('manage')
+    setLineForAction(null)
+    setSelectedShipIds(new Set(
+      (group.requests || []).filter((request) => canShipRequest(request)).map((request) => request.requestId),
+    ))
+    setSelectedGroupKey(group.key)
   }
 
   function closeModal() {
-    if (busyId || batchBusy) return
-    setSelected(null)
-    setMode('details')
+    if (busyId || invoiceBusy) return
+    setSelectedGroupKey('')
+    setMode('manage')
+    setLineForAction(null)
     setRejectReason('')
     setReturnNotes('')
+    setInvoicePreview(null)
+    setIssuedInvoice(null)
+    setPickedVerified(false)
+    setSelectedShipIds(new Set())
   }
 
-  function toggleSelect(requestId) {
-    setSelectedIds((prev) => {
+  function toggleShipLine(requestId) {
+    setSelectedShipIds((prev) => {
       const next = new Set(prev)
       if (next.has(requestId)) next.delete(requestId)
       else next.add(requestId)
@@ -165,48 +230,25 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     })
   }
 
-  function toggleSelectAllPage() {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (allPageSelected) {
-        pageSelectableIds.forEach((id) => next.delete(id))
-      } else {
-        pageSelectableIds.forEach((id) => next.add(id))
-      }
-      return next
-    })
+  function toggleAllShippable() {
+    if (!shippableLines.length) return
+    setSelectedShipIds(allShippableSelected
+      ? new Set()
+      : new Set(shippableLines.map((request) => request.requestId)))
   }
 
-  function openBatchShip(requestsToShip) {
-    setError('')
-    setBatchResult(null)
-    setPickedVerified(false)
-    const list = [...requestsToShip]
-    if (!list.length) {
-      setError('Select at least one pending request.')
+  function printGroupChecklist() {
+    const toPrint = selectedShippableLines.length
+      ? selectedShippableLines
+      : shippableLines
+    if (!toPrint.length) {
+      setError('Select at least one ready line to print a checklist for this shipment.')
       return
     }
-    const branchKeys = new Set(list.map((request) => normalizeBranchKey(request.branchName)))
-    if (branchKeys.size > 1) {
-      setError('Select requests from one branch only. Print and ship are batched per branch.')
-      return
-    }
-    setBatchRequests(list)
-  }
-
-  function closeBatchShip() {
-    if (batchBusy) return
-    setBatchRequests(null)
-    setPickedVerified(false)
-    setBatchResult(null)
-  }
-
-  function printBatchChecklist() {
-    if (!batchRequests?.length) return
     try {
       openChecklistPrintWindow({
-        branchName: batchRequests[0].branchName,
-        requests: batchRequests,
+        branchName: selectedGroup.branchName,
+        requests: toPrint,
         printedBy: admin?.fullName || '',
         organizationName: settings.organizationName,
         timezone: settings.timezone,
@@ -216,58 +258,69 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     }
   }
 
-  async function confirmBatchShip() {
-    if (!batchRequests?.length || !pickedVerified) return
+  function printInvoice(invoice) {
+    if (!invoice) return
+    try {
+      openInvoicePrintWindow({
+        invoice,
+        printedBy: admin?.fullName || invoice.createdByName || '',
+        organizationName: settings.organizationName,
+        timezone: settings.timezone,
+      })
+    } catch (err) {
+      setError(err.message || 'Unable to open invoice print window.')
+    }
+  }
 
-    const shippable = batchRequests.filter((request) => canShipRequest(request))
-    const blocked = batchRequests
-      .filter((request) => !canShipRequest(request))
-      .map((request) => ({
-        request,
-        reason: getStockIssue(request)?.message || 'Cannot ship',
-      }))
-
-    if (!shippable.length) {
-      setBatchResult({ shipped: [], blocked })
+  async function openInvoicePreview() {
+    if (!selectedGroup) return
+    const readyIds = selectedShippableLines.map((request) => request.requestId)
+    if (!readyIds.length) {
+      setError('Select at least one ready line for this shipment. Unchecked lines stay pending for later.')
       return
     }
-
-    setBatchBusy(true)
+    setInvoiceBusy(true)
     setError('')
-    const shipped = []
-    const failed = [...blocked]
-
-    for (const request of shippable) {
-      try {
-        await shipStockRequest(request.requestId)
-        shipped.push(request)
-      } catch (err) {
-        failed.push({
-          request,
-          reason: err.message || 'Ship failed',
-        })
-      }
+    try {
+      const preview = await previewStockRequestInvoice(readyIds)
+      setIssuedInvoice(null)
+      setInvoicePreview(preview)
+      setMode('invoice')
+    } catch (err) {
+      setError(err.message || 'Unable to preview invoice.')
+    } finally {
+      setInvoiceBusy(false)
     }
+  }
 
-    setBatchResult({ shipped, blocked: failed })
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      shipped.forEach((request) => next.delete(request.requestId))
-      return next
-    })
-    await onRefresh()
-    setBatchBusy(false)
+  async function confirmInvoiceAndShip() {
+    if (!selectedGroup || !pickedVerified) return
+    const readyIds = selectedShippableLines.map((request) => request.requestId)
+    if (!readyIds.length) return
+    setInvoiceBusy(true)
+    setError('')
+    try {
+      const result = await issueStockRequestInvoiceAndShip(readyIds)
+      setIssuedInvoice(result.invoice)
+      setInvoicePreview(null)
+      setMode('invoice')
+      await onRefresh()
+    } catch (err) {
+      setError(err.message || 'Unable to issue invoice and ship.')
+    } finally {
+      setInvoiceBusy(false)
+    }
   }
 
   async function confirmReturn(e) {
     e.preventDefault()
-    if (!selected?.requestId) return
-    setBusyId(selected.requestId)
+    if (!lineForAction?.requestId) return
+    setBusyId(lineForAction.requestId)
     setError('')
     try {
-      await returnStockRequest(selected.requestId, returnNotes.trim())
-      setSelected(null)
-      setMode('details')
+      await returnStockRequest(lineForAction.requestId, returnNotes.trim())
+      setMode('manage')
+      setLineForAction(null)
       setReturnNotes('')
       await onRefresh()
     } catch (err) {
@@ -279,13 +332,13 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
 
   async function confirmReject(e) {
     e.preventDefault()
-    if (!selected?.requestId) return
-    setBusyId(selected.requestId)
+    if (!lineForAction?.requestId) return
+    setBusyId(lineForAction.requestId)
     setError('')
     try {
-      await rejectStockRequest(selected.requestId, rejectReason.trim())
-      setSelected(null)
-      setMode('details')
+      await rejectStockRequest(lineForAction.requestId, rejectReason.trim())
+      setMode('manage')
+      setLineForAction(null)
       setRejectReason('')
       await onRefresh()
     } catch (err) {
@@ -295,15 +348,13 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     }
   }
 
-  const batchBranchName = batchRequests?.length
-    ? branchDisplayName(batchRequests[0].branchName)
-    : ''
-  const batchShippableCount = batchRequests
-    ? batchRequests.filter((request) => canShipRequest(request)).length
-    : 0
-  const batchBlockedCount = batchRequests
-    ? batchRequests.length - batchShippableCount
-    : 0
+  const shippableCount = selectedGroup?.shippableCount || 0
+  const selectedShipCount = selectedShippableLines.length
+  const activeInvoice = issuedInvoice || invoicePreview
+  const leftoverPendingCount = Math.max(
+    0,
+    (selectedGroup?.pendingCount || 0) - selectedShipCount,
+  )
 
   return (
     <>
@@ -311,8 +362,8 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
         <div>
           <h1>Stock requests</h1>
           <p>
-            Select pending requests by branch, print a pickup checklist, then confirm ship to deduct warehouse stock.
-            Branch delivery is confirmed in CMS.
+            Each CMS cart is one request group. Open Manage, check the lines for this shipment, preview the invoice,
+            then confirm ship. Unchecked or out-of-stock lines stay pending for a later shipment.
           </p>
         </div>
       </div>
@@ -324,57 +375,19 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             className={filter === status ? 'selected' : ''}
             onClick={() => { setFilter(status); setPage(1) }}
           >
-            <span>{requestsForBranch.filter((request) => request.status === status).length}</span>
+            <span>{tabCounts[status] || 0}</span>
             {formatStatus(status)}
           </button>
         ))}
       </div>
 
-      {filter === 'PENDING' && (
-        <div className="batch-ship-bar">
-          <div>
-            <strong>{selectedPending.length}</strong>
-            <span> selected</span>
-            {selectedPending.length > 0 && (
-              <span className="muted"> · {branchDisplayName(selectedPending[0].branchName)}</span>
-            )}
-          </div>
-          <div className="batch-ship-bar-actions">
-            {selectedPending.length > 0 && (
-              <button type="button" className="secondary" onClick={() => setSelectedIds(new Set())}>
-                Clear selection
-              </button>
-            )}
-            <button
-              type="button"
-              className="primary"
-              disabled={!selectedPending.length}
-              onClick={() => openBatchShip(selectedPending)}
-            >
-              Ship selected ({selectedPending.length})
-            </button>
-          </div>
-        </div>
-      )}
-
-      {error && !selected && !batchRequests && <div className="page-error">{error}</div>}
+      {error && !selectedGroup && <div className="page-error">{error}</div>}
 
       <section className="panel recent">
         <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: filter === 'PENDING' ? '1280px' : '1220px' }}>
+          <table style={{ width: '100%', minWidth: '1180px' }}>
             <thead>
               <tr>
-                {filter === 'PENDING' && (
-                  <th className="select-col">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      onChange={toggleSelectAllPage}
-                      disabled={!pageSelectableIds.length}
-                      aria-label="Select all on this page"
-                    />
-                  </th>
-                )}
                 <th>Requested by</th>
                 <th className="branch-col-header">
                   <button
@@ -428,7 +441,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                     document.body,
                   )}
                 </th>
-                <th>Item</th>
+                <th>Items</th>
                 <th>Qty</th>
                 <th>Reason</th>
                 <th>Status</th>
@@ -437,364 +450,262 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               </tr>
             </thead>
             <tbody>
-              {pageItems.length ? pageItems.map((request) => {
-                const checked = selectedIds.has(request.requestId)
-                const otherBranchSelected = Boolean(selectionBranchKey)
-                  && normalizeBranchKey(request.branchName) !== selectionBranchKey
-                  && !checked
-                return (
-                  <tr key={request.requestId} className={checked ? 'row-selected' : undefined}>
-                    {filter === 'PENDING' && (
-                      <td className="select-col">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={otherBranchSelected}
-                          title={otherBranchSelected ? 'Select one branch at a time' : 'Select for batch ship'}
-                          onChange={() => toggleSelect(request.requestId)}
-                          aria-label={`Select request ${request.externalReference || request.requestId}`}
-                        />
-                      </td>
+              {pageItems.length ? pageItems.map((group) => (
+                <tr key={group.key}>
+                  <td>
+                    <strong>{group.requestedBy}</strong>
+                    <small>{group.sourceSystem}</small>
+                  </td>
+                  <td>
+                    <strong>{group.branchName || '—'}</strong>
+                    <small>{group.batchReference}</small>
+                  </td>
+                  <td>
+                    <strong>{group.lineCount} item{group.lineCount === 1 ? '' : 's'}</strong>
+                    <small>{group.itemPreview.slice(0, 3).join(', ')}{group.itemPreview.length > 3 ? '…' : ''}</small>
+                  </td>
+                  <td><strong>{group.totalQty}</strong></td>
+                  <td className="reason-cell">{group.reason}</td>
+                  <td>
+                    <StatusBadge status={group.status} />
+                    {group.status === 'PARTIAL' && (
+                      <small>{group.pendingCount} pending · {group.shippedCount} shipped</small>
                     )}
-                    <td>
-                      <strong>{request.requestedBy}</strong>
-                      <small>{request.sourceSystem}</small>
-                    </td>
-                    <td>
-                      <strong>{request.branchName || '—'}</strong>
-                    </td>
-                    <td>
-                      <strong>{requestItemLabel(request)}</strong>
-                      <small>
-                        {requestSkuLabel(request)}
-                        {requestVariation(request) ? ` · ${requestVariation(request)}` : ''}
-                      </small>
-                    </td>
-                    <td><strong>{request.quantity}</strong></td>
-                    <td className="reason-cell">{request.reason}</td>
-                    <td><StatusBadge status={request.status} /></td>
-                    <td className="muted">{formatDate(request.createdAt)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className={request.status === 'PENDING' ? 'primary small-btn' : 'secondary small-btn'}
-                        onClick={() => openDetails(request)}
-                      >
-                        {request.status === 'PENDING' || request.status === 'SHIPPED' ? 'Manage' : 'View'}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              }) : (
+                  </td>
+                  <td className="muted">{formatDate(group.createdAt)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className={group.pendingCount > 0 ? 'primary small-btn' : 'secondary small-btn'}
+                      onClick={() => openManage(group)}
+                    >
+                      {group.pendingCount > 0 || group.shippedCount > 0 ? 'Manage' : 'View'}
+                    </button>
+                  </td>
+                </tr>
+              )) : (
                 <tr>
-                  <td colSpan={filter === 'PENDING' ? 9 : 8}>
+                  <td colSpan={8}>
                     <EmptyState
                       title={branchFilter
-                        ? `No ${formatStatus(filter).toLowerCase()} requests for this branch`
-                        : `No ${formatStatus(filter).toLowerCase()} requests`}
-                      message="External merchandise requests will appear here for review."
+                        ? `No ${formatStatus(filter).toLowerCase()} request groups for this branch`
+                        : `No ${formatStatus(filter).toLowerCase()} request groups`}
+                      message="External merchandise requests will appear here grouped by CMS cart."
                     />
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="requests" />
+          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="request groups" />
         </div>
       </section>
 
-      {batchRequests && (
+      {selectedGroup && mode === 'manage' && (
         <div className="modal-backdrop">
-          <div className="modal batch-ship-modal">
+          <div className="modal request-group-modal">
             <div className="modal-head">
               <div>
-                <h2>{batchResult ? 'Ship results' : 'Ship batch checklist'}</h2>
+                <h2>Manage stock request</h2>
                 <p>
-                  {batchBranchName} · {batchRequests.length} line{batchRequests.length === 1 ? '' : 's'}
-                  {!batchResult && batchBlockedCount > 0
-                    ? ` · ${batchShippableCount} ready, ${batchBlockedCount} stay pending`
-                    : ''}
+                  {selectedGroup.requestedBy} · {selectedGroup.branchName || 'No branch'} · {selectedGroup.sourceSystem}
                 </p>
               </div>
-              <button type="button" onClick={closeBatchShip} disabled={batchBusy}>×</button>
+              <button type="button" onClick={closeModal} disabled={invoiceBusy || Boolean(busyId)}>×</button>
             </div>
 
-            {!batchResult ? (
+            <div className="request-detail-status">
+              <StatusBadge status={selectedGroup.status} />
+              <span className="muted">
+                {selectedGroup.lineCount} line{selectedGroup.lineCount === 1 ? '' : 's'} · Requested {formatDate(selectedGroup.createdAt)}
+              </span>
+            </div>
+
+            <div className="request-detail-grid">
+              <div><span>Branch</span><strong>{detailValue(selectedGroup.branchName)}</strong></div>
+              <div><span>Group reference</span><strong>{detailValue(selectedGroup.batchReference)}</strong></div>
+              <div><span>Requested total</span><strong>{formatCurrency(selectedGroup.requestedTotal)}</strong></div>
+              <div><span>This shipment</span><strong>{formatCurrency(selectedShipmentTotal)}</strong></div>
+              <div className="full"><span>Reason</span><strong>{detailValue(selectedGroup.reason)}</strong></div>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg table-scroll group-lines-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
+              <table className="batch-ship-table" style={{ width: '100%', minWidth: '920px' }}>
+                <thead>
+                  <tr>
+                    <th className="select-col">
+                      <input
+                        type="checkbox"
+                        checked={allShippableSelected}
+                        disabled={!shippableLines.length || invoiceBusy}
+                        onChange={toggleAllShippable}
+                        aria-label="Select all ready lines for this shipment"
+                      />
+                    </th>
+                    <th>#</th>
+                    <th>Item</th>
+                    <th>SKU</th>
+                    <th>Qty</th>
+                    <th>Internal price</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedGroup.requests.map((request, index) => {
+                    const issue = getStockIssue(request)
+                    const shippable = canShipRequest(request)
+                    const checked = selectedShipIds.has(request.requestId)
+                    const components = Array.isArray(request.components) ? request.components : []
+                    const amount = Number(request.quantity || 0) * Number(request.internalSellingPrice || 0)
+                    return (
+                      <Fragment key={request.requestId}>
+                        <tr className={request.status === 'PENDING' && issue ? 'batch-row-blocked' : undefined}>
+                          <td className="select-col">
+                            {request.status === 'PENDING' ? (
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={!shippable || invoiceBusy}
+                                title={shippable
+                                  ? (checked ? 'Include in this shipment' : 'Leave pending for a later shipment')
+                                  : (issue?.title || 'Cannot ship yet')}
+                                onChange={() => toggleShipLine(request.requestId)}
+                                aria-label={`Include ${requestItemLabel(request)} in this shipment`}
+                              />
+                            ) : null}
+                          </td>
+                          <td>{index + 1}</td>
+                          <td>
+                            <strong>{requestItemLabel(request)}</strong>
+                            <small>
+                              {request.categoryName}
+                              {requestVariation(request) ? ` · ${requestVariation(request)}` : ''}
+                              {request.externalReference ? ` · ${request.externalReference}` : ''}
+                            </small>
+                          </td>
+                          <td>{requestSkuLabel(request)}</td>
+                          <td><strong>{request.quantity}</strong></td>
+                          <td>{formatCurrency(request.internalSellingPrice)}</td>
+                          <td><strong>{formatCurrency(amount)}</strong></td>
+                          <td>
+                            {request.status === 'PENDING' && issue ? (
+                              <span className="batch-status warn">{issue.title}</span>
+                            ) : (
+                              <StatusBadge status={request.status} />
+                            )}
+                          </td>
+                          <td>
+                            {request.status === 'PENDING' && (
+                              <button
+                                type="button"
+                                className="secondary small-btn"
+                                disabled={Boolean(busyId) || invoiceBusy}
+                                onClick={() => {
+                                  setError('')
+                                  setLineForAction(request)
+                                  setMode('reject')
+                                }}
+                              >
+                                Reject
+                              </button>
+                            )}
+                            {(request.status === 'SHIPPED' || request.status === 'DELIVERED') && (
+                              <button
+                                type="button"
+                                className="secondary small-btn"
+                                disabled={Boolean(busyId) || invoiceBusy}
+                                onClick={() => {
+                                  setError('')
+                                  setLineForAction(request)
+                                  setMode('return')
+                                }}
+                              >
+                                Return
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {components.map((component) => (
+                          <tr key={`${request.requestId}-${component.requestComponentId || component.matchedSku || component.itemName}`} className="batch-component-row">
+                            <td />
+                            <td />
+                            <td className="batch-component-name">↳ {componentItemLabel(component)}</td>
+                            <td>{componentSkuLabel(component)}</td>
+                            <td>{component.quantity}</td>
+                            <td colSpan={4} className="muted">Component</td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {groupInvoices.length > 0 && (
+              <div className="group-invoice-list">
+                <h3>Issued invoices</h3>
+                {groupInvoices.map((invoice) => (
+                  <div key={invoice.invoiceId} className="group-invoice-row">
+                    <div>
+                      <strong>{invoice.invoiceNumber}</strong>
+                      <small>
+                        Shipment {invoice.shipmentSeq} · {formatCurrency(invoice.subtotal)} · {formatDate(invoice.createdAt)}
+                      </small>
+                    </div>
+                    <button type="button" className="secondary small-btn" onClick={() => printInvoice(invoice)}>
+                      Reprint
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedGroup.pendingCount > 0 && (
               <>
                 <div className="batch-ship-toolbar">
-                  <button type="button" className="batch-print-btn" onClick={printBatchChecklist} disabled={batchBusy}>
+                  <button type="button" className="batch-print-btn" onClick={printGroupChecklist} disabled={invoiceBusy}>
                     Print checklist
                   </button>
                   <p className="batch-ship-hint">
-                    Print a soft copy for the courier. Then tick the box below after you physically pick and check every line.
+                    Check only the lines for this box. Unchecked ready lines stay Pending for shipment 2+.
+                    Out-of-stock lines cannot be selected.
                   </p>
                 </div>
-
-                <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-                  <table className="batch-ship-table" style={{ width: '100%', minWidth: '720px' }}>
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Item name</th>
-                        <th>SKU</th>
-                        <th>Qty</th>
-                        <th>Pick status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batchRequests.map((request, index) => {
-                        const issue = getStockIssue(request)
-                        const components = Array.isArray(request.components) ? request.components : []
-                        return (
-                          <Fragment key={request.requestId}>
-                            <tr className={issue ? 'batch-row-blocked' : undefined}>
-                              <td>{index + 1}</td>
-                              <td>
-                                <strong>{requestItemLabel(request)}</strong>
-                                <small>{request.externalReference || request.requestId}</small>
-                              </td>
-                              <td>{requestSkuLabel(request)}</td>
-                              <td><strong>{request.quantity}</strong></td>
-                              <td>
-                                {issue ? (
-                                  <span className="batch-status warn">{issue.title}</span>
-                                ) : (
-                                  <span className="batch-status ok">Ready</span>
-                                )}
-                              </td>
-                            </tr>
-                            {components.map((component) => (
-                              <tr key={`${request.requestId}-${component.requestComponentId || component.matchedSku || component.itemName}`} className="batch-component-row">
-                                <td />
-                                <td className="batch-component-name">↳ {componentItemLabel(component)}</td>
-                                <td>{componentSkuLabel(component)}</td>
-                                <td>{component.quantity}</td>
-                                <td className="muted">Component</td>
-                              </tr>
-                            ))}
-                          </Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {batchBlockedCount > 0 && (
-                  <div className="integration-note warn">
-                    Out-of-stock or unmatched lines stay <strong>Pending</strong>. Ready lines will ship and deduct warehouse stock.
-                  </div>
-                )}
-
                 <label className={`batch-verify${pickedVerified ? ' is-checked' : ''}`}>
                   <input
                     type="checkbox"
                     checked={pickedVerified}
                     onChange={(e) => setPickedVerified(e.target.checked)}
-                    disabled={batchBusy || batchShippableCount === 0}
+                    disabled={invoiceBusy || selectedShipCount === 0}
                   />
                   <span>
                     <strong>Items picked &amp; verified</strong>
                     <small>
-                      Required before Confirm ship. Means you (or the picker) already pulled these items from the warehouse
-                      and checked them against this checklist / printout.
+                      This shipment: {selectedShipCount} of {shippableCount} ready line{shippableCount === 1 ? '' : 's'}.
+                      {leftoverPendingCount > 0 ? ` ${leftoverPendingCount} stay pending.` : ''}
                     </small>
                   </span>
                 </label>
-
-                {error && <div className="page-error">{error}</div>}
-
-                <div className="modal-actions">
-                  <button type="button" className="secondary" onClick={closeBatchShip} disabled={batchBusy}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={batchBusy || !pickedVerified || batchShippableCount === 0}
-                    onClick={confirmBatchShip}
-                  >
-                    {batchBusy
-                      ? 'Shipping…'
-                      : `Confirm ship (${batchShippableCount})`}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="integration-note">
-                  Shipped <strong>{batchResult.shipped.length}</strong>
-                  {batchResult.blocked.length > 0 && (
-                    <> · Left pending <strong>{batchResult.blocked.length}</strong></>
-                  )}
-                </div>
-                {batchResult.shipped.length > 0 && (
-                  <div className="batch-result-block">
-                    <h3>Shipped</h3>
-                    <ul>
-                      {batchResult.shipped.map((request) => (
-                        <li key={request.requestId}>
-                          {requestItemLabel(request)} · {requestSkuLabel(request)} · qty {request.quantity}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {batchResult.blocked.length > 0 && (
-                  <div className="batch-result-block">
-                    <h3>Still pending</h3>
-                    <ul>
-                      {batchResult.blocked.map(({ request, reason }) => (
-                        <li key={request.requestId}>
-                          {requestItemLabel(request)} · {requestSkuLabel(request)} — {reason}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className="modal-actions">
-                  <button type="button" className="primary" onClick={closeBatchShip}>
-                    Done
-                  </button>
-                </div>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {selected && mode === 'details' && (
-        <div className="modal-backdrop">
-          <div className="modal request-detail-modal">
-            <div className="modal-head">
-              <div>
-                <h2>Stock request details</h2>
-                <p>{selected.requestedBy} · {selected.branchName || 'No branch'} · {selected.sourceSystem}</p>
-              </div>
-              <button type="button" onClick={closeModal}>×</button>
-            </div>
-
-            <div className="request-detail-status">
-              <StatusBadge status={selected.status} />
-              <span className="muted">Requested {formatDate(selected.createdAt)}</span>
-            </div>
-
-            {stockIssue && selected.status === 'PENDING' && (
-              <div className="stock-warning-banner">
-                <strong>{stockIssue.title}</strong>
-                <p>{stockIssue.message}</p>
-              </div>
-            )}
-
-            <div className="request-detail-grid">
-              <div><span>Branch</span><strong>{detailValue(selected.branchName)}</strong></div>
-              <div><span>Category</span><strong>{detailValue(selected.categoryName)}</strong></div>
-              <div><span>Item name</span><strong>{detailValue(requestItemLabel(selected))}</strong></div>
-              <div><span>Variation</span><strong>{detailValue(variation)}</strong></div>
-              <div><span>Quantity requested</span><strong>{detailValue(selected.quantity)}</strong></div>
-              <div>
-                <span>Current stock</span>
-                <strong className={stockIssue ? 'danger-text' : ''}>
-                  {selected.currentStocks ?? '—'}
-                </strong>
-              </div>
-              <div><span>Matched SKU</span><strong>{detailValue(selected.matchedSku)}</strong></div>
-              <div><span>External reference</span><strong>{detailValue(selected.externalReference)}</strong></div>
-              <div><span>Request date</span><strong>{formatDate(selected.requestDate)}</strong></div>
-              <div className="full"><span>Reason</span><strong>{detailValue(selected.reason)}</strong></div>
-              {selected.failureReason && (
-                <div className="full"><span>Failure reason</span><strong className="danger-text">{selected.failureReason}</strong></div>
-              )}
-              {selected.rejectionReason && (
-                <div className="full"><span>Notes / rejection</span><strong>{selected.rejectionReason}</strong></div>
-              )}
-              {selected.deliveryConfirmedBy && (
-                <div><span>Delivery confirmed by</span><strong>{selected.deliveryConfirmedBy}</strong></div>
-              )}
-              {selected.deliveredAt && (
-                <div><span>Delivered at</span><strong>{formatDate(selected.deliveredAt)}</strong></div>
-              )}
-              {selected.deliveryNotes && (
-                <div className="full"><span>Delivery notes</span><strong>{selected.deliveryNotes}</strong></div>
-              )}
-              {selected.processedByName && (
-                <div><span>Processed by</span><strong>{selected.processedByName}</strong></div>
-              )}
-              {selected.processedAt && (
-                <div><span>Processed at</span><strong>{formatDate(selected.processedAt)}</strong></div>
-              )}
-              {(selected.status === 'SHIPPED' || selected.status === 'DELIVERED' || selected.status === 'RETURNED' || selected.status === 'REJECTED') && (
-                <div className="full">
-                  <span>External webhook</span>
-                  <strong className={
-                    selected.webhookLastStatus === 'FAILED' || selected.webhookLastStatus === 'SKIPPED'
-                      ? 'danger-text'
-                      : ''
-                  }>
-                    {selected.webhookLastStatus || '—'}
-                    {selected.webhookLastAttemptAt ? ` · ${formatDate(selected.webhookLastAttemptAt)}` : ''}
-                  </strong>
-                </div>
-              )}
-            </div>
 
             {error && <div className="page-error">{error}</div>}
 
-            {selected.status === 'PENDING' ? (
-              <div className={`integration-note ${stockIssue ? 'warn' : ''}`}>
-                {stockIssue
-                  ? 'Ship is blocked until stock is available or the item is matched. You can reject this request now.'
-                  : 'Use Ship selected (with checklist) or ship this line alone. Confirm ship deducts warehouse stock.'}
-              </div>
-            ) : selected.status === 'SHIPPED' ? (
-              <div className="integration-note">
-                Goods left the warehouse. Delivery is confirmed by the branch in CMS (POST /deliver).
-                Use Mark returned only if goods come back to the warehouse.
-              </div>
-            ) : selected.status === 'DELIVERED' ? (
-              <div className="integration-note">
-                Branch received this shipment. You can still mark returned to restock the warehouse (CMS should reverse branch stock).
-              </div>
-            ) : selected.webhookLastStatus === 'SKIPPED' || selected.webhookLastStatus === 'FAILED' ? (
-              <div className="integration-note warn">
-                RHET marked this request {formatStatus(selected.status).toLowerCase()}, but the external system may still be out of sync
-                because the webhook was {String(selected.webhookLastStatus).toLowerCase()}.
-              </div>
-            ) : (
-              <div className="integration-note">
-                This request is already {formatStatus(selected.status).toLowerCase()}.
-              </div>
-            )}
-
             <div className="modal-actions">
-              <button type="button" className="secondary" onClick={closeModal} disabled={Boolean(busyId)}>Close</button>
-              {selected.status === 'PENDING' && (
-                <>
-                  <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('reject') }}>
-                    Reject
-                  </button>
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={busyId === selected.requestId}
-                    onClick={() => {
-                      const request = selected
-                      setSelected(null)
-                      setMode('details')
-                      openBatchShip([request])
-                    }}
-                  >
-                    Ship with checklist
-                  </button>
-                </>
-              )}
-              {selected.status === 'SHIPPED' && (
-                <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('return') }}>
-                  Mark returned
-                </button>
-              )}
-              {selected.status === 'DELIVERED' && (
-                <button type="button" className="secondary" disabled={busyId === selected.requestId} onClick={() => { setError(''); setMode('return') }}>
-                  Mark returned
+              <button type="button" className="secondary" onClick={closeModal} disabled={invoiceBusy || Boolean(busyId)}>
+                Close
+              </button>
+              {selectedGroup.pendingCount > 0 && (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={invoiceBusy || !pickedVerified || selectedShipCount === 0}
+                  onClick={openInvoicePreview}
+                >
+                  {invoiceBusy ? 'Preparing…' : `Preview invoice (${selectedShipCount})`}
                 </button>
               )}
             </div>
@@ -802,15 +713,134 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
         </div>
       )}
 
-      {selected && mode === 'return' && (
+      {selectedGroup && mode === 'invoice' && activeInvoice && (
+        <div className="modal-backdrop">
+          <div className="modal invoice-preview-modal">
+            <div className="modal-head">
+              <div>
+                <h2>{issuedInvoice ? 'Invoice issued' : 'Invoice preview'}</h2>
+                <p>
+                  {selectedGroup.branchName || 'No branch'} · {activeInvoice.invoiceNumber || 'Draft'} · Shipment {activeInvoice.shipmentSeq || 1}
+                </p>
+              </div>
+              <button type="button" onClick={() => {
+                if (invoiceBusy) return
+                if (issuedInvoice) {
+                  closeModal()
+                  return
+                }
+                setMode('manage')
+                setInvoicePreview(null)
+              }}
+              >
+                ×
+              </button>
+            </div>
+
+            {issuedInvoice ? (
+              <div className="integration-note">
+                Invoice <strong>{issuedInvoice.invoiceNumber}</strong> saved. Warehouse stock was deducted for this shipment.
+                {leftoverPendingCount > 0
+                  ? ` ${leftoverPendingCount} line${leftoverPendingCount === 1 ? '' : 's'} remain pending for a later shipment.`
+                  : ''}
+              </div>
+            ) : (
+              <div className={`integration-note${activeInvoice.zeroPriceCount ? ' warn' : ''}`}>
+                Draft only. Confirm ship creates the invoice snapshot and deducts warehouse stock.
+                {activeInvoice.zeroPriceCount > 0 && (
+                  <> {activeInvoice.zeroPriceCount} line{activeInvoice.zeroPriceCount === 1 ? '' : 's'} have internal selling price ₱0.</>
+                )}
+              </div>
+            )}
+
+            <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
+              <table className="invoice-preview-table" style={{ width: '100%', minWidth: '720px' }}>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>SKU</th>
+                    <th>Qty</th>
+                    <th>Unit price</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activeInvoice.lines || []).map((line, index) => (
+                    <tr key={line.requestId || `${line.sku}-${index}`}>
+                      <td>
+                        <strong>{line.itemName}</strong>
+                        {line.variation ? <small>{line.variation}</small> : null}
+                      </td>
+                      <td>{line.sku || '—'}</td>
+                      <td><strong>{line.quantity}</strong></td>
+                      <td>{formatInvoiceMoney(line.unitPrice)}</td>
+                      <td><strong>{formatInvoiceMoney(line.lineTotal)}</strong></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="invoice-total-row">
+              <span>Total due</span>
+              <strong>{formatInvoiceMoney(activeInvoice.subtotal)}</strong>
+            </div>
+
+            {!!activeInvoice.blocked?.length && (
+              <div className="integration-note warn">
+                Left pending: {activeInvoice.blocked.map((row) => row.itemName || row.requestId).join(', ')}
+              </div>
+            )}
+
+            {error && <div className="page-error">{error}</div>}
+
+            <div className="modal-actions">
+              {!issuedInvoice && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => { setMode('manage'); setInvoicePreview(null) }}
+                  disabled={invoiceBusy}
+                >
+                  Back
+                </button>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => printInvoice(activeInvoice)}
+                disabled={invoiceBusy || !(activeInvoice.lines || []).length}
+              >
+                Print invoice
+              </button>
+              {issuedInvoice ? (
+                <button type="button" className="primary" onClick={closeModal}>
+                  Done
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={invoiceBusy || !pickedVerified || !(activeInvoice.lines || []).length}
+                  onClick={confirmInvoiceAndShip}
+                >
+                  {invoiceBusy ? 'Shipping…' : 'Confirm ship & save invoice'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedGroup && mode === 'return' && lineForAction && (
         <div className="modal-backdrop">
           <form className="modal small" onSubmit={confirmReturn}>
             <div className="modal-head">
               <div>
                 <h2>Mark returned</h2>
-                <p>{selected.requestedBy} · {selected.branchName || '—'} · Qty {selected.quantity}</p>
+                <p>{lineForAction.requestedBy} · {lineForAction.branchName || '—'} · Qty {lineForAction.quantity}</p>
               </div>
-              <button type="button" onClick={closeModal}>×</button>
+              <button type="button" onClick={() => { if (!busyId) { setMode('manage'); setLineForAction(null) } }}>×</button>
             </div>
             <div className="integration-note warn">
               Warehouse stock will be restocked. If this was already delivered, CMS should reverse branch stock.
@@ -825,26 +855,26 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             </label>
             {error && <div className="page-error">{error}</div>}
             <div className="modal-actions">
-              <button type="button" className="secondary" onClick={() => { setError(''); setMode('details') }} disabled={Boolean(busyId)}>
-                Back to details
+              <button type="button" className="secondary" onClick={() => { setError(''); setMode('manage'); setLineForAction(null) }} disabled={Boolean(busyId)}>
+                Back
               </button>
-              <button className="primary" disabled={busyId === selected.requestId}>
-                {busyId === selected.requestId ? 'Saving…' : 'Confirm return'}
+              <button className="primary" disabled={busyId === lineForAction.requestId}>
+                {busyId === lineForAction.requestId ? 'Saving…' : 'Confirm return'}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {selected && mode === 'reject' && (
+      {selectedGroup && mode === 'reject' && lineForAction && (
         <div className="modal-backdrop">
           <form className="modal small" onSubmit={confirmReject}>
             <div className="modal-head">
               <div>
-                <h2>Reject request</h2>
-                <p>{selected.requestedBy} · {selected.branchName || '—'} · {selected.categoryName} · Qty {selected.quantity}</p>
+                <h2>Reject line</h2>
+                <p>{lineForAction.requestedBy} · {lineForAction.branchName || '—'} · {requestItemLabel(lineForAction)} · Qty {lineForAction.quantity}</p>
               </div>
-              <button type="button" onClick={closeModal}>×</button>
+              <button type="button" onClick={() => { if (!busyId) { setMode('manage'); setLineForAction(null) } }}>×</button>
             </div>
             <label>
               Rejection reason *
@@ -854,16 +884,16 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                 autoFocus
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Explain why this request cannot be fulfilled"
+                placeholder="Explain why this line cannot be fulfilled"
               />
             </label>
             {error && <div className="page-error">{error}</div>}
             <div className="modal-actions">
-              <button type="button" className="secondary" onClick={() => { setError(''); setMode('details') }} disabled={Boolean(busyId)}>
-                Back to details
+              <button type="button" className="secondary" onClick={() => { setError(''); setMode('manage'); setLineForAction(null) }} disabled={Boolean(busyId)}>
+                Back
               </button>
-              <button className="primary" disabled={busyId === selected.requestId}>
-                {busyId === selected.requestId ? 'Rejecting…' : 'Confirm reject'}
+              <button className="primary" disabled={busyId === lineForAction.requestId}>
+                {busyId === lineForAction.requestId ? 'Rejecting…' : 'Confirm reject'}
               </button>
             </div>
           </form>

@@ -4,6 +4,7 @@ const statusLabels = {
   OUT_OF_STOCK: 'Out of stock',
   INACTIVE: 'Inactive',
   PENDING: 'Pending',
+  PARTIAL: 'Partial',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   FULFILLED: 'Fulfilled',

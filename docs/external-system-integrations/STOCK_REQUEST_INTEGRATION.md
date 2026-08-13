@@ -214,7 +214,7 @@ X-Integration-Key: YOUR_KEY
 | `reason` | Yes | 5–500 chars |
 | `items` | Yes | 1–50 line items |
 | `requestDate` | No | Defaults to today |
-| `batchReference` | No | Optional batch id |
+| `batchReference` | Strongly recommended | Shared **cart / request-group** id. Same value on every line from one user submit. RHET groups Manage + invoices by this. Pattern: `YOUR_SYSTEM-REQ-<localHeaderId>` |
 | `webhookUrl` | Recommended | Your callback URL |
 
 ### 7.2 Each `items[]` row

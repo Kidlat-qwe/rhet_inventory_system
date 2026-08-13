@@ -90,7 +90,7 @@ function AppShell() {
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
         fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
         fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),
-        fetchStockRequests({ limit: 100 }),
+        fetchStockRequests({ limit: 500 }),
         fetchOnlineOrders({ limit: 100 }),
         fetchManualOrders({ limit: 100 }),
         roleIsAdmin ? fetchUsers() : Promise.resolve([]),
@@ -123,7 +123,7 @@ function AppShell() {
     if (stockRequestsRefreshInFlight.current) return
     stockRequestsRefreshInFlight.current = true
     try {
-      const requests = await fetchStockRequests({ limit: 100 })
+      const requests = await fetchStockRequests({ limit: 500 })
       setStockRequests(requests.data)
     } catch (err) {
       // Silent polling: do not surface transient errors to the user UI.
@@ -139,7 +139,7 @@ function AppShell() {
   const refreshAfterStockDecision = useCallback(async () => {
     try {
       const [requests, inv, mov, onlineMov, dash] = await Promise.all([
-        fetchStockRequests({ limit: 100 }),
+        fetchStockRequests({ limit: 500 }),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
         fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
         fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),

@@ -8,11 +8,11 @@ Base: `/api/v1/integrations` (X-Integration-Key or Bearer).
 |--------|------|---------|
 | GET | `/catalog` | Categories + items |
 | GET | `/availability` | Stock check |
-| POST | `/stock-requests` | Create (requires `branchName`) |
+| POST | `/stock-requests` | Create (requires `branchName`; send `batchReference` for multi-item carts) |
 | GET | `/stock-requests/:id` | Poll status |
 | POST | `/stock-requests/:id/deliver` | CMS branch confirm receipt (SHIPPED → DELIVERED) |
 
-Staff UI routes (Firebase): `/api/v1/stock-requests/:id/ship|deliver|return|reject`.
+Staff UI routes (Firebase): `/api/v1/stock-requests` list/get/ship/deliver/return/reject; invoices at `/api/v1/stock-requests/invoices` (preview, issue+ship, list, get).
 
 ## Manual orders (Scoring Shipping Management — non-Shopee)
 

@@ -1,4 +1,5 @@
 import * as service from '../services/stock-request.service.js';
+import * as invoiceService from '../services/stock-request-invoice.service.js';
 import { asyncHandler, success } from '../utils/api.js';
 
 export async function list(req, res) {
@@ -48,4 +49,26 @@ export async function reject(req, res) {
     req.admin,
     req.validated.body.rejectionReason,
   ));
+}
+
+export async function previewInvoice(req, res) {
+  success(res, await invoiceService.previewStockRequestInvoice(req.validated.body.requestIds));
+}
+
+export async function issueInvoiceAndShip(req, res) {
+  success(res, await invoiceService.issueStockRequestInvoiceAndShip(
+    req.validated.body.requestIds,
+    req.admin,
+  ));
+}
+
+export async function listInvoices(req, res) {
+  success(res, await invoiceService.listStockRequestInvoices({
+    batchReference: req.validated.query.batchReference,
+    sourceSystem: req.validated.query.sourceSystem || 'PSMS',
+  }));
+}
+
+export async function getInvoice(req, res) {
+  success(res, await invoiceService.getStockRequestInvoice(req.validated.params.invoiceId));
 }
