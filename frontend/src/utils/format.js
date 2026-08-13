@@ -5,6 +5,7 @@ const statusLabels = {
   INACTIVE: 'Inactive',
   PENDING: 'Pending',
   PARTIAL: 'Partial',
+  RETURN: 'Return',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   FULFILLED: 'Fulfilled',

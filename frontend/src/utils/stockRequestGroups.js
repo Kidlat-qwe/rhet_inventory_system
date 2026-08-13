@@ -2,9 +2,10 @@ import { canShipRequest, requestItemLabel } from './stockRequestChecklist'
 
 export function requestGroupKey(request) {
   const source = String(request?.sourceSystem || 'PSMS').trim() || 'PSMS'
+  const kind = String(request?.requestKind || 'REQUEST').trim().toUpperCase() || 'REQUEST'
   const batch = String(request?.batchReference || '').trim()
-  if (batch) return `${source}::${batch}`
-  return `solo::${request?.requestId || ''}`
+  if (batch) return `${source}::${kind}::${batch}`
+  return `solo::${kind}::${request?.requestId || ''}`
 }
 
 export function rollupGroupStatus(requests = []) {
@@ -71,6 +72,7 @@ export function buildStockRequestGroups(requests = []) {
       map.set(key, {
         key,
         sourceSystem: request.sourceSystem || 'PSMS',
+        requestKind: String(request.requestKind || 'REQUEST').toUpperCase() === 'RETURN' ? 'RETURN' : 'REQUEST',
         batchReference: request.batchReference || request.externalReference || request.requestId,
         branchName: request.branchName,
         requestedBy: request.requestedBy,
@@ -91,6 +93,16 @@ export function buildStockRequestGroups(requests = []) {
       const pending = group.requests.filter((row) => row.status === 'PENDING')
       const shipped = group.requests.filter((row) => row.status === 'SHIPPED')
       const delivered = group.requests.filter((row) => row.status === 'DELIVERED')
+      const receivedTimes = group.requests
+        .map((row) => row.deliveredAt)
+        .filter(Boolean)
+        .map((value) => new Date(value))
+        .filter((date) => !Number.isNaN(date.getTime()))
+      const receivedByNames = [...new Set(
+        group.requests
+          .map((row) => String(row.deliveryConfirmedBy || '').trim())
+          .filter(Boolean),
+      )]
       return {
         ...group,
         lineCount: group.requests.length,
@@ -102,6 +114,10 @@ export function buildStockRequestGroups(requests = []) {
         status: rollupGroupStatus(group.requests),
         requestedTotal: requestedGroupTotal(group.requests),
         shipmentTotal: shipmentGroupTotal(group.requests),
+        receivedAt: receivedTimes.length
+          ? new Date(Math.max(...receivedTimes.map((date) => date.getTime()))).toISOString()
+          : null,
+        receivedBy: receivedByNames.length ? receivedByNames.join(', ') : null,
         itemPreview: uniqueItemLabels(group.requests),
       }
     })

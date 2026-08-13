@@ -82,6 +82,67 @@ export function resolveProcessedByUserId(request = {}) {
   return null;
 }
 
+/**
+ * CMS inbound Return Stock (PSMS-RET-*). Do not use stock_request.* events —
+ * CMS return rows must not match outbound request webhooks.
+ */
+export async function dispatchStockReturnWebhook(request, event = 'stock_return.accepted', processor = null) {
+  const url = request.webhook_url || request.webhookUrl || env.PSMS_WEBHOOK_URL;
+  if (!url) return { skipped: true };
+
+  const processedByName = processor?.displayName
+    || request.requestedBy
+    || request.requested_by
+    || 'Branch Admin';
+
+  const payload = {
+    event,
+    requestId: request.request_id || request.requestId,
+    requestKind: request.request_kind || request.requestKind || 'RETURN',
+    externalReference: request.external_reference || request.externalReference,
+    batchReference: request.batch_reference || request.batchReference || null,
+    sourceSystem: request.source_system || request.sourceSystem,
+    status: request.status || 'RETURNED',
+    requestedBy: request.requested_by || request.requestedBy,
+    branchName: request.branch_name || request.branchName || null,
+    reason: request.reason,
+    categoryName: request.category_name || request.categoryName,
+    gender: request.gender,
+    type: request.item_type || request.type || request.itemType,
+    size: request.size_label || request.size || request.sizeLabel,
+    quantity: request.quantity,
+    matchedSku: request.matched_sku || request.matchedSku,
+    inventoryId: request.inventory_id || request.inventoryId,
+    processedBy: processedByName,
+    processedByName: processedByName,
+    timestamp: new Date().toISOString(),
+  };
+
+  if (env.NODE_ENV !== 'production') {
+    console.log('[webhook] POST', url, JSON.stringify({
+      event: payload.event,
+      externalReference: payload.externalReference,
+      status: payload.status,
+    }));
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(env.PSMS_INTEGRATION_KEY && { 'X-Integration-Key': env.PSMS_INTEGRATION_KEY }),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Webhook failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+
+  return { delivered: true, status: response.status };
+}
+
 export async function dispatchStockRequestWebhook(request, event, processor = null) {
   const url = request.webhook_url || env.PSMS_WEBHOOK_URL;
   if (!url) return { skipped: true };

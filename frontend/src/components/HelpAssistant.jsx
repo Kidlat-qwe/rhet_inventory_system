@@ -45,6 +45,7 @@ const ALL_TOPICS = [
         'Tick **Items picked & verified**, then **Preview invoice**. Print if needed.',
         'Click **Confirm ship & save invoice** to deduct warehouse stock. Remaining Pending lines get a later invoice.',
         'Use **Reject** or **Return** on a single line when needed. Branch delivery is confirmed in CMS.',
+        '**CMS Return Stock** appears on the **Returned** tab (label: CMS branch return). Warehouse qty was already increased — view only.',
       ],
     },
   },

@@ -13,6 +13,7 @@ Business logic modules used by Express controllers and routes.
 | `webhook.service.js` | Outbound partner webhooks (stock requests + manual orders) |
 | `online-order.service.js` | Marketplace orders |
 | `stock-request.service.js` | External stock requests (line rows + `batch_reference` group) |
+| `stock-return.service.js` | CMS Return Stock → warehouse `RETURN` movement (`request_kind = RETURN`) |
 | `stock-request-invoice.service.js` | Shipment invoices at internal selling price (preview + issue/ship snapshot) |
 | `channel-allocation.service.js` | Shopee channel stock |
 | `integration-client.service.js` | API keys / partners |

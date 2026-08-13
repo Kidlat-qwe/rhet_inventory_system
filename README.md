@@ -56,7 +56,7 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
   - **Learning Kit**: category slots; concrete SKUs come from stock-request `components[]`. Available kits = min across category totals.
   - **Child-SKU categories** (e.g. Tool Kit via Others + toggle): parent kits share raw child SKUs. Click the parent name to open the raw-items page. Same part can be linked to multiple parents and keeps one stock pool. Available kits = min across that kit's raw stocks.
 - `stock_requests (1) → (many) stock_request_components`: request-time component specs for Learning Kits (uniform attrs or item name/SKU). Child-SKU kit requests use the pinned BOM (no `components[]` required).
-- `stock_requests` lines share `batch_reference` (one CMS cart). `stock_request_invoices (1) → (many) stock_request_invoice_lines`: one invoice per warehouse shipment at internal selling price.
+- `stock_requests` lines share `batch_reference` (one CMS cart). `request_kind` is `REQUEST` (HQ restock) or `RETURN` (CMS Return Stock). `stock_request_invoices (1) → (many) stock_request_invoice_lines`: one invoice per warehouse shipment at internal selling price.
 - `users (1) → (many) stock_movements`: records the responsible authenticated user.
 - `users` also relates to inventory through `created_by` and `updated_by`.
 - `system_settings`: singleton JSON document for org defaults (branding, timezone, low-stock default, couriers, uniform sizes, Help Assistant).

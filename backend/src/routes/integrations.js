@@ -5,6 +5,7 @@ import {
   availabilityQuerySchema,
   deliverStockRequestSchema,
   psmsStockRequestSchema,
+  psmsStockReturnSchema,
   stockRequestIdParams,
 } from '../validation/stock-request.schemas.js';
 import {
@@ -20,6 +21,7 @@ export const integrations = Router();
 integrations.get('/catalog', controller.catalog);
 integrations.get('/availability', validate(availabilityQuerySchema), controller.availability);
 integrations.post('/stock-requests', validate(psmsStockRequestSchema), controller.submit);
+integrations.post('/stock-returns', validate(psmsStockReturnSchema), controller.submitReturns);
 integrations.get('/stock-requests/:id', validate(stockRequestIdParams), controller.get);
 integrations.post('/stock-requests/:id/deliver', validate(deliverStockRequestSchema), controller.deliver);
 

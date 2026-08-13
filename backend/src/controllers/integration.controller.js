@@ -1,4 +1,5 @@
 import * as service from '../services/stock-request.service.js';
+import * as stockReturnService from '../services/stock-return.service.js';
 import * as manualOrderService from '../services/manual-order.service.js';
 import { AppError, asyncHandler, success } from '../utils/api.js';
 
@@ -15,6 +16,21 @@ export const submit = asyncHandler(async (req, res) => {
     items: body.items,
   });
   success(res, data, { count: data.length }, 201);
+});
+
+export const submitReturns = asyncHandler(async (req, res) => {
+  const body = req.validated.body;
+  const result = await stockReturnService.createStockReturnsFromPsms({
+    sourceSystem: req.integration?.sourceSystem,
+    requestDate: body.requestDate || new Date(),
+    requestedBy: body.requestedBy,
+    branchName: body.branchName,
+    reason: body.reason,
+    batchReference: body.batchReference,
+    webhookUrl: body.webhookUrl,
+    items: body.items,
+  });
+  success(res, result.data, { count: result.data.length, replayed: !result.created }, result.created ? 201 : 200);
 });
 
 export const get = asyncHandler(async (req, res) => {

@@ -175,12 +175,13 @@ export async function createStockRequestsFromPsms(input) {
     );
     const isLearningKit = inventory.isLearningKitCategory(categoryLookup.rows[0])
       || inventory.isLearningKitCategoryName(item.categoryName);
-    const resolved = await resolveInventoryItem(pool, {
+        const resolved = await resolveInventoryItem(pool, {
       categoryName: item.categoryName,
       gender: item.gender,
       type: item.type,
       size: item.size,
       itemName: item.itemName,
+      sku: item.sku,
     });
 
     const result = await pool.query(

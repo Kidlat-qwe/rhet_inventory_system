@@ -16,3 +16,5 @@ Base: `/api/v1/stock-requests` (Firebase auth).
 | GET | `/invoices/:invoiceId` | Reprint payload |
 
 UI groups lines by `batchReference`. Invoice prices are `inventory.internal_selling_price` frozen at ship time.
+
+Inbound CMS returns (`request_kind = RETURN`) appear on the Returned tab as view-only groups. Warehouse stock was already increased on `POST /integrations/stock-returns`.

@@ -142,7 +142,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
   }, [branchFilter, branchOptions])
 
   useEffect(() => {
-    if (!selectedGroup?.batchReference) {
+    if (!selectedGroup?.batchReference || selectedGroup.requestKind === 'RETURN') {
       setGroupInvoices([])
       return undefined
     }
@@ -348,6 +348,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     }
   }
 
+  const isBranchReturn = selectedGroup?.requestKind === 'RETURN'
   const shippableCount = selectedGroup?.shippableCount || 0
   const selectedShipCount = selectedShippableLines.length
   const activeInvoice = issuedInvoice || invoicePreview
@@ -454,7 +455,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                 <tr key={group.key}>
                   <td>
                     <strong>{group.requestedBy}</strong>
-                    <small>{group.sourceSystem}</small>
+                    <small>{group.requestKind === 'RETURN' ? 'CMS branch return' : group.sourceSystem}</small>
                   </td>
                   <td>
                     <strong>{group.branchName || '—'}</strong>
@@ -468,6 +469,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                   <td className="reason-cell">{group.reason}</td>
                   <td>
                     <StatusBadge status={group.status} />
+                    {group.requestKind === 'RETURN' && <small>Warehouse restocked</small>}
                     {group.status === 'PARTIAL' && (
                       <small>{group.pendingCount} pending · {group.shippedCount} shipped</small>
                     )}
@@ -506,7 +508,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
           <div className="modal request-group-modal">
             <div className="modal-head">
               <div>
-                <h2>Manage stock request</h2>
+                <h2>{isBranchReturn ? 'Branch stock return' : 'Manage stock request'}</h2>
                 <p>
                   {selectedGroup.requestedBy} · {selectedGroup.branchName || 'No branch'} · {selectedGroup.sourceSystem}
                 </p>
@@ -517,31 +519,55 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             <div className="request-detail-status">
               <StatusBadge status={selectedGroup.status} />
               <span className="muted">
-                {selectedGroup.lineCount} line{selectedGroup.lineCount === 1 ? '' : 's'} · Requested {formatDate(selectedGroup.createdAt)}
+                {selectedGroup.lineCount} line{selectedGroup.lineCount === 1 ? '' : 's'} · {isBranchReturn ? 'Returned' : 'Requested'} {formatDate(selectedGroup.createdAt)}
+                {!isBranchReturn && selectedGroup.receivedAt ? ` · Received ${formatDate(selectedGroup.receivedAt)}` : ''}
               </span>
             </div>
 
-            <div className="request-detail-grid">
-              <div><span>Branch</span><strong>{detailValue(selectedGroup.branchName)}</strong></div>
-              <div><span>Group reference</span><strong>{detailValue(selectedGroup.batchReference)}</strong></div>
-              <div><span>Requested total</span><strong>{formatCurrency(selectedGroup.requestedTotal)}</strong></div>
-              <div><span>This shipment</span><strong>{formatCurrency(selectedShipmentTotal)}</strong></div>
-              <div className="full"><span>Reason</span><strong>{detailValue(selectedGroup.reason)}</strong></div>
-            </div>
+            {isBranchReturn ? (
+              <div className="request-detail-grid">
+                <div><span>Branch</span><strong>{detailValue(selectedGroup.branchName)}</strong></div>
+                <div><span>Group reference</span><strong>{detailValue(selectedGroup.batchReference)}</strong></div>
+                <div><span>Returned by</span><strong>{detailValue(selectedGroup.requestedBy)}</strong></div>
+                <div><span>Returned at</span><strong>{formatDate(selectedGroup.createdAt)}</strong></div>
+                <div className="full"><span>Reason</span><strong>{detailValue(selectedGroup.reason)}</strong></div>
+              </div>
+            ) : (
+              <div className="request-detail-grid">
+                <div><span>Branch</span><strong>{detailValue(selectedGroup.branchName)}</strong></div>
+                <div><span>Group reference</span><strong>{detailValue(selectedGroup.batchReference)}</strong></div>
+                <div><span>Requested total</span><strong>{formatCurrency(selectedGroup.requestedTotal)}</strong></div>
+                <div><span>This shipment</span><strong>{formatCurrency(selectedShipmentTotal)}</strong></div>
+                <div>
+                  <span>Branch received</span>
+                  <strong>{selectedGroup.receivedAt ? formatDate(selectedGroup.receivedAt) : '—'}</strong>
+                  {selectedGroup.receivedBy ? <small>{selectedGroup.receivedBy}</small> : null}
+                </div>
+                <div className="full"><span>Reason</span><strong>{detailValue(selectedGroup.reason)}</strong></div>
+              </div>
+            )}
+
+            {isBranchReturn && (
+              <div className="integration-note">
+                CMS Return Stock already deducted branch qty. RHET increased warehouse stock when this return was accepted.
+              </div>
+            )}
 
             <div className="overflow-x-auto rounded-lg table-scroll group-lines-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-              <table className="batch-ship-table" style={{ width: '100%', minWidth: '920px' }}>
+              <table className="batch-ship-table" style={{ width: '100%', minWidth: isBranchReturn ? '760px' : '920px' }}>
                 <thead>
                   <tr>
-                    <th className="select-col">
-                      <input
-                        type="checkbox"
-                        checked={allShippableSelected}
-                        disabled={!shippableLines.length || invoiceBusy}
-                        onChange={toggleAllShippable}
-                        aria-label="Select all ready lines for this shipment"
-                      />
-                    </th>
+                    {!isBranchReturn && (
+                      <th className="select-col">
+                        <input
+                          type="checkbox"
+                          checked={allShippableSelected}
+                          disabled={!shippableLines.length || invoiceBusy}
+                          onChange={toggleAllShippable}
+                          aria-label="Select all ready lines for this shipment"
+                        />
+                      </th>
+                    )}
                     <th>#</th>
                     <th>Item</th>
                     <th>SKU</th>
@@ -562,20 +588,22 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                     return (
                       <Fragment key={request.requestId}>
                         <tr className={request.status === 'PENDING' && issue ? 'batch-row-blocked' : undefined}>
-                          <td className="select-col">
-                            {request.status === 'PENDING' ? (
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={!shippable || invoiceBusy}
-                                title={shippable
-                                  ? (checked ? 'Include in this shipment' : 'Leave pending for a later shipment')
-                                  : (issue?.title || 'Cannot ship yet')}
-                                onChange={() => toggleShipLine(request.requestId)}
-                                aria-label={`Include ${requestItemLabel(request)} in this shipment`}
-                              />
-                            ) : null}
-                          </td>
+                          {!isBranchReturn && (
+                            <td className="select-col">
+                              {request.status === 'PENDING' ? (
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={!shippable || invoiceBusy}
+                                  title={shippable
+                                    ? (checked ? 'Include in this shipment' : 'Leave pending for a later shipment')
+                                    : (issue?.title || 'Cannot ship yet')}
+                                  onChange={() => toggleShipLine(request.requestId)}
+                                  aria-label={`Include ${requestItemLabel(request)} in this shipment`}
+                                />
+                              ) : null}
+                            </td>
+                          )}
                           <td>{index + 1}</td>
                           <td>
                             <strong>{requestItemLabel(request)}</strong>
@@ -593,11 +621,19 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                             {request.status === 'PENDING' && issue ? (
                               <span className="batch-status warn">{issue.title}</span>
                             ) : (
-                              <StatusBadge status={request.status} />
+                              <>
+                                <StatusBadge status={request.status} />
+                                {request.deliveredAt && (request.status === 'DELIVERED' || request.status === 'RETURNED') ? (
+                                  <small>
+                                    Received {formatDate(request.deliveredAt)}
+                                    {request.deliveryConfirmedBy ? ` · ${request.deliveryConfirmedBy}` : ''}
+                                  </small>
+                                ) : null}
+                              </>
                             )}
                           </td>
                           <td>
-                            {request.status === 'PENDING' && (
+                            {!isBranchReturn && request.status === 'PENDING' && (
                               <button
                                 type="button"
                                 className="secondary small-btn"
@@ -611,7 +647,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                                 Reject
                               </button>
                             )}
-                            {(request.status === 'SHIPPED' || request.status === 'DELIVERED') && (
+                            {!isBranchReturn && (request.status === 'SHIPPED' || request.status === 'DELIVERED') && (
                               <button
                                 type="button"
                                 className="secondary small-btn"
@@ -629,7 +665,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                         </tr>
                         {components.map((component) => (
                           <tr key={`${request.requestId}-${component.requestComponentId || component.matchedSku || component.itemName}`} className="batch-component-row">
-                            <td />
+                            {!isBranchReturn && <td />}
                             <td />
                             <td className="batch-component-name">↳ {componentItemLabel(component)}</td>
                             <td>{componentSkuLabel(component)}</td>
@@ -644,7 +680,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               </table>
             </div>
 
-            {groupInvoices.length > 0 && (
+            {!isBranchReturn && groupInvoices.length > 0 && (
               <div className="group-invoice-list">
                 <h3>Issued invoices</h3>
                 {groupInvoices.map((invoice) => (
@@ -663,7 +699,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               </div>
             )}
 
-            {selectedGroup.pendingCount > 0 && (
+            {!isBranchReturn && selectedGroup.pendingCount > 0 && (
               <>
                 <div className="batch-ship-toolbar">
                   <button type="button" className="batch-print-btn" onClick={printGroupChecklist} disabled={invoiceBusy}>
@@ -698,7 +734,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               <button type="button" className="secondary" onClick={closeModal} disabled={invoiceBusy || Boolean(busyId)}>
                 Close
               </button>
-              {selectedGroup.pendingCount > 0 && (
+              {!isBranchReturn && selectedGroup.pendingCount > 0 && (
                 <button
                   type="button"
                   className="primary"

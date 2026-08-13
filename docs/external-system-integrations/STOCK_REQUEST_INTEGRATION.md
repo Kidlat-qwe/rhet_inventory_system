@@ -120,6 +120,7 @@ Errors:
 | `GET` | `/catalog` | Active categories + inventory items |
 | `GET` | `/availability` | Check one SKU by attributes |
 | `POST` | `/stock-requests` | Submit one or many line items |
+| `POST` | `/stock-returns` | CMS Return Stock — restock warehouse immediately (`PSMS-RET-*`) |
 | `GET` | `/stock-requests/:requestId` | Read status by RHET UUID |
 
 ---
@@ -231,6 +232,35 @@ X-Integration-Key: YOUR_KEY
 Response `201`: array of created requests (`requestId`, `status: PENDING`, `matchedSku` if matched, `failureReason` if not).
 
 Store `requestId` + `externalReference` on your local request row.
+
+### 7.3 Branch Return Stock (`POST /stock-returns`)
+
+CMS **Return Stock** (branch sending goods back to HQ). Deduct branch qty first; if this call fails, roll back branch qty.
+
+```http
+POST /stock-returns
+Content-Type: application/json
+X-Integration-Key: YOUR_KEY
+```
+
+Same top-level fields as `/stock-requests`, plus:
+
+| Field | Required | Notes |
+|---|---|---|
+| `requestType` | Recommended | Must be `"RETURN"` if sent |
+| `batchReference` | Strongly recommended | `YOUR_SYSTEM-RET-<firstLocalId>` (e.g. `PSMS-RET-82`) |
+| `items[].externalReference` | Yes | Unique **line** id: `YOUR_SYSTEM-RET-<localId>` — **not** `PSMS-<id>` / `PSMS-REQ-<id>` |
+| `items[].sku` | Non-uniform, recommended | Helps matching |
+
+RHET behavior:
+
+- Matches items like Request Stock (uniform: gender + type + size; other: itemName and/or sku).
+- On success: warehouse stock **increases** (`RETURN` movement), rows stored as `requestKind: RETURN`, `status: RETURNED`.
+- All-or-nothing. Unmatched item or Learning Kit / Tool Kit → **422**, nothing restocked.
+- Idempotent replay of the same `externalReference`s → **200** with existing rows (no second restock).
+- Webhook: `stock_return.accepted` only (do **not** treat as `stock_request.*`).
+
+Response `201` (new) / `200` (replay): array of lines (`requestId`, `status: RETURNED`, `requestKind: RETURN`, `matchedSku`, `batchReference`, `externalReference`).
 
 ---
 

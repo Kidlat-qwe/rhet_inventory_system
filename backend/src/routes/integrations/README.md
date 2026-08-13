@@ -9,6 +9,7 @@ Base: `/api/v1/integrations` (X-Integration-Key or Bearer).
 | GET | `/catalog` | Categories + items |
 | GET | `/availability` | Stock check |
 | POST | `/stock-requests` | Create (requires `branchName`; send `batchReference` for multi-item carts) |
+| POST | `/stock-returns` | CMS Return Stock (restock warehouse; `PSMS-RET-*`; `request_kind = RETURN`) |
 | GET | `/stock-requests/:id` | Poll status |
 | POST | `/stock-requests/:id/deliver` | CMS branch confirm receipt (SHIPPED → DELIVERED) |
 

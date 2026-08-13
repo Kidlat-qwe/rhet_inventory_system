@@ -58,6 +58,7 @@ Use these when changing the **existing** CMS merchandise / stock-request flow. D
 | **[CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md](./CMS_PSMS_BRANCH_NAME_STOCK_REQUEST_PROMPT.md)** | **Paste** — required `branchName` (campus display name) on every `POST /stock-requests` |
 | **[CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md)** | **Paste** — Pending → Shipped → Delivered → Returned (cut out FULFILLED) |
 | **[CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md](./CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md)** | **Paste** — send `batchReference` so multi-item carts group on RHET Manage/invoice |
+| **[STOCK_REQUEST_INTEGRATION.md](./STOCK_REQUEST_INTEGRATION.md)** § stock-returns | RHET `POST /stock-returns` for CMS Return Stock (`PSMS-RET-*`) |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
 ### CMS quick path

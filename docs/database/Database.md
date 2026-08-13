@@ -240,6 +240,8 @@ CREATE TABLE IF NOT EXISTS public.stock_requests
     quantity integer NOT NULL,
     status character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'PENDING'::character varying,
     -- Allowed: PENDING | SHIPPED | DELIVERED | RETURNED | REJECTED
+    request_kind character varying(20) NOT NULL DEFAULT 'REQUEST',
+    -- REQUEST = HQ restock; RETURN = CMS branch Return Stock (warehouse already increased)
     inventory_id uuid,
     matched_sku character varying(64) COLLATE pg_catalog."default",
     movement_id uuid,
