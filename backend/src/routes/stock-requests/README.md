@@ -8,7 +8,7 @@ Base: `/api/v1/stock-requests` (Firebase auth).
 | GET | `/:id` | Get one line |
 | POST | `/:id/ship` | Ship one pending line (legacy / single) |
 | POST | `/:id/deliver` | Mark delivered |
-| POST | `/:id/return` | Mark returned. Body: `{ reusable, notes }`. For **CMS branch returns** (`request_kind = RETURN`, Pending): inspect reusable vs not. Reusable restocks warehouse + RETURN movement, then status RETURNED. For shipped/delivered **requests**: always restocks. |
+| POST | `/:id/return` | HQ inspect for **CMS branch returns** only (`request_kind = RETURN`, Pending). Body: `{ reusable, notes }`. Reusable restocks warehouse + RETURN movement, then status RETURNED. Staff UI has no Return button on Shipped/Delivered request lines. |
 | POST | `/:id/reject` | Reject pending line |
 | POST | `/invoices/preview` | Invoice draft for selected line ids (ready lines only) |
 | POST | `/invoices` | Save invoice snapshot + ship those lines |

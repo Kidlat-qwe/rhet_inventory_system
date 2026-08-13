@@ -44,7 +44,7 @@ const ALL_TOPICS = [
         'Check the lines for **this shipment**. Unchecked ready lines stay Pending for shipment 2+. Out-of-stock lines cannot be selected.',
         'Tick **Items picked & verified**, then **Preview invoice**. Print if needed.',
         'Click **Confirm ship & save invoice** to deduct warehouse stock. Remaining Pending lines get a later invoice.',
-        'Use **Reject** or **Return** on a single shipped/delivered request line when needed. Branch delivery is confirmed in CMS.',
+        'Use **Reject** on a Pending line when needed. Shipped and Delivered are view-only (no Return button). Branch delivery is confirmed in CMS.',
         '**CMS Return Stock** arrives on **Pending** (Inspect). Check each item: **Reusable** adds qty back to warehouse with a RETURN movement; **Not reusable** does not. Then it moves to the **Returned** tab (Reusable / Not reusable categories).',
       ],
     },

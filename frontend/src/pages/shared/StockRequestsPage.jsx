@@ -343,13 +343,12 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
   async function confirmReturn(e) {
     e.preventDefault()
     if (!lineForAction?.requestId) return
+    if (selectedGroup?.requestKind !== 'RETURN' && lineForAction?.requestKind !== 'RETURN') return
     setBusyId(lineForAction.requestId)
     setError('')
     try {
       await returnStockRequest(lineForAction.requestId, {
-        reusable: (selectedGroup?.requestKind === 'RETURN' || lineForAction?.requestKind === 'RETURN')
-          ? returnReusable === 'true'
-          : true,
+        reusable: returnReusable === 'true',
         notes: returnNotes.trim(),
       })
       setMode('manage')
@@ -390,6 +389,8 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     0,
     (selectedGroup?.pendingCount || 0) - selectedShipCount,
   )
+  const showShipSelect = !isBranchReturn && (selectedGroup?.pendingCount || 0) > 0
+  const showLineActions = Boolean(selectedGroup?.requests?.some((row) => row.status === 'PENDING'))
 
   return (
     <>
@@ -629,10 +630,10 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             )}
 
             <div className="overflow-x-auto rounded-lg table-scroll group-lines-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-              <table className="batch-ship-table" style={{ width: '100%', minWidth: isBranchReturn ? '760px' : '920px' }}>
+              <table className="batch-ship-table" style={{ width: '100%', minWidth: isBranchReturn ? '760px' : (showShipSelect || showLineActions ? '920px' : '780px') }}>
                 <thead>
                   <tr>
-                    {!isBranchReturn && (
+                    {showShipSelect && (
                       <th className="select-col">
                         <input
                           type="checkbox"
@@ -650,7 +651,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                     <th>Internal price</th>
                     <th>Amount</th>
                     <th>Status</th>
-                    <th>Action</th>
+                    {showLineActions && <th>Action</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -663,7 +664,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                     return (
                       <Fragment key={request.requestId}>
                         <tr className={request.status === 'PENDING' && issue ? 'batch-row-blocked' : undefined}>
-                          {!isBranchReturn && (
+                          {showShipSelect && (
                             <td className="select-col">
                               {request.status === 'PENDING' ? (
                                 <input
@@ -718,62 +719,49 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                               </>
                             )}
                           </td>
-                          <td>
-                            {isBranchReturn && request.status === 'PENDING' && (
-                              <button
-                                type="button"
-                                className="primary small-btn"
-                                disabled={Boolean(busyId) || invoiceBusy}
-                                onClick={() => {
-                                  setError('')
-                                  setReturnReusable('true')
-                                  setReturnNotes('')
-                                  setLineForAction(request)
-                                  setMode('return')
-                                }}
-                              >
-                                Check item
-                              </button>
-                            )}
-                            {!isBranchReturn && request.status === 'PENDING' && (
-                              <button
-                                type="button"
-                                className="secondary small-btn"
-                                disabled={Boolean(busyId) || invoiceBusy}
-                                onClick={() => {
-                                  setError('')
-                                  setLineForAction(request)
-                                  setMode('reject')
-                                }}
-                              >
-                                Reject
-                              </button>
-                            )}
-                            {!isBranchReturn && (request.status === 'SHIPPED' || request.status === 'DELIVERED') && (
-                              <button
-                                type="button"
-                                className="secondary small-btn"
-                                disabled={Boolean(busyId) || invoiceBusy}
-                                onClick={() => {
-                                  setError('')
-                                  setReturnNotes('')
-                                  setLineForAction(request)
-                                  setMode('return')
-                                }}
-                              >
-                                Return
-                              </button>
-                            )}
-                          </td>
+                          {showLineActions && (
+                            <td>
+                              {isBranchReturn && request.status === 'PENDING' && (
+                                <button
+                                  type="button"
+                                  className="primary small-btn"
+                                  disabled={Boolean(busyId) || invoiceBusy}
+                                  onClick={() => {
+                                    setError('')
+                                    setReturnReusable('true')
+                                    setReturnNotes('')
+                                    setLineForAction(request)
+                                    setMode('return')
+                                  }}
+                                >
+                                  Check item
+                                </button>
+                              )}
+                              {!isBranchReturn && request.status === 'PENDING' && (
+                                <button
+                                  type="button"
+                                  className="secondary small-btn"
+                                  disabled={Boolean(busyId) || invoiceBusy}
+                                  onClick={() => {
+                                    setError('')
+                                    setLineForAction(request)
+                                    setMode('reject')
+                                  }}
+                                >
+                                  Reject
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                         {components.map((component) => (
                           <tr key={`${request.requestId}-${component.requestComponentId || component.matchedSku || component.itemName}`} className="batch-component-row">
-                            {!isBranchReturn && <td />}
+                            {showShipSelect && <td />}
                             <td />
                             <td className="batch-component-name">↳ {componentItemLabel(component)}</td>
                             <td>{componentSkuLabel(component)}</td>
                             <td>{component.quantity}</td>
-                            <td colSpan={4} className="muted">Component</td>
+                            <td colSpan={showLineActions ? 4 : 3} className="muted">Component</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -971,12 +959,12 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
         </div>
       )}
 
-      {selectedGroup && mode === 'return' && lineForAction && (
+      {selectedGroup && isBranchReturn && mode === 'return' && lineForAction && (
         <div className="modal-backdrop">
           <form className="modal small" onSubmit={confirmReturn}>
             <div className="modal-head">
               <div>
-                <h2>{isBranchReturn ? 'Check returned item' : 'Mark returned'}</h2>
+                <h2>Check returned item</h2>
                 <p>
                   {requestItemLabel(lineForAction)} · Qty {lineForAction.quantity}
                   {lineForAction.branchName ? ` · ${lineForAction.branchName}` : ''}
@@ -984,31 +972,23 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               </div>
               <button type="button" onClick={() => { if (!busyId) { setMode('manage'); setLineForAction(null) } }}>×</button>
             </div>
-            {isBranchReturn ? (
-              <>
-                <div className="integration-note warn">
-                  Reusable adds this quantity back to warehouse stock and writes a RETURN movement.
-                  Not reusable keeps warehouse qty unchanged.
-                </div>
-                <label>
-                  Outcome
-                  <select value={returnReusable} onChange={(e) => setReturnReusable(e.target.value)}>
-                    <option value="true">Reusable — add back to RHET stock</option>
-                    <option value="false">Not reusable — do not add to stock</option>
-                  </select>
-                </label>
-              </>
-            ) : (
-              <div className="integration-note warn">
-                Warehouse stock will be restocked. If this was already delivered, CMS should reverse branch stock.
-              </div>
-            )}
+            <div className="integration-note warn">
+              Reusable adds this quantity back to warehouse stock and writes a RETURN movement.
+              Not reusable keeps warehouse qty unchanged.
+            </div>
+            <label>
+              Outcome
+              <select value={returnReusable} onChange={(e) => setReturnReusable(e.target.value)}>
+                <option value="true">Reusable — add back to RHET stock</option>
+                <option value="false">Not reusable — do not add to stock</option>
+              </select>
+            </label>
             <label>
               Notes
               <textarea
                 value={returnNotes}
                 onChange={(e) => setReturnNotes(e.target.value)}
-                placeholder={isBranchReturn ? 'Inspection notes (optional)' : 'Optional return notes'}
+                placeholder="Inspection notes (optional)"
               />
             </label>
             {error && <div className="page-error">{error}</div>}
@@ -1017,9 +997,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                 Back
               </button>
               <button className="primary" disabled={busyId === lineForAction.requestId}>
-                {busyId === lineForAction.requestId
-                  ? 'Saving…'
-                  : (isBranchReturn ? 'Confirm check' : 'Confirm return')}
+                {busyId === lineForAction.requestId ? 'Saving…' : 'Confirm check'}
               </button>
             </div>
           </form>
