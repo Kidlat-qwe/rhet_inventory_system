@@ -352,11 +352,63 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
   const outOfStock = Number(summary.outOfStockItems) || 0
   const totalItems = Number(summary.totalItems) || 0
 
-  const cards = [
-    ['Total merchandise', totalItems, totalItems ? 'Active items in inventory' : 'No merchandise added yet', 'blue'],
-    ['Available stocks', totalStocks.toLocaleString(), totalStocks ? 'Across all categories' : 'No stock on hand', 'violet'],
-    ['Inventory value', formatCurrency(totalValue), totalValue ? 'Based on selling price' : 'Add items to calculate value', 'green'],
-    ['Stock alerts', lowStock + outOfStock, `${lowStock} low · ${outOfStock} out of stock`, 'orange'],
+  const channelSales = dashboard?.channelSales || {}
+  const stockRequestSales = channelSales.stockRequests || {}
+  const onlineOrderSales = channelSales.onlineOrders || {}
+  const manualOrderSales = channelSales.manualOrders || {}
+
+  const overviewCards = [
+    {
+      key: 'merchandise',
+      label: 'Total merchandise',
+      value: totalItems,
+      note: totalItems ? 'Active items in inventory' : 'No merchandise added yet',
+      color: 'blue',
+      icon: 'tag',
+    },
+    {
+      key: 'stocks',
+      label: 'Available stocks',
+      value: totalStocks.toLocaleString(),
+      note: totalStocks ? 'Across all categories' : 'No stock on hand',
+      color: 'violet',
+      icon: 'box',
+    },
+    {
+      key: 'alerts',
+      label: 'Stock alerts',
+      value: lowStock + outOfStock,
+      note: `${lowStock} low · ${outOfStock} out of stock`,
+      color: 'orange',
+      icon: 'swap',
+    },
+  ]
+
+  const salesCards = [
+    {
+      key: 'stock-requests',
+      label: 'Stock requests',
+      value: formatCurrency(stockRequestSales.value),
+      note: `${Number(stockRequestSales.units) || 0} units released this month`,
+      color: 'green',
+      icon: 'swap',
+    },
+    {
+      key: 'online-orders',
+      label: 'Online orders',
+      value: formatCurrency(onlineOrderSales.value),
+      note: `${Number(onlineOrderSales.units) || 0} units sold this month`,
+      color: 'blue',
+      icon: 'cart',
+    },
+    {
+      key: 'manual-orders',
+      label: 'Manual orders',
+      value: formatCurrency(manualOrderSales.value),
+      note: `${Number(manualOrderSales.units) || 0} units sold this month`,
+      color: 'violet',
+      icon: 'box',
+    },
   ]
 
   return (
@@ -364,22 +416,41 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
       <div className="page-title">
         <div>
           <h1>Good afternoon, {greetingName(admin?.fullName)}</h1>
-          <p>Inventory overview, consumption trends, and reorder signals.</p>
+          <p>Inventory overview, channel sales this month, and reorder signals.</p>
         </div>
         <button type="button" className="primary" onClick={goInventory}>＋ Add new item</button>
       </div>
 
-      <section className="stat-grid">
-        {cards.map(([label, num, note, color]) => (
-          <div className="stat-card" key={label}>
-            <div className={`stat-icon ${color}`}>
-              <Icon name={label === 'Stock alerts' ? 'swap' : label === 'Inventory value' ? 'report' : label === 'Available stocks' ? 'box' : 'tag'} />
+      <section className="stat-grid overview-stat-grid" aria-label="Inventory overview">
+        {overviewCards.map((card) => (
+          <div className="stat-card" key={card.key}>
+            <div className={`stat-icon ${card.color}`}>
+              <Icon name={card.icon} />
             </div>
-            <p>{label}</p>
-            <strong>{num}</strong>
-            <span>{note}</span>
+            <p>{card.label}</p>
+            <strong>{card.value}</strong>
+            <span>{card.note}</span>
           </div>
         ))}
+      </section>
+
+      <section className="dashboard-sales" aria-label="Sales this month by channel">
+        <div className="dashboard-sales-head">
+          <h2>Sales this month</h2>
+          <p>Outbound value by channel · stock requests use internal price when set</p>
+        </div>
+        <div className="stat-grid sales-stat-grid">
+          {salesCards.map((card) => (
+            <div className="stat-card sales-stat-card" key={card.key}>
+              <div className={`stat-icon ${card.color}`}>
+                <Icon name={card.icon} />
+              </div>
+              <p>{card.label}</p>
+              <strong>{card.value}</strong>
+              <span>{card.note}</span>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="dashboard-charts">
@@ -387,7 +458,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
           <div className="panel-head">
             <div>
               <h2>Inventory value</h2>
-              <p>Selling-price value share by category</p>
+              <p>On-hand selling-price value share by category</p>
             </div>
           </div>
           <InventoryValueChart categories={categories} totalValue={totalValue} />

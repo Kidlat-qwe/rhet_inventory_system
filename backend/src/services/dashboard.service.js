@@ -4,7 +4,7 @@ import { camelize } from '../utils/api.js';
 const CONSUMPTION_TYPES = ['ONLINE_SALE', 'MANUAL_SALE', 'RELEASED', 'STOCK_OUT'];
 
 export async function dashboardSummary() {
-  const [summary, categories, recentItems, movements, monthlyConsumption, reorderItems] = await Promise.all([
+  const [summary, categories, recentItems, movements, monthlyConsumption, reorderItems, channelSales] = await Promise.all([
     pool.query(`SELECT COUNT(*) FILTER (WHERE lifecycle_status='ACTIVE')::int total_items,
       COALESCE(SUM(stocks) FILTER (WHERE lifecycle_status='ACTIVE'),0)::int total_stocks,
       COALESCE(SUM(stocks*price) FILTER (WHERE lifecycle_status='ACTIVE'),0)::numeric total_value,
@@ -47,7 +47,26 @@ export async function dashboardSummary() {
         AND i.stocks <= i.low_stock_threshold
       ORDER BY (i.low_stock_threshold - i.stocks) DESC, i.stocks ASC, i.item_name ASC
       LIMIT 100`),
+    // Month-to-date outbound sales by channel (units + estimated ₱).
+    // Stock requests use internal selling price when set; online/manual use catalog selling price.
+    // Values use current inventory prices (movements do not store historical unit price).
+    pool.query(`SELECT
+        COALESCE(SUM(m.quantity) FILTER (WHERE m.movement_type = 'RELEASED'), 0)::int AS stock_request_units,
+        COALESCE(SUM(
+          m.quantity * COALESCE(NULLIF(i.internal_selling_price, 0), i.price)
+        ) FILTER (WHERE m.movement_type = 'RELEASED'), 0)::numeric AS stock_request_value,
+        COALESCE(SUM(m.quantity) FILTER (WHERE m.movement_type = 'ONLINE_SALE'), 0)::int AS online_order_units,
+        COALESCE(SUM(m.quantity * i.price) FILTER (WHERE m.movement_type = 'ONLINE_SALE'), 0)::numeric AS online_order_value,
+        COALESCE(SUM(m.quantity) FILTER (WHERE m.movement_type = 'MANUAL_SALE'), 0)::int AS manual_order_units,
+        COALESCE(SUM(m.quantity * i.price) FILTER (WHERE m.movement_type = 'MANUAL_SALE'), 0)::numeric AS manual_order_value
+      FROM stock_movements m
+      JOIN inventory i ON i.inventory_id = m.inventory_id
+      WHERE m.stock_delta < 0
+        AND m.movement_type IN ('RELEASED', 'ONLINE_SALE', 'MANUAL_SALE')
+        AND m.created_at >= date_trunc('month', NOW())`),
   ]);
+
+  const salesRow = channelSales.rows[0] || {};
 
   return camelize({
     summary: summary.rows[0],
@@ -56,5 +75,20 @@ export async function dashboardSummary() {
     recent_movements: movements.rows,
     monthly_consumption: monthlyConsumption.rows,
     reorder_items: reorderItems.rows,
+    channel_sales: {
+      period: 'month',
+      stock_requests: {
+        units: Number(salesRow.stock_request_units) || 0,
+        value: salesRow.stock_request_value ?? 0,
+      },
+      online_orders: {
+        units: Number(salesRow.online_order_units) || 0,
+        value: salesRow.online_order_value ?? 0,
+      },
+      manual_orders: {
+        units: Number(salesRow.manual_order_units) || 0,
+        value: salesRow.manual_order_value ?? 0,
+      },
+    },
   });
 }

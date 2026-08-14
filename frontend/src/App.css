@@ -889,6 +889,45 @@ label.full-width textarea{
   }
 }
 
+/* Dashboard overview + channel sales */
+.overview-stat-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.dashboard-sales{
+  margin-top:16px;
+}
+.dashboard-sales-head{
+  margin-bottom:10px;
+}
+.dashboard-sales-head h2{
+  margin:0 0 4px;
+  font-size:13px;
+  color:#283246;
+}
+.dashboard-sales-head p{
+  margin:0;
+  font-size:10px;
+  color:#9299a5;
+}
+.sales-stat-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.sales-stat-card>strong{
+  font-size:20px;
+}
+@media(max-width:1050px){
+  .overview-stat-grid,
+  .sales-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .overview-stat-grid,
+  .sales-stat-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:430px){
+  .overview-stat-grid,
+  .sales-stat-grid{grid-template-columns:1fr}
+}
+
 /* Dashboard analytics charts */
 .dashboard-charts{
   display:grid;
