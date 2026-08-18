@@ -8,8 +8,38 @@ export const PE_UNIFORM_TYPES = ['Shirt', 'Pants']
 
 export const LCA_SHIRT_TYPES = ['Logo 1', 'Logo 2']
 
-// Top-level options shown in Add/Edit Category (Uniform groups School / PE / Shirt).
+/** Business grouping (stored as category_type). UI label: Category type. */
 export const CATEGORY_TYPE_OPTIONS = [
+  { value: 'MERCHANDISE', label: 'Merchandise' },
+  { value: 'SUPPLIES', label: 'Supplies' },
+]
+
+/** Inventory table header filter. ALL shows the “Categories” label. */
+export const INVENTORY_CATEGORY_TYPE_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'Categories' },
+  ...CATEGORY_TYPE_OPTIONS,
+]
+
+export const CATEGORY_TYPE_LABELS = {
+  MERCHANDISE: 'Merchandise',
+  SUPPLIES: 'Supplies',
+}
+
+export function normalizeCategoryType(value) {
+  const type = String(value || 'MERCHANDISE').trim().toUpperCase()
+  return type === 'SUPPLIES' ? 'SUPPLIES' : 'MERCHANDISE'
+}
+
+export function categoryTypeOf(category) {
+  return normalizeCategoryType(category?.categoryType)
+}
+
+export function categoryTypeLabel(type) {
+  return CATEGORY_TYPE_LABELS[normalizeCategoryType(type)] || 'Merchandise'
+}
+
+// Kind options shown in Add/Edit Category (Uniform groups School / PE / Shirt).
+export const CATEGORY_KIND_OPTIONS = [
   { value: 'UNIFORM', label: 'Uniform', categoryName: '' },
   { value: 'LEARNING_KIT', label: 'Learning Kit', categoryName: 'Learning Kit' },
   { value: 'OTHER', label: 'Others', categoryName: '' },

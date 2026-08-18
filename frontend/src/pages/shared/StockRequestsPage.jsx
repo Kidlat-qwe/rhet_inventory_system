@@ -436,7 +436,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
 
       <section className="panel recent">
         <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: '1180px' }}>
+          <table style={{ width: '100%', minWidth: '1260px' }}>
             <thead>
               <tr>
                 <th>Requested by</th>
@@ -494,6 +494,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                 </th>
                 <th>Items</th>
                 <th>Qty</th>
+                <th>Amount</th>
                 <th>Reason</th>
                 <th>Status</th>
                 <th>Requested</th>
@@ -516,6 +517,10 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                     <small>{group.itemPreview.slice(0, 3).join(', ')}{group.itemPreview.length > 3 ? '…' : ''}</small>
                   </td>
                   <td><strong>{group.totalQty}</strong></td>
+                  <td>
+                    <strong>{formatCurrency(group.requestedTotal)}</strong>
+                    <small>Internal selling price</small>
+                  </td>
                   <td className="reason-cell">{group.reason}</td>
                   <td>
                     <StatusBadge status={group.status} />
@@ -553,7 +558,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <EmptyState
                       title={branchFilter
                         ? `No ${formatStatus(filter).toLowerCase()} request groups for this branch`

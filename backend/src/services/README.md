@@ -5,7 +5,7 @@ Business logic modules used by Express controllers and routes.
 | File | Purpose |
 |------|---------|
 | `settings.service.js` | Org settings singleton (`system_settings`): branding, timezone, default low-stock threshold, courier presets, uniform/shirt sizes, Help Assistant flag. |
-| `inventory.service.js` | Categories, inventory CRUD, movements, Tool Kit children |
+| `inventory.service.js` | Categories (`category_type` Merchandise/Supplies + `category_kind`), inventory CRUD, movements, Tool Kit children |
 | `dashboard.service.js` | Dashboard summary, category stocks/value, recent activity, monthly consumption, reorder alerts, **MTD channel sales** (RELEASED / ONLINE_SALE / MANUAL_SALE units + ₱) |
 | `users.service.js` | User list / create / role / status |
 | `manual-order.service.js` | HQ / Scoring courier shipments + partner ingest webhooks |

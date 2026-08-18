@@ -5,7 +5,7 @@ import { DeleteCategoryModal } from '../../components/DeleteCategoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
-import { categoryKindLabel } from '../../constants/uniformOptions'
+import { categoryKindLabel, categoryTypeLabel } from '../../constants/uniformOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { createCategory, deleteCategory, updateCategory } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
@@ -33,18 +33,18 @@ export default function CategoriesPage({
 
   const { page, setPage, pageItems, total } = usePagination(categories, 15)
 
-  async function saveCategory({ categoryName, categoryKind, hasChildSkus }) {
+  async function saveCategory({ categoryName, categoryType, categoryKind, hasChildSkus }) {
     if (modal?.mode === 'edit' && !canManage) return
     if (modal?.mode !== 'edit' && !allowCreate) return
     setBusy(true)
     setError('')
     try {
       if (modal?.mode === 'edit') {
-        await updateCategory(modal.category.categoryId, { categoryName, categoryKind, hasChildSkus })
+        await updateCategory(modal.category.categoryId, { categoryName, categoryType, categoryKind, hasChildSkus })
         setModal(null)
         await onRefresh()
       } else {
-        const created = await createCategory({ categoryName, categoryKind, hasChildSkus })
+        const created = await createCategory({ categoryName, categoryType, categoryKind, hasChildSkus })
         setModal(null)
         await onRefresh()
         setCreatedOffer({
@@ -107,11 +107,12 @@ export default function CategoriesPage({
       <section className="panel recent">
         <div className="panel-head"><div><h2>All categories</h2><p>{categories.length} categories available</p></div></div>
         <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: canManage ? '720px' : '600px' }}>
+          <table style={{ width: '100%', minWidth: canManage ? '820px' : '700px' }}>
             <thead>
               <tr>
                 <th>Category</th>
                 <th>Type</th>
+                <th>Kind</th>
                 <th>Items</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -124,6 +125,7 @@ export default function CategoriesPage({
                 return (
                   <tr key={category.categoryId}>
                     <td><strong>{category.categoryName}</strong></td>
+                    <td className="muted">{categoryTypeLabel(category.categoryType)}</td>
                     <td className="muted">{categoryKindLabel(category.categoryKind, category.hasChildSkus)}</td>
                     <td className="muted">{itemCount}</td>
                     <td><StatusBadge status={category.status} /></td>
@@ -155,7 +157,7 @@ export default function CategoriesPage({
                 )
               }) : (
                 <tr>
-                  <td colSpan={canManage ? 6 : 5}>
+                  <td colSpan={canManage ? 7 : 6}>
                     <EmptyState
                       title="No categories found"
                       message={allowCreate

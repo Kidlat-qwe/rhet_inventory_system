@@ -127,17 +127,28 @@ export const deleteInventoryItem = (id, confirmationName) =>
 export const createStockMovement = (id, body) =>
   api(`/inventory/${id}/movements`, { method: 'POST', body: JSON.stringify(body) }).then((response) => response.data)
 
-export const createCategory = ({ categoryName, categoryKind = 'OTHER', hasChildSkus = false }) =>
+export const createCategory = ({
+  categoryName,
+  categoryType = 'MERCHANDISE',
+  categoryKind = 'OTHER',
+  hasChildSkus = false,
+}) =>
   api('/categories', {
     method: 'POST',
-    body: JSON.stringify({ categoryName, categoryKind, hasChildSkus: Boolean(hasChildSkus) }),
+    body: JSON.stringify({
+      categoryName,
+      categoryType,
+      categoryKind,
+      hasChildSkus: Boolean(hasChildSkus),
+    }),
   }).then((response) => response.data)
 
-export const updateCategory = (categoryId, { categoryName, categoryKind, hasChildSkus }) =>
+export const updateCategory = (categoryId, { categoryName, categoryType, categoryKind, hasChildSkus }) =>
   api(`/categories/${categoryId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       categoryName,
+      ...(categoryType ? { categoryType } : {}),
       ...(categoryKind ? { categoryKind } : {}),
       ...(hasChildSkus !== undefined ? { hasChildSkus: Boolean(hasChildSkus) } : {}),
     }),

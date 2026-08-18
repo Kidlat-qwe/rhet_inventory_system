@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
+  CATEGORY_KIND_OPTIONS,
   CATEGORY_TYPE_OPTIONS,
   UNIFORM_SUBTYPE_OPTIONS,
+  categoryTypeOf,
   isUniformFamilyKind,
 } from '../constants/uniformOptions'
 
@@ -27,6 +29,7 @@ function namePlaceholder(uiType, uniformSubtype) {
 export function CategoryModal({ category = null, categories = [], busy, onClose, onSave }) {
   const isEdit = Boolean(category)
   const initialKind = category?.categoryKind || 'OTHER'
+  const [categoryType, setCategoryType] = useState(() => categoryTypeOf(category))
   const [uiType, setUiType] = useState(() => resolveUiType(initialKind))
   const [uniformSubtype, setUniformSubtype] = useState(() => resolveUniformSubtype(initialKind))
   const [name, setName] = useState(category?.categoryName || '')
@@ -64,6 +67,7 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
     if (!canSubmit) return
     onSave({
       categoryName: resolvedName,
+      categoryType,
       categoryKind: resolvedKind,
       hasChildSkus: resolvedKind === 'OTHER' ? hasChildSkus : false,
     })
@@ -90,16 +94,23 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
             <h2>{isEdit ? 'Edit category' : 'Add category'}</h2>
             <p>
               {isEdit
-                ? 'Update this merchandise category. Behavior follows the type and options below.'
-                : 'Pick a category type, then give it a unique name.'}
+                ? 'Update this category. Category type groups Merchandise vs Supplies; kind controls item behavior.'
+                : 'Choose Merchandise or Supplies, then set the kind and a unique name.'}
             </p>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </div>
         <div className="form-grid">
           <label>Category type *
-            <select value={uiType} onChange={(e) => onUiTypeChange(e.target.value)}>
+            <select value={categoryType} onChange={(e) => setCategoryType(e.target.value)}>
               {CATEGORY_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>Kind *
+            <select value={uiType} onChange={(e) => onUiTypeChange(e.target.value)}>
+              {CATEGORY_KIND_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>

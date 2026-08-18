@@ -51,6 +51,7 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
 
 - `categories (1) → (many) inventory`: every item belongs to a controlled category.
 - `inventory (1) → (many) stock_movements`: the immutable transaction history for an item.
+- `categories.category_type`: `MERCHANDISE` or `SUPPLIES` (UI label: **Category type**). Independent of `category_kind`.
 - `categories.has_child_skus`: when true (typically with `OTHER`), items can be parent kits with raw child SKUs (former Tool Kit behavior). Existing Tool Kit rows were migrated to `OTHER` + this flag.
 - `inventory (1) → (many) inventory_bundle_components`: Kit bill of materials.
   - **Learning Kit**: category slots; concrete SKUs come from stock-request `components[]`. Available kits = min across category totals.
@@ -198,6 +199,8 @@ Copy-Item .env.example .env
 npm install
 npm run dev
 ```
+
+Backend `env.js` loads `DB_*_DEVELOPMENT` when `NODE_ENV=development` (`inventsys_dev`) and `DB_*_PRODUCTION` when `NODE_ENV=production` (`inventsys_prod`). Restart the API after changing `.env`; the startup log shows `Database: <name>`. Set `NODE_ENV=production` on Coolify, not as an everyday local setting.
 
 For API-only local development, set `AUTH_BYPASS=true`. Do not use it in a deployed environment.
 

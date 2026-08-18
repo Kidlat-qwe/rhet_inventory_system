@@ -3,13 +3,20 @@ import { env } from '../config/env.js';
 
 const { Pool } = pg;
 
+function discreteConnectionString(database) {
+  const user = encodeURIComponent(database.user);
+  const password = encodeURIComponent(database.password);
+  const name = encodeURIComponent(database.database);
+  const sslMode = env.databaseSsl ? 'require' : 'disable';
+  // Neon pooler routes by the path database name. Discrete host+database
+  // options can land on the role default DB, so both "envs" look the same.
+  // pg_restore can leave search_path empty, which makes public.users "not exist".
+  return `postgresql://${user}:${password}@${database.host}:${database.port}/${name}?sslmode=${sslMode}`;
+}
+
 const poolConfig = env.database
   ? {
-      host: env.database.host,
-      port: env.database.port,
-      database: env.database.database,
-      user: env.database.user,
-      password: env.database.password,
+      connectionString: discreteConnectionString(env.database),
       ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30_000,

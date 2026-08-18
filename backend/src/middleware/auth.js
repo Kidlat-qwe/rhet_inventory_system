@@ -60,6 +60,13 @@ export async function requireAuth(req, _res, next) {
   } catch (error) {
     if (error instanceof AppError) return next(error);
     console.error('Authentication failed', error.code || '', error.message);
+    if (error.code === '42P01') {
+      return next(new AppError(
+        503,
+        'DATABASE_SCHEMA_MISSING',
+        `Database "${env.database?.database || env.NODE_ENV}" is missing required tables (e.g. users). Use inventsys_dev locally (NODE_ENV=development), or restore/migrate inventsys_prod before NODE_ENV=production.`,
+      ));
+    }
     if (error.code === '28000' || error.code === '57P01' || /SSL|insecure|ECONNREFUSED|timeout/i.test(error.message || '')) {
       return next(new AppError(503, 'DATABASE_UNAVAILABLE', 'Unable to reach the database. Check DB host/SSL settings.'));
     }

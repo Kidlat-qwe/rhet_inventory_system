@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
+import { TableHeadSelect } from '../../components/TableHeadSelect'
 import { DeleteInventoryModal } from '../../components/DeleteInventoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Icon } from '../../components/Icon'
@@ -11,7 +12,9 @@ import { ToolKitRawItemModal } from '../../components/ToolKitRawItemModal'
 import { UniformItemModal } from '../../components/UniformItemModal'
 import { usePagination } from '../../hooks/usePagination'
 import {
+  INVENTORY_CATEGORY_TYPE_FILTER_OPTIONS,
   UNIFORM_SET_TYPE,
+  categoryTypeOf,
   generateUniqueSku,
   getUniformGendersForCategory,
   getUniformSizesForCategory,
@@ -101,6 +104,25 @@ export default function InventoryPage({
   const [showAddRawModal, setShowAddRawModal] = useState(false)
   const [rawError, setRawError] = useState('')
   const [expandedLearningKitIds, setExpandedLearningKitIds] = useState(() => new Set())
+  const [categoryTypeFilter, setCategoryTypeFilter] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('inventoryCategoryTypeFilter')
+      if (saved === 'SUPPLIES' || saved === 'MERCHANDISE' || saved === 'ALL') return saved
+    } catch {
+      /* ignore */
+    }
+    return 'ALL'
+  })
+
+  function applyCategoryTypeFilter(value) {
+    const next = value === 'SUPPLIES' || value === 'MERCHANDISE' ? value : 'ALL'
+    setCategoryTypeFilter(next)
+    try {
+      sessionStorage.setItem('inventoryCategoryTypeFilter', next)
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
 
   useEffect(() => {
     if (!initialCategoryId) return
@@ -121,7 +143,11 @@ export default function InventoryPage({
   }, [initialCategoryId, categories, onInitialCategoryConsumed])
 
   // Category-level rollup shown on the main inventory page.
-  const summaryRows = useMemo(() => categories.map((category) => {
+  const summaryRows = useMemo(() => categories
+    .filter((category) => (
+      categoryTypeFilter === 'ALL' || categoryTypeOf(category) === categoryTypeFilter
+    ))
+    .map((category) => {
     const catItems = items.filter((item) => (
       item.categoryId === category.categoryId && item.kitRole !== 'RAW_COMPONENT'
     ))
@@ -139,7 +165,7 @@ export default function InventoryPage({
       if (!lastUpdated || new Date(item.updatedAt) > new Date(lastUpdated)) lastUpdated = item.updatedAt
     })
     return { ...category, itemCount: catItems.length, totalStocks, low, out, inactive, lastUpdated }
-  }), [categories, items])
+  }), [categories, items, categoryTypeFilter])
 
   const activeCategory = useMemo(
     () => categories.find((category) => category.categoryId === activeCategoryId) || null,
@@ -949,7 +975,10 @@ export default function InventoryPage({
   return (
     <>
       <div className="page-title inventory-title">
-        <div><h1>Inventory</h1><p>Stock levels grouped by category. Open a category to manage its items.</p></div>
+        <div>
+          <h1>Inventory</h1>
+          <p>Stock levels grouped by category. Filter the first column by Merchandise or Supplies, or keep Categories for all.</p>
+        </div>
       </div>
       {error && <div className="page-error">{error}</div>}
       <section className="panel inventory-panel">
@@ -957,7 +986,14 @@ export default function InventoryPage({
           <table className="inventory-table" style={{ width: '100%', minWidth: '760px' }}>
             <thead>
               <tr>
-                <th>Category</th>
+                <th>
+                  <TableHeadSelect
+                    value={categoryTypeFilter}
+                    options={INVENTORY_CATEGORY_TYPE_FILTER_OPTIONS}
+                    onChange={applyCategoryTypeFilter}
+                    ariaLabel="Category type"
+                  />
+                </th>
                 <th>Total stocks</th>
                 <th>Status</th>
                 <th>Last updated</th>
@@ -981,7 +1017,20 @@ export default function InventoryPage({
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={5}><EmptyState title="No categories yet" message="Create a category first, then add inventory items to it from here." /></td></tr>
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState
+                      title={
+                        categoryTypeFilter === 'SUPPLIES'
+                          ? 'No supplies categories yet'
+                          : categoryTypeFilter === 'MERCHANDISE'
+                            ? 'No merchandise categories yet'
+                            : 'No categories yet'
+                      }
+                      message="Create a category first, then add inventory items to it from here."
+                    />
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

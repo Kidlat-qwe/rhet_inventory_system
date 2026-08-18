@@ -818,7 +818,7 @@ export async function getAvailability(input) {
 
 export async function getIntegrationCatalog() {
   const categories = await pool.query(
-    `SELECT category_id, category_name, category_kind FROM categories WHERE status = 'ACTIVE' ORDER BY category_name`,
+    `SELECT category_id, category_name, category_kind, category_type FROM categories WHERE status = 'ACTIVE' ORDER BY category_name`,
   );
 
   const inventoryRows = await pool.query(

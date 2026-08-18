@@ -6,7 +6,22 @@ import { pool } from './pool.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(here, '../../database/migrations');
 
+function quoteIdent(name) {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(`Unsafe database name: ${name}`);
+  }
+  return `"${name}"`;
+}
+
 try {
+  await pool.query('CREATE SCHEMA IF NOT EXISTS public');
+  await pool.query('SET search_path TO public');
+  const dbName = (await pool.query('SELECT current_database() AS name')).rows[0].name;
+  try {
+    await pool.query(`ALTER DATABASE ${quoteIdent(dbName)} SET search_path TO public`);
+  } catch (error) {
+    console.warn(`Could not persist search_path on ${dbName}: ${error.message}`);
+  }
   await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
     filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);

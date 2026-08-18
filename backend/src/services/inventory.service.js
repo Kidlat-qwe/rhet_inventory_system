@@ -22,6 +22,8 @@ export const CATEGORY_KINDS = Object.freeze([
   'OTHER',
 ]);
 
+export const CATEGORY_TYPES = Object.freeze(['MERCHANDISE', 'SUPPLIES']);
+
 export function isLearningKitCategoryName(categoryName = '') {
   return String(categoryName || '').trim().toLowerCase() === 'learning kit';
 }
@@ -57,6 +59,11 @@ export function isVirtualKitCategory(category = {}) {
 export function normalizeCategoryKind(value) {
   const kind = String(value || 'OTHER').trim().toUpperCase();
   return CATEGORY_KINDS.includes(kind) ? kind : null;
+}
+
+export function normalizeCategoryType(value) {
+  const type = String(value || 'MERCHANDISE').trim().toUpperCase();
+  return CATEGORY_TYPES.includes(type) ? type : null;
 }
 
 /** Sum ACTIVE stocks in a category (used for category-slot kit availability).

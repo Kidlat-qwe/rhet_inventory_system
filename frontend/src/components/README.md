@@ -12,7 +12,7 @@ Reusable presentational and modal components used across admin and user pages.
 | `MovementTable.jsx` | Stock movement history table (optional order/notes column for online logs). `compact` hides Processed by for dashboard side-by-side layout. Always shows column headers; empty state renders inside the table body. |
 | `Sidebar.jsx` | App navigation sidebar; organization name from Settings |
 | `Header.jsx` | Top bar with breadcrumbs, stock-request notifications (count badge, toast alert, **Mark all as Read**), account menu (**Forgot password** / **Log out**) |
-| `CategoryModal.jsx` | Create / edit category. Top type: **Uniform** (subtype: School / PE / Shirt), **Learning Kit**, **Others**. Others can enable **Parent items with child SKUs**. |
+| `CategoryModal.jsx` | Create / edit category. **Category type**: Merchandise / Supplies. **Kind**: Uniform (subtype School / PE / Shirt), Learning Kit, Others. Others can enable **Parent items with child SKUs**. |
 | `DeleteCategoryModal.jsx` | Admin-only delete confirm: must type the exact category name. Can delete categories that still have items (cascades item delete when safe). |
 | `DeleteInventoryModal.jsx` | Admin-only delete confirm for an inventory item: must type the exact item name. Shows SKU; completed stock requests are unlinked; blocked for online orders / active requests / kit BOM. |
 | `ItemModal.jsx` | Create / edit a single inventory item. Requires **Selling price** and **Internal selling price**. **Learning Kit**: category-slot BOM. **Tool Kit**: parent metadata only — raw children are added from the Tool Kit raw-items page modal. For **Shirt** (`LCA_SHIRT`), shows Gender / **Logo** / Size. Non-uniform SKUs regenerate on rename; uniform SKUs stay locked. |
@@ -20,6 +20,7 @@ Reusable presentational and modal components used across admin and user pages.
 | `UniformItemModal.jsx` | Add / edit School or PE uniform. Toggle **Per piece** (Polo+Short / Shirt+Pants, each own stock) or **Set** (one SKU with independent set stock, type `Set` / SKU code `SET`). LCA T-Shirt uses `ItemModal` instead. |
 | `HelpAssistant.jsx` | Floating help button (bottom-right). Cleared from pagination via content/pager padding. Rule-based FAQ; visibility from org Settings (`helpAssistantEnabled`). |
 | `ActionsMenu.jsx` | Floating ellipsis (•••) actions menu rendered in a portal |
+| `TableHeadSelect.jsx` | Borderless table-header filter (Inventory Categories / Merchandise / Supplies). Custom menu in a portal so native `<select>` chrome is not used. |
 | `Pagination.jsx` | Presentational pager (pairs with the `usePagination` hook) |
 | `StockModal.jsx` | Add / deduct / adjust stock form |
 | `AllocationModal.jsx` | Legacy Shopee allocate/deallocate form (UI hidden; reserved for future Open API) |

@@ -137,8 +137,8 @@ Typical `data` shape:
 ```json
 {
   "categories": [
-    { "categoryId": "uuid", "categoryName": "School Uniform", "categoryKind": "SCHOOL_UNIFORM" },
-    { "categoryId": "uuid", "categoryName": "Learning Kit", "categoryKind": "LEARNING_KIT" }
+    { "categoryId": "uuid", "categoryName": "School Uniform", "categoryKind": "SCHOOL_UNIFORM", "categoryType": "MERCHANDISE" },
+    { "categoryId": "uuid", "categoryName": "Learning Kit", "categoryKind": "LEARNING_KIT", "categoryType": "SUPPLIES" }
   ],
   "items": [
     {
@@ -155,7 +155,7 @@ Typical `data` shape:
 }
 ```
 
-**Important:** Categories may include `categoryKind` (`SCHOOL_UNIFORM`, `PE_UNIFORM`, `LCA_SHIRT`, `LEARNING_KIT`, `OTHER`). Prefer kind for form behavior; always send the exact `categoryName` for matching. Names are unique; the same kind may be reused under different names.
+**Important:** Categories may include `categoryKind` (`SCHOOL_UNIFORM`, `PE_UNIFORM`, `LCA_SHIRT`, `LEARNING_KIT`, `OTHER`) and `categoryType` (`MERCHANDISE`, `SUPPLIES`). Prefer kind for form behavior; `categoryType` is the Merchandise vs Supplies grouping. Always send the exact `categoryName` for matching. Names are unique; the same kind may be reused under different names.
 
 **How to use it**
 

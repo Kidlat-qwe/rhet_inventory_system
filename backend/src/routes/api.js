@@ -2,7 +2,13 @@ import { Router } from 'express';
 import { pool } from '../database/pool.js';
 import * as controller from '../controllers/inventory.controller.js';
 import { dashboardSummary } from '../services/dashboard.service.js';
-import { CATEGORY_KINDS, deleteCategory, normalizeCategoryKind } from '../services/inventory.service.js';
+import {
+  CATEGORY_KINDS,
+  CATEGORY_TYPES,
+  deleteCategory,
+  normalizeCategoryKind,
+  normalizeCategoryType,
+} from '../services/inventory.service.js';
 import { asyncHandler, camelize, success } from '../utils/api.js';
 import { validate } from '../middleware/validate.js';
 import { requireAdminRole } from '../middleware/auth.js';
@@ -66,10 +72,20 @@ api.post('/categories', asyncHandler(async (req, res) => {
       error: { code: 'VALIDATION_ERROR', message: 'Parent items with child SKUs are only available for Others categories' },
     });
   }
+  const type = normalizeCategoryType(req.body.categoryType ?? req.body.category_type);
+  if (!type) {
+    return res.status(422).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: `categoryType must be one of: ${CATEGORY_TYPES.join(', ')}`,
+      },
+    });
+  }
   try {
     const result = await pool.query(
-      'INSERT INTO categories(category_name, category_kind, has_child_skus) VALUES($1, $2, $3) RETURNING *',
-      [name, kind, hasChildSkus],
+      'INSERT INTO categories(category_name, category_kind, has_child_skus, category_type) VALUES($1, $2, $3, $4) RETURNING *',
+      [name, kind, hasChildSkus, type],
     );
     success(res, camelize(result.rows[0]), null, 201);
   } catch (err) {
@@ -103,16 +119,31 @@ api.patch('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(
   const hasChildSkus = hasChildFlag
     ? Boolean(req.body.hasChildSkus ?? req.body.has_child_skus)
     : null;
+  const hasType = (
+    (req.body.categoryType !== undefined && req.body.categoryType !== null && req.body.categoryType !== '')
+    || (req.body.category_type !== undefined && req.body.category_type !== null && req.body.category_type !== '')
+  );
+  const type = hasType ? normalizeCategoryType(req.body.categoryType ?? req.body.category_type) : null;
+  if (hasType && !type) {
+    return res.status(422).json({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: `categoryType must be one of: ${CATEGORY_TYPES.join(', ')}`,
+      },
+    });
+  }
 
   try {
     const current = await pool.query(
-      'SELECT category_id, category_kind, has_child_skus FROM categories WHERE category_id = $1',
+      'SELECT category_id, category_kind, has_child_skus, category_type FROM categories WHERE category_id = $1',
       [id],
     );
     if (!current.rowCount) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } });
     }
     const nextKind = kind || current.rows[0].category_kind;
+    const nextType = type || current.rows[0].category_type;
     let nextHasChild = hasChildSkus;
     if (nextHasChild === null) {
       nextHasChild = Boolean(current.rows[0].has_child_skus);
@@ -143,10 +174,11 @@ api.patch('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(
        SET category_name = $1,
            category_kind = $2,
            has_child_skus = $3,
+           category_type = $4,
            updated_at = NOW()
-       WHERE category_id = $4
+       WHERE category_id = $5
        RETURNING *`,
-      [name, nextKind, nextHasChild, id],
+      [name, nextKind, nextHasChild, nextType, id],
     );
     success(res, camelize(result.rows[0]));
   } catch (err) {
