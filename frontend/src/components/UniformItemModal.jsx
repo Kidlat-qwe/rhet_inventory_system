@@ -250,6 +250,7 @@ export function UniformItemModal({
       sku: isEdit ? (lines[type]?.sku || skus[type]) : skus[type],
       itemName: normalizeInventoryText(
         String(lines[type]?.itemName || buildUniformItemName(category.categoryName, type)),
+        { trimEdges: true },
       ).slice(0, 180),
       categoryId: category.categoryId,
       variation: buildUniformVariation({ uniformGender: gender, uniformType: type, uniformSize: size }),

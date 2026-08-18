@@ -40,10 +40,10 @@ export function ToolKitRawItemModal({
   )
 
   const nameMatch = useMemo(() => {
-    const name = normalizeInventoryText(form.itemName)
+    const name = normalizeInventoryText(form.itemName, { trimEdges: true })
     if (name.length < 2) return null
     return availableRawItems.find(
-      (entry) => normalizeInventoryText(entry.itemName) === name,
+      (entry) => normalizeInventoryText(entry.itemName, { trimEdges: true }) === name,
     ) || null
   }, [form.itemName, availableRawItems])
 
@@ -60,7 +60,7 @@ export function ToolKitRawItemModal({
   function submit(e) {
     e.preventDefault()
     setLocalError('')
-    const itemName = normalizeInventoryText(form.itemName)
+    const itemName = normalizeInventoryText(form.itemName, { trimEdges: true })
 
     if (effectiveMode === 'link') {
       const target = selectedExisting
@@ -85,7 +85,7 @@ export function ToolKitRawItemModal({
       mode: 'create',
       forceCreate: Boolean(nameMatch),
       itemName,
-      variation: normalizeInventoryText(form.variation || '') || null,
+      variation: normalizeInventoryText(form.variation || '', { trimEdges: true }) || null,
       stocks: Number(form.stocks) || 0,
     })
   }

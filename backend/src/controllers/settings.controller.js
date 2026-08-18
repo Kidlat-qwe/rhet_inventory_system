@@ -8,3 +8,7 @@ export const get = asyncHandler(async (_req, res) => {
 export const update = asyncHandler(async (req, res) => {
   success(res, await service.updateSettings(req.validated.body, req.admin.user_id));
 });
+
+export const addShirtLogo = asyncHandler(async (req, res) => {
+  success(res, await service.addShirtLogo(req.validated.body.name, req.admin.user_id));
+});

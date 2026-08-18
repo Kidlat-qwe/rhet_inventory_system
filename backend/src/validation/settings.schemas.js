@@ -10,11 +10,20 @@ export const updateSettingsSchema = z.object({
     courierPresets: stringList.min(1).optional(),
     uniformSizes: z.array(z.string().trim().min(1).max(20)).min(1).max(30).optional(),
     shirtSizes: z.array(z.string().trim().min(1).max(20)).min(1).max(30).optional(),
+    shirtLogos: z.array(z.string().trim().min(1).max(20)).min(1).max(30).optional(),
     helpAssistantEnabled: z.boolean().optional(),
   }).refine(
     (body) => Object.keys(body).length > 0,
     { message: 'Provide at least one settings field to update' },
   ),
+  query: z.any(),
+  params: z.any(),
+});
+
+export const addShirtLogoSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(1).max(20),
+  }),
   query: z.any(),
   params: z.any(),
 });

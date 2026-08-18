@@ -13,7 +13,10 @@ import {
   getFieldPlaceholders,
 } from '../constants/uniformOptions'
 import { useSettings } from '../context/SettingsContext'
+import { addShirtLogo } from '../services/inventoryApi'
 import { normalizeInventoryText } from '../utils/format'
+
+const ADD_LOGO_VALUE = '__add_logo__'
 
 function newLearningKitRow() {
   return {
@@ -63,12 +66,25 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     return isLearningKitCategory(initialCategoryId, categories) ? [newLearningKitRow()] : []
   })
   const [localError, setLocalError] = useState('')
+  const [addingLogo, setAddingLogo] = useState(false)
+  const [newLogoName, setNewLogoName] = useState('')
+  const [extraLogos, setExtraLogos] = useState([])
+  const [logoBusy, setLogoBusy] = useState(false)
 
   const isUniform = isUniformCategory(form.categoryId, categories)
   const isLearningKit = isLearningKitCategory(form.categoryId, categories)
   const isToolKit = isToolKitCategory(form.categoryId, categories)
   const isLcaShirt = isLcaShirtCategory(form.categoryId, categories)
-  const uniformTypes = getUniformTypesForCategory(form.categoryId, categories, form.uniformGender)
+  const uniformTypes = useMemo(() => {
+    const configured = getUniformTypesForCategory(form.categoryId, categories, form.uniformGender, {
+      shirtLogos: settings.shirtLogos,
+    })
+    const extras = extraLogos.filter((logo) => !configured.some((entry) => entry.toLowerCase() === logo.toLowerCase()))
+    const selected = form.uniformType && ![...configured, ...extras].includes(form.uniformType)
+      ? [form.uniformType]
+      : []
+    return [...configured, ...extras, ...selected]
+  }, [form.categoryId, form.uniformGender, form.uniformType, categories, settings.shirtLogos, extraLogos])
   const uniformGenders = getUniformGendersForCategory(form.categoryId, categories)
   const uniformSizes = getUniformSizesForCategory(form.categoryId, categories, {
     uniformSizes: settings.uniformSizes,
@@ -116,7 +132,9 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     setForm((current) => {
       const nextUniform = isUniformCategory(value, categories)
       const currentUniform = isUniformCategory(current.categoryId, categories)
-      const nextTypes = getUniformTypesForCategory(value, categories, current.uniformGender)
+      const nextTypes = getUniformTypesForCategory(value, categories, current.uniformGender, {
+        shirtLogos: settings.shirtLogos,
+      })
       const keepType = nextTypes.includes(current.uniformType) ? current.uniformType : ''
       const nextLearningKit = isLearningKitCategory(value, categories)
 
@@ -155,10 +173,56 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
 
   function setUniformGender(value) {
     setForm((current) => {
-      const nextTypes = getUniformTypesForCategory(current.categoryId, categories, value)
+      const nextTypes = getUniformTypesForCategory(current.categoryId, categories, value, {
+        shirtLogos: settings.shirtLogos,
+      })
       const keepType = nextTypes.includes(current.uniformType) ? current.uniformType : ''
       return { ...current, uniformGender: value, uniformType: keepType }
     })
+  }
+
+  function onLogoSelect(value) {
+    if (value === ADD_LOGO_VALUE) {
+      setAddingLogo(true)
+      setNewLogoName('')
+      setLocalError('')
+      return
+    }
+    setAddingLogo(false)
+    set('uniformType', value)
+  }
+
+  async function saveNewLogo() {
+    const name = newLogoName.trim()
+    if (!name) {
+      setLocalError('Enter a logo name.')
+      return
+    }
+    if (name.length > 20) {
+      setLocalError('Logo name must be 20 characters or fewer.')
+      return
+    }
+    const exists = uniformTypes.some((entry) => entry.toLowerCase() === name.toLowerCase())
+    if (exists) {
+      set('uniformType', uniformTypes.find((entry) => entry.toLowerCase() === name.toLowerCase()))
+      setAddingLogo(false)
+      setNewLogoName('')
+      return
+    }
+    setLogoBusy(true)
+    setLocalError('')
+    try {
+      const nextSettings = await addShirtLogo(name)
+      const saved = nextSettings?.shirtLogos?.find((entry) => entry.toLowerCase() === name.toLowerCase()) || name
+      setExtraLogos((current) => (current.includes(saved) ? current : [...current, saved]))
+      set('uniformType', saved)
+      setAddingLogo(false)
+      setNewLogoName('')
+    } catch (err) {
+      setLocalError(err.message || 'Could not add logo.')
+    } finally {
+      setLogoBusy(false)
+    }
   }
 
   function updateComponent(key, patch) {
@@ -239,10 +303,48 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                 </select>
               </label>
               <label>{isLcaShirt ? 'Logo *' : 'Type *'}
-                <select required value={form.uniformType} onChange={(e) => set('uniformType', e.target.value)}>
+                <select
+                  required={!addingLogo}
+                  value={addingLogo ? ADD_LOGO_VALUE : form.uniformType}
+                  onChange={(e) => onLogoSelect(e.target.value)}
+                >
                   <option value="">{isLcaShirt ? 'Select logo' : 'Select type'}</option>
                   {uniformTypes.map((option) => <option key={option} value={option}>{option}</option>)}
+                  {isLcaShirt && <option value={ADD_LOGO_VALUE}>+ Add logo</option>}
                 </select>
+                {isLcaShirt && addingLogo && (
+                  <span className="add-logo-row">
+                    <input
+                      autoFocus
+                      maxLength={20}
+                      value={newLogoName}
+                      onChange={(e) => setNewLogoName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveNewLogo()
+                        }
+                      }}
+                      placeholder="e.g. Beeli"
+                      aria-label="New logo name"
+                    />
+                    <button type="button" className="secondary" disabled={logoBusy || !newLogoName.trim()} onClick={saveNewLogo}>
+                      {logoBusy ? 'Adding…' : 'Add'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={logoBusy}
+                      onClick={() => {
+                        setAddingLogo(false)
+                        setNewLogoName('')
+                        setLocalError('')
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                )}
               </label>
               <label>Size *
                 <select required value={form.uniformSize} onChange={(e) => set('uniformSize', e.target.value)}>
@@ -294,6 +396,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
             !item.inventoryId && <label>Initial stock *<input required type="number" min="0" value={form.stocks} onChange={(e) => set('stocks', e.target.value)} /></label>
           )}
         </div>
+        {localError && !isLearningKit && <p className="form-error">{localError}</p>}
 
         <label className="full-width">
           Remarks
@@ -376,13 +479,13 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                 </tbody>
               </table>
             </div>
-            {localError && <p className="form-error">{localError}</p>}
+            {localError && isLearningKit && <p className="form-error">{localError}</p>}
           </div>
         )}
 
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
-          <button className="primary" disabled={busy || !categories.length || !canGenerateSku(form, categories)}>
+          <button className="primary" disabled={busy || addingLogo || !categories.length || !canGenerateSku(form, categories)}>
             {busy ? 'Saving…' : item.inventoryId ? 'Save changes' : 'Add merchandise'}
           </button>
         </div>

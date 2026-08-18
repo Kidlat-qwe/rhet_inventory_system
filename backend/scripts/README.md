@@ -12,7 +12,20 @@ Default is a **dry run** unless the script says otherwise. Destructive scripts r
 | `seed-uniform-variants.mjs` | Seed uniform SKUs. |
 | `normalize-pe-uniform-unisex.mjs` | PE unisex cleanup. |
 | `reset-lca-shirt-logos.mjs` | Shirt logo reset. |
+| `rename-shirt-items-to-beeli-lca.mjs` | Renames existing Shirt items from Logo 1 / Logo 2 to Beeli / LCA. Updates `item_name` to lowercase underscores (`shirt_beeli`, `shirt_lca`), plus `uniform_type`, `variation`, and SKU (`LOGO1` → `BEELI`, `LOGO2` → `LCA`). |
 | `rename-shirt-skus-to-shi.mjs` | Shirt SKU rename. |
+| `seed-shirt-logo-sizes.mjs` | Add missing Shirt sizes for a custom logo (e.g. ACC). Skips sizes that already exist; copies price/stock from the first existing row. |
+
+## Seed Shirt logo sizes
+
+```bash
+node scripts/seed-shirt-logo-sizes.mjs --logo=ACC
+node scripts/seed-shirt-logo-sizes.mjs --logo=ACC --yes
+```
+
+Or: `npm run db:seed-shirt-logo-sizes -- --logo=ACC --yes`
+
+Optional flags: `--stocks=50`, `--price=0`, `--internal-price=156`, `--threshold=10`.
 
 ## Purge operational data (production)
 

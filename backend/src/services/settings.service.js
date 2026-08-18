@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   courierPresets: Object.freeze(['LBC Express', 'J&T Express', 'Lalamove']),
   uniformSizes: Object.freeze(['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']),
   shirtSizes: Object.freeze(['XS', 'S', 'M', 'L', 'XL', 'Teen']),
+  shirtLogos: Object.freeze(['Beeli', 'LCA']),
   helpAssistantEnabled: true,
 });
 
@@ -30,12 +31,28 @@ function cleanStringList(value, { maxItems = 40, maxLen = 60 } = {}) {
   return out;
 }
 
+function normalizeShirtLogos(value) {
+  const cleaned = cleanStringList(value, { maxItems: 30, maxLen: 20 });
+  const source = cleaned?.length ? cleaned : [...DEFAULT_SETTINGS.shirtLogos];
+  const seen = new Set();
+  const out = [];
+  for (const entry of source) {
+    const mapped = entry === 'Logo 1' ? 'Beeli' : entry === 'Logo 2' ? 'LCA' : entry;
+    const key = mapped.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(mapped);
+  }
+  return out.length ? out : [...DEFAULT_SETTINGS.shirtLogos];
+}
+
 function mergeSettings(stored = {}) {
   const courierPresets = cleanStringList(stored.courierPresets) || [...DEFAULT_SETTINGS.courierPresets];
   const uniformSizes = cleanStringList(stored.uniformSizes, { maxItems: 30, maxLen: 20 })
     || [...DEFAULT_SETTINGS.uniformSizes];
   const shirtSizes = cleanStringList(stored.shirtSizes, { maxItems: 30, maxLen: 20 })
     || [...DEFAULT_SETTINGS.shirtSizes];
+  const shirtLogos = normalizeShirtLogos(stored.shirtLogos);
 
   const threshold = Number(stored.defaultLowStockThreshold);
   const organizationName = String(stored.organizationName || '').trim().slice(0, 120)
@@ -53,6 +70,7 @@ function mergeSettings(stored = {}) {
     courierPresets,
     uniformSizes,
     shirtSizes,
+    shirtLogos,
     helpAssistantEnabled: stored.helpAssistantEnabled === false ? false : true,
   };
 }
@@ -138,6 +156,14 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     next.shirtSizes = list;
   }
 
+  if (patch.shirtLogos !== undefined) {
+    const list = normalizeShirtLogos(patch.shirtLogos);
+    if (!list?.length) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'Add at least one shirt logo');
+    }
+    next.shirtLogos = list;
+  }
+
   if (patch.helpAssistantEnabled !== undefined) {
     next.helpAssistantEnabled = Boolean(patch.helpAssistantEnabled);
   }
@@ -149,6 +175,7 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     courierPresets: next.courierPresets,
     uniformSizes: next.uniformSizes,
     shirtSizes: next.shirtSizes,
+    shirtLogos: next.shirtLogos,
     helpAssistantEnabled: next.helpAssistantEnabled,
   };
 
@@ -169,4 +196,18 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     updatedAt: row.updated_at || null,
     updatedBy: row.updated_by || null,
   };
+}
+
+export async function addShirtLogo(name, actorUserId = null) {
+  const logo = String(name || '').trim();
+  if (logo.length < 1 || logo.length > 20) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'Logo name must be 1–20 characters');
+  }
+  const current = await getSettings();
+  const exists = current.shirtLogos.some((entry) => entry.toLowerCase() === logo.toLowerCase());
+  if (exists) return current;
+  if (current.shirtLogos.length >= 30) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'A maximum of 30 shirt logos is allowed');
+  }
+  return updateSettings({ shirtLogos: [...current.shirtLogos, logo] }, actorUserId);
 }

@@ -14,6 +14,8 @@ export const fetchDashboard = () => api('/dashboard').then((response) => respons
 export const fetchSettings = () => api('/settings').then((response) => response.data)
 export const updateSettings = (body) =>
   api('/settings', { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
+export const addShirtLogo = (name) =>
+  api('/settings/shirt-logos', { method: 'POST', body: JSON.stringify({ name }) }).then((response) => response.data)
 export const fetchCategories = () => api('/categories').then((response) => response.data)
 export const fetchUsers = () => api('/users').then((response) => response.data)
 

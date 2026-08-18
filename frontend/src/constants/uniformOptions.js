@@ -6,7 +6,7 @@ export const SCHOOL_UNIFORM_FEMALE_TYPES = ['Blouse', 'Skirt']
 
 export const PE_UNIFORM_TYPES = ['Shirt', 'Pants']
 
-export const LCA_SHIRT_TYPES = ['Logo 1', 'Logo 2']
+export const LCA_SHIRT_TYPES = ['Beeli', 'LCA']
 
 /** Business grouping (stored as category_type). UI label: Category type. */
 export const CATEGORY_TYPE_OPTIONS = [
@@ -121,6 +121,8 @@ const TYPE_CODES = {
   Skirt: 'SKIRT',
   Shirt: 'SHIRT',
   Pants: 'PANTS',
+  Beeli: 'BEELI',
+  LCA: 'LCA',
   'Logo 1': 'LOGO1',
   'Logo 2': 'LOGO2',
   Set: 'SET',
@@ -145,10 +147,10 @@ const CATEGORY_FIELD_PLACEHOLDERS = {
   uniform: { itemName: 'e.g. Classic White Polo', variation: 'Gender, type, size...' },
   'school uniform': { itemName: 'e.g. Classic White Polo', variation: 'Gender, type, size...' },
   'pe uniform': { itemName: 'e.g. PE Training Shirt', variation: 'Type, size (Unisex)...' },
-  shirt: { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
-  'lca shirt': { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
-  'lca t-shirt': { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
-  'lca tshirt': { itemName: 'e.g. Shirt Logo 1', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  shirt: { itemName: 'e.g. shirt_beeli', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  'lca shirt': { itemName: 'e.g. shirt_beeli', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  'lca t-shirt': { itemName: 'e.g. shirt_beeli', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
+  'lca tshirt': { itemName: 'e.g. shirt_beeli', variation: 'Unisex, logo, size (XS–XL or Teen)...' },
   bag: { itemName: 'e.g. School Backpack', variation: 'Color, capacity...' },
   book: { itemName: 'e.g. Grade 5 Mathematics Textbook', variation: 'Grade level, edition...' },
   accessory: { itemName: 'e.g. School Necktie', variation: 'Color, size...' },
@@ -245,7 +247,7 @@ export function isLcaShirtCategory(categoryId, categories = []) {
 // Gender options available for a category:
 // - School Uniform → Male / Female only
 // - PE Uniform → Unisex only
-// - Shirt (LCA_SHIRT) → Unisex only (Logo 1 / Logo 2)
+// - Shirt (LCA_SHIRT) → Unisex only (Beeli / LCA, plus any logos added in Settings)
 // - other uniforms → Male / Female / Unisex
 export function getUniformGendersForCategory(categoryId, categories = []) {
   if (isSchoolUniformCategory(categoryId, categories)) {
@@ -294,16 +296,19 @@ export function getFieldPlaceholders(categoryId, categories = []) {
   return DEFAULT_FIELD_PLACEHOLDERS
 }
 
-export function getUniformTypesForCategory(categoryId, categories = [], gender = '') {
+export function getUniformTypesForCategory(categoryId, categories = [], gender = '', typeLists = {}) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!isUniformCategory(categoryId, categories)) return []
   const kind = categoryKindOf(category)
+  const shirtLogos = Array.isArray(typeLists.shirtLogos) && typeLists.shirtLogos.length
+    ? typeLists.shirtLogos
+    : LCA_SHIRT_TYPES
 
   if (kind === 'SCHOOL_UNIFORM' || (!kind && category?.categoryName?.toLowerCase().trim() === 'school uniform')) {
     return gender === 'Female' ? SCHOOL_UNIFORM_FEMALE_TYPES : SCHOOL_UNIFORM_TYPES
   }
   if (kind === 'LCA_SHIRT' || (!kind && isLcaShirtCategoryName(category?.categoryName))) {
-    return LCA_SHIRT_TYPES
+    return [...shirtLogos]
   }
   if (kind === 'PE_UNIFORM') return PE_UNIFORM_TYPES
 
@@ -331,12 +336,17 @@ export function parseUniformVariation(variation = '') {
   }
 }
 
-export function resolveItemVariation(form, categories) {
+export function resolveItemVariation(form, categories, typeLists = {}) {
   if (isUniformCategory(form.categoryId, categories)) {
     if (!form.uniformGender || !form.uniformType || !form.uniformSize) {
       throw new Error('Please select gender, type, and size for uniform items.')
     }
-    const allowedTypes = getUniformTypesForCategory(form.categoryId, categories, form.uniformGender)
+    const allowedTypes = getUniformTypesForCategory(
+      form.categoryId,
+      categories,
+      form.uniformGender,
+      typeLists,
+    )
     const typeOk = isUniformSetType(form.uniformType) || allowedTypes.includes(form.uniformType)
     if (!typeOk) {
       throw new Error('Please select a valid type for the chosen uniform category.')

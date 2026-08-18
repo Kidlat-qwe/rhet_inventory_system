@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   courierPresets: Object.freeze(['LBC Express', 'J&T Express', 'Lalamove']),
   uniformSizes: Object.freeze(['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']),
   shirtSizes: Object.freeze(['XS', 'S', 'M', 'L', 'XL', 'Teen']),
+  shirtLogos: Object.freeze(['Beeli', 'LCA']),
   helpAssistantEnabled: true,
   updatedAt: null,
   updatedBy: null,
@@ -28,6 +29,9 @@ export function SettingsProvider({ settings, children }) {
     shirtSizes: settings?.shirtSizes?.length
       ? settings.shirtSizes
       : [...DEFAULT_SETTINGS.shirtSizes],
+    shirtLogos: settings?.shirtLogos?.length
+      ? settings.shirtLogos
+      : [...DEFAULT_SETTINGS.shirtLogos],
   }), [settings])
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

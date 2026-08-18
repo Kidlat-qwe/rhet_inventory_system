@@ -106,6 +106,7 @@ function cloneForm(settings) {
     courierPresets: [...(settings.courierPresets || [])],
     uniformSizes: [...(settings.uniformSizes || [])],
     shirtSizes: [...(settings.shirtSizes || [])],
+    shirtLogos: [...(settings.shirtLogos?.length ? settings.shirtLogos : ['Beeli', 'LCA'])],
     helpAssistantEnabled: settings.helpAssistantEnabled !== false,
   }
 }
@@ -127,6 +128,7 @@ export default function AdminSettings({ settings, onRefresh }) {
     source.courierPresets,
     source.uniformSizes,
     source.shirtSizes,
+    source.shirtLogos,
   ])
   const [form, setForm] = useState(() => cloneForm(source))
   const [error, setError] = useState('')
@@ -146,6 +148,7 @@ export default function AdminSettings({ settings, onRefresh }) {
     source.courierPresets,
     source.uniformSizes,
     source.shirtSizes,
+    source.shirtLogos,
   ])
 
   const dirty = useMemo(() => (
@@ -156,6 +159,7 @@ export default function AdminSettings({ settings, onRefresh }) {
     || !sameList(form.courierPresets, baseline.courierPresets)
     || !sameList(form.uniformSizes, baseline.uniformSizes)
     || !sameList(form.shirtSizes, baseline.shirtSizes)
+    || !sameList(form.shirtLogos, baseline.shirtLogos)
   ), [form, baseline])
 
   function resetFromServer() {
@@ -183,6 +187,7 @@ export default function AdminSettings({ settings, onRefresh }) {
         courierPresets: form.courierPresets,
         uniformSizes: form.uniformSizes,
         shirtSizes: form.shirtSizes,
+        shirtLogos: form.shirtLogos,
         helpAssistantEnabled: Boolean(form.helpAssistantEnabled),
       })
       await onRefresh?.()
@@ -315,7 +320,7 @@ export default function AdminSettings({ settings, onRefresh }) {
           <SettingsCard
             icon="list"
             title="Uniform catalog"
-            description="Size options for School / PE uniforms and Shirt categories."
+            description="Size and logo options for School / PE uniforms and Shirt categories."
             wide
           >
             <div className="settings-split">
@@ -332,6 +337,14 @@ export default function AdminSettings({ settings, onRefresh }) {
                 onChange={(shirtSizes) => setField('shirtSizes', shirtSizes)}
                 placeholder="e.g. Teen"
                 emptyLabel="Add at least one size"
+              />
+              <TagListEditor
+                label="Shirt logos"
+                hint="Shown as Logo on Add merchandise. You can also add logos from that form."
+                values={form.shirtLogos}
+                onChange={(shirtLogos) => setField('shirtLogos', shirtLogos)}
+                placeholder="e.g. Beeli"
+                emptyLabel="Add at least one logo"
               />
             </div>
           </SettingsCard>

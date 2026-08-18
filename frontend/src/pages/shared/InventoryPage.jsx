@@ -197,7 +197,9 @@ export default function InventoryPage({
 
     // Known piece types for all genders in this category.
     getUniformGendersForCategory(activeCategoryId, categories).forEach((gender) => {
-      getUniformTypesForCategory(activeCategoryId, categories, gender).forEach((type) => types.add(type))
+      getUniformTypesForCategory(activeCategoryId, categories, gender, {
+        shirtLogos: settings.shirtLogos,
+      }).forEach((type) => types.add(type))
     })
     if (!isLcaShirtCategory(activeCategoryId, categories)) {
       types.add(UNIFORM_SET_TYPE)
@@ -360,7 +362,7 @@ export default function InventoryPage({
           inventoryId: form.inventoryId,
         })
       } else {
-        const itemName = normalizeInventoryText(form.itemName)
+        const itemName = normalizeInventoryText(form.itemName, { trimEdges: true })
         const sku = generateUniqueSku(
           { itemName, categoryId: parentItem.categoryId },
           categories,
@@ -402,7 +404,7 @@ export default function InventoryPage({
   }
 
   function startAdd() {
-    // LCA T-Shirt uses the single-item form so Logo (Logo 1 / Logo 2) is a visible field.
+    // LCA T-Shirt uses the single-item form so Logo (Beeli / LCA) is a visible field.
     // School Uniform / PE Uniform still use the paired set modal.
     if (isUniformCategory(activeCategoryId, categories) && !isLcaShirtCategory(activeCategoryId, categories)) {
       setUniformModal({ category: activeCategory })
@@ -439,9 +441,11 @@ export default function InventoryPage({
       }
       const body = {
         sku,
-        itemName: normalizeInventoryText(form.itemName).slice(0, 180),
+        itemName: normalizeInventoryText(form.itemName, { trimEdges: true }).slice(0, 180),
         categoryId: form.categoryId,
-        variation: resolveItemVariation(form, categories),
+        variation: resolveItemVariation(form, categories, {
+          shirtLogos: [...(settings.shirtLogos || []), form.uniformType].filter(Boolean),
+        }),
         price: form.price,
         internalSellingPrice: form.internalSellingPrice,
         lowStockThreshold: form.lowStockThreshold,
@@ -755,7 +759,9 @@ export default function InventoryPage({
                   <option value="">All types</option>
                   {(uniformGenderFilter
                     ? [
-                      ...getUniformTypesForCategory(activeCategoryId, categories, uniformGenderFilter),
+                      ...getUniformTypesForCategory(activeCategoryId, categories, uniformGenderFilter, {
+                        shirtLogos: settings.shirtLogos,
+                      }),
                       ...(isLcaShirtCategory(activeCategoryId, categories) ? [] : [UNIFORM_SET_TYPE]),
                     ].filter((value, index, list) => list.indexOf(value) === index)
                     : uniformFilterOptions.types

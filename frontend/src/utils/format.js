@@ -149,13 +149,17 @@ export function greetingName(name) {
   return name.split(/\s+/)[0]
 }
 
-// Normalize free-text inventory labels (item name / variation): lowercase and
-// turn spaces into underscores so values stay consistent for SKUs and matching.
-export function normalizeInventoryText(value = '') {
-  return String(value)
+// Normalize free-text inventory labels (item name / variation): lowercase,
+// and turn spaces and hyphens into underscores for consistent matching.
+// Live typing keeps a trailing "_" so Space can start the next word.
+export function normalizeInventoryText(value = '', { trimEdges = false } = {}) {
+  let next = String(value)
     .toLowerCase()
-    .replace(/\s+/g, '_')
+    .replace(/[-\s]+/g, '_')
     .replace(/_+/g, '_')
+    .replace(/^_/g, '')
+  if (trimEdges) next = next.replace(/_+$/g, '')
+  return next
 }
 
 /** Truncate long text for table cells; full value belongs in title/tooltip. */

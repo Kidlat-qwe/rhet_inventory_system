@@ -27,7 +27,7 @@ import {
 import * as integrationClientController from '../controllers/integration-client.controller.js';
 import * as usersController from '../controllers/users.controller.js';
 import * as settingsController from '../controllers/settings.controller.js';
-import { updateSettingsSchema } from '../validation/settings.schemas.js';
+import { addShirtLogoSchema, updateSettingsSchema } from '../validation/settings.schemas.js';
 
 export const api = Router();
 
@@ -35,6 +35,7 @@ api.get('/me', (req, res) => success(res, camelize(req.admin)));
 api.get('/dashboard', asyncHandler(async (_req, res) => success(res, await dashboardSummary())));
 api.get('/settings', settingsController.get);
 api.patch('/settings', requireAdminRole, validate(updateSettingsSchema), settingsController.update);
+api.post('/settings/shirt-logos', validate(addShirtLogoSchema), settingsController.addShirtLogo);
 api.get('/categories', asyncHandler(async (_req, res) => {
   const result = await pool.query('SELECT * FROM categories ORDER BY category_name'); success(res, camelize(result.rows));
 }));
