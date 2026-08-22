@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getUniformGendersForCategory,
   getUniformSizesForCategory,
@@ -18,10 +18,17 @@ import { normalizeInventoryText } from '../utils/format'
 
 const ADD_LOGO_VALUE = '__add_logo__'
 
+function normalizeComponentQty(value) {
+  const qty = Math.trunc(Number(value))
+  if (!Number.isFinite(qty) || qty < 1) return 1
+  return Math.min(999, qty)
+}
+
 function newLearningKitRow() {
   return {
     key: crypto.randomUUID(),
     categoryId: '',
+    quantity: 1,
   }
 }
 
@@ -29,6 +36,7 @@ function rowFromSavedComponent(component) {
   return {
     key: component.componentRowId || crypto.randomUUID(),
     categoryId: component.categoryId || component.componentCategoryId || '',
+    quantity: normalizeComponentQty(component.quantity),
   }
 }
 
@@ -70,6 +78,8 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
   const [newLogoName, setNewLogoName] = useState('')
   const [extraLogos, setExtraLogos] = useState([])
   const [logoBusy, setLogoBusy] = useState(false)
+  const kitTableRef = useRef(null)
+  const kitRowCountRef = useRef(0)
 
   const isUniform = isUniformCategory(form.categoryId, categories)
   const isLearningKit = isLearningKitCategory(form.categoryId, categories)
@@ -98,15 +108,23 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     [categories],
   )
 
+  const usedComponentCategoryIds = useMemo(
+    () => new Set(components.map((row) => row.categoryId).filter(Boolean)),
+    [components],
+  )
+
   const computedKitStocks = useMemo(() => {
     if (!isLearningKit) return null
-    const selected = components.map((row) => row.categoryId).filter(Boolean)
+    const selected = components.filter((row) => row.categoryId)
     if (!selected.length) return 0
-    const totals = selected.map((categoryId) => items
-      .filter((entry) => entry.categoryId === categoryId && entry.kitRole !== 'RAW_COMPONENT')
-      .reduce((sum, entry) => sum + (Number(entry.stocks) || 0), 0))
-    if (totals.length !== selected.length) return 0
-    return Math.min(...totals)
+    const perKit = selected.map((row) => {
+      const have = items
+        .filter((entry) => entry.categoryId === row.categoryId && entry.kitRole !== 'RAW_COMPONENT')
+        .reduce((sum, entry) => sum + (Number(entry.stocks) || 0), 0)
+      const need = normalizeComponentQty(row.quantity)
+      return Math.floor(have / need)
+    })
+    return Math.min(...perKit)
   }, [isLearningKit, components, items])
 
   useEffect(() => {
@@ -127,6 +145,27 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     categories,
     items,
   ])
+
+  useEffect(() => {
+    if (!isLearningKit) {
+      kitRowCountRef.current = components.length
+      return
+    }
+    if (components.length > kitRowCountRef.current) {
+      const el = kitTableRef.current
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        })
+      }
+    }
+    kitRowCountRef.current = components.length
+  }, [components.length, isLearningKit])
+
+  function addComponentRow() {
+    setLocalError('')
+    setComponents((rows) => [...rows, newLearningKitRow()])
+  }
 
   function setCategoryId(value) {
     setForm((current) => {
@@ -251,20 +290,22 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
     const seenCategories = new Set()
 
     for (const row of components) {
-      if (!row.categoryId) {
-        setLocalError('Each component row needs a category.')
-        return
-      }
+      if (!row.categoryId) continue
       if (seenCategories.has(row.categoryId)) {
-        setLocalError('Each category can only be included once.')
+        const categoryName = categories.find((entry) => entry.categoryId === row.categoryId)?.categoryName
+          || 'this category'
+        setLocalError(`Each category can only be included once. "${categoryName}" is already on this bundle.`)
         return
       }
       seenCategories.add(row.categoryId)
-      resolved.push({ categoryId: row.categoryId, quantity: 1 })
+      resolved.push({
+        categoryId: row.categoryId,
+        quantity: normalizeComponentQty(row.quantity),
+      })
     }
 
     if (!resolved.length) {
-      setLocalError('Add at least one category to the Learning Kit.')
+      setLocalError('Add at least one category to the bundle.')
       return
     }
 
@@ -279,7 +320,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
             <h2>{item.inventoryId ? 'Edit merchandise' : 'Add new merchandise'}</h2>
             <p>
               {isLearningKit
-                ? 'Choose which categories this kit includes. The external system picks the concrete items (size / SKU) when requesting stock. Available kits = minimum total stock across those categories.'
+                ? 'Choose which categories this bundle includes. The external system picks the concrete items (size / SKU) when requesting stock. Available kits = minimum total stock across those categories.'
                 : isToolKit
                   ? 'This category uses parent items with child SKUs. After saving, click the item name on Inventory to open its raw items page and add child SKUs. Parent stock is computed from those raw items.'
                   : 'Enter the item and stock information below.'}
@@ -287,6 +328,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
           </div>
           <button type="button" onClick={onClose}>×</button>
         </div>
+        <div className={isLearningKit ? 'kit-modal-body' : undefined}>
         <div className="form-grid">
           <label>Item name *<input required minLength="2" value={form.itemName} onChange={(e) => set('itemName', normalizeInventoryText(e.target.value))} placeholder={placeholders.itemName} /></label>
           <label>Category *
@@ -389,7 +431,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
               <small className="field-hint">
                 {isToolKit
                   ? 'Managed from the Inventory table: click the parent name, then add raw items. Stock = how many kits those raw items can build.'
-                  : 'Minimum of total stock in each included category. Concrete sizes/SKUs are chosen when an external system requests the kit.'}
+                  : 'Minimum of floor(category stock ÷ qty per kit) across included categories. Concrete sizes/SKUs are chosen when an external system requests the kit.'}
               </small>
             </label>
           ) : (
@@ -401,7 +443,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
         <label className="full-width">
           Remarks
           <textarea
-            rows={3}
+            rows={isLearningKit ? 2 : 3}
             maxLength={500}
             value={form.remarks}
             onChange={(e) => set('remarks', e.target.value)}
@@ -417,16 +459,24 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                 <strong>Included categories</strong>
                 <p>
                   Pick categories only. The external stock request fills the concrete inventory item
-                  (uniform: gender · type · size; non-uniform: item name / SKU). Recipe quantity is always 1.
+                  (uniform: gender · type · size; non-uniform: item name / SKU). Qty is units required
+                  per kit (default 1).
                 </p>
               </div>
-              <button type="button" className="secondary" onClick={() => setComponents((rows) => [...rows, newLearningKitRow()])}>
+              <button type="button" className="secondary" onClick={addComponentRow}>
                 + Add row
               </button>
             </div>
             <div
+              ref={kitTableRef}
               className="overflow-x-auto rounded-lg kit-components-scroll"
-              style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
+              style={{
+                overflowX: 'auto',
+                overflowY: 'auto',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#cbd5e0 #f7fafc',
+                WebkitOverflowScrolling: 'touch',
+              }}
             >
               <table style={{ width: '100%', minWidth: '420px' }}>
                 <thead>
@@ -443,10 +493,22 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                     return (
                       <tr key={row.key}>
                         <td>
-                          <select value={row.categoryId} onChange={(e) => setComponentCategory(row.key, e.target.value)} required>
+                          <select
+                            value={row.categoryId}
+                            onChange={(e) => {
+                              setLocalError('')
+                              setComponentCategory(row.key, e.target.value)
+                            }}
+                          >
                             <option value="">Select category</option>
                             {componentCategories.map((category) => (
-                              <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                              <option
+                                key={category.categoryId}
+                                value={category.categoryId}
+                                disabled={usedComponentCategoryIds.has(category.categoryId) && category.categoryId !== row.categoryId}
+                              >
+                                {category.categoryName}
+                              </option>
                             ))}
                           </select>
                         </td>
@@ -460,7 +522,20 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
                           )}
                         </td>
                         <td>
-                          <input className="readonly-input kit-qty" value="1" readOnly tabIndex={-1} />
+                          <input
+                            className="kit-qty"
+                            type="number"
+                            min="1"
+                            max="999"
+                            step="1"
+                            value={row.quantity ?? 1}
+                            onChange={(e) => {
+                              setLocalError('')
+                              updateComponent(row.key, { quantity: e.target.value })
+                            }}
+                            onBlur={() => updateComponent(row.key, { quantity: normalizeComponentQty(row.quantity) })}
+                            aria-label="Quantity per kit"
+                          />
                         </td>
                         <td>
                           <button
@@ -482,6 +557,7 @@ export function ItemModal({ item, categories, items = [], busy, lockCategory = f
             {localError && isLearningKit && <p className="form-error">{localError}</p>}
           </div>
         )}
+        </div>
 
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>

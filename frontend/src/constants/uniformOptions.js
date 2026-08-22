@@ -41,7 +41,7 @@ export function categoryTypeLabel(type) {
 // Kind options shown in Add/Edit Category (Uniform groups School / PE / Shirt).
 export const CATEGORY_KIND_OPTIONS = [
   { value: 'UNIFORM', label: 'Uniform', categoryName: '' },
-  { value: 'LEARNING_KIT', label: 'Learning Kit', categoryName: 'Learning Kit' },
+  { value: 'LEARNING_KIT', label: 'Bundle', categoryName: '' },
   { value: 'OTHER', label: 'Others', categoryName: '' },
 ]
 
@@ -57,7 +57,7 @@ export const CATEGORY_KIND_LABELS = {
   SCHOOL_UNIFORM: 'School Uniform',
   PE_UNIFORM: 'PE Uniform',
   LCA_SHIRT: 'Shirt',
-  LEARNING_KIT: 'Learning Kit',
+  LEARNING_KIT: 'Bundle',
   TOOL_KIT: 'Tool Kit (legacy)',
   OTHER: 'Others',
 }
@@ -156,6 +156,7 @@ const CATEGORY_FIELD_PLACEHOLDERS = {
   accessory: { itemName: 'e.g. School Necktie', variation: 'Color, size...' },
   other: { itemName: 'e.g. Item name', variation: 'Size, color, grade...' },
   'learning kit': { itemName: 'e.g. grade-1-learning-kit', variation: 'e.g. grade-1, sy-2026' },
+  'moving up kit': { itemName: 'e.g. moving_up_kit', variation: 'e.g. sy-2026' },
   'tool kit': { itemName: 'e.g. nc-kg-toolkits', variation: 'e.g. nc-kg-w/notebook' },
 }
 
@@ -277,13 +278,16 @@ export function getUniformSizesForCategory(categoryId, categories = [], sizeList
 export function getFieldPlaceholders(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   const kind = categoryKindOf(category)
+  const normalized = category?.categoryName?.toLowerCase().trim() || ''
   if (kind === 'SCHOOL_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['school uniform']
   if (kind === 'PE_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['pe uniform']
   if (kind === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS.shirt
-  if (kind === 'LEARNING_KIT') return CATEGORY_FIELD_PLACEHOLDERS['learning kit']
+  if (kind === 'LEARNING_KIT') {
+    return CATEGORY_FIELD_PLACEHOLDERS[normalized]
+      || { itemName: 'e.g. kit_name', variation: 'e.g. grade-1, sy-2026' }
+  }
   if (kind === 'TOOL_KIT') return CATEGORY_FIELD_PLACEHOLDERS['tool kit']
 
-  const normalized = category?.categoryName?.toLowerCase().trim() || ''
   if (!normalized) return DEFAULT_FIELD_PLACEHOLDERS
   if (CATEGORY_FIELD_PLACEHOLDERS[normalized]) return CATEGORY_FIELD_PLACEHOLDERS[normalized]
   if (normalized.endsWith(' uniform')) return CATEGORY_FIELD_PLACEHOLDERS.uniform

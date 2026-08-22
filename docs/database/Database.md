@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS public.inventory_bundle_components
 );
 
 COMMENT ON TABLE public.inventory_bundle_components
-    IS 'Learning Kit BOM: category slots only. Concrete inventory items are chosen on the stock request. Quantity is always 1 on the recipe.';
+    IS 'Bundle / Learning Kit BOM: category slots only. Concrete inventory items are chosen on the stock request. Quantity is units required per kit (default 1).';
 
 COMMENT ON COLUMN public.inventory_bundle_components.component_category_id
     IS 'Category included in the kit. Required for every BOM row.';

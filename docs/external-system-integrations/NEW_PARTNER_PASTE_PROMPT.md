@@ -55,7 +55,7 @@ Errors: `{ "success": false, "error": { "code", "message", "details" } }`
 - Prefer live `GET /catalog` — do not hard-code category / size lists.
 - Categories may include `categoryKind`:
   - `SCHOOL_UNIFORM` | `PE_UNIFORM` | `LCA_SHIRT` → send gender + type + size
-  - `LEARNING_KIT` → send itemName + `components[]`
+  - `LEARNING_KIT` (RHET UI: Bundle — Learning Kit, Moving Up Kit, etc.) → send that category’s exact `categoryName` + itemName + `components[]`
   - `OTHER` → send itemName and/or sku
 - Always send the exact `categoryName` from catalog (names are unique; kinds can repeat).
 

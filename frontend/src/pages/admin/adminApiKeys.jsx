@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
+import { useConfirm } from '../../context/ConfirmContext'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { INTEGRATION_DOC_LINKS, openIntegrationDoc } from '../../docs/openIntegrationDoc'
@@ -11,6 +12,7 @@ import { formatDate } from '../../utils/format'
 const integrationApiUrl = `${baseUrl.replace(/\/+$/, '')}/integrations`
 
 export default function AdminApiKeys({ clients, onRefresh }) {
+  const confirm = useConfirm()
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [systemName, setSystemName] = useState('')
   const [expiration, setExpiration] = useState('none')
@@ -129,9 +131,13 @@ export default function AdminApiKeys({ clients, onRefresh }) {
 
   async function regenerateKey(client) {
     if (!client?.systemCode) return
-    const confirmed = window.confirm(
-      `Regenerate API key for ${client.displayName || client.systemCode}? The previous key will stop working immediately.`,
-    )
+    const confirmed = await confirm({
+      title: 'Regenerate API key',
+      message: `Regenerate API key for ${client.displayName || client.systemCode}? The previous key will stop working immediately.`,
+      confirmLabel: 'Regenerate',
+      cancelLabel: 'Cancel',
+      danger: true,
+    })
     if (!confirmed) return
 
     setBusy(true)
@@ -152,9 +158,13 @@ export default function AdminApiKeys({ clients, onRefresh }) {
 
   async function revokeKey(client) {
     if (!client?.hasApiKey) return
-    const confirmed = window.confirm(
-      `Revoke API key for ${client.displayName || client.systemCode}? External systems using this key will stop working immediately.`,
-    )
+    const confirmed = await confirm({
+      title: 'Revoke API key',
+      message: `Revoke API key for ${client.displayName || client.systemCode}? External systems using this key will stop working immediately.`,
+      confirmLabel: 'Revoke key',
+      cancelLabel: 'Cancel',
+      danger: true,
+    })
     if (!confirmed) return
 
     setBusy(true)

@@ -438,7 +438,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
         <div className="dashboard-sales-head">
           <h2>Sales this month</h2>
           <p>Outbound value by channel · stock requests use internal price when set</p>
-        </div>
+                    </div>
         <div className="stat-grid sales-stat-grid">
           {salesCards.map((card) => (
             <div className="stat-card sales-stat-card" key={card.key}>

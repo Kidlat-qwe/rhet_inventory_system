@@ -83,6 +83,41 @@ function shapeStockRequest(row) {
   };
 }
 
+/** Tool Kit / Bundle (LEARNING_KIT) parents use computed availability, not stored parent qty. */
+async function enrichStockRequestAvailability(rows, db = pool) {
+  const enriched = [];
+  for (const row of rows) {
+    const inventoryId = row.inventory_id || row.inventoryId;
+    if (!inventoryId) {
+      enriched.push(row);
+      continue;
+    }
+
+    const meta = await db.query(
+      `SELECT i.inventory_id, i.stocks, c.category_name, c.category_kind, c.has_child_skus
+       FROM inventory i
+       JOIN categories c ON c.category_id = i.category_id
+       WHERE i.inventory_id = $1`,
+      [inventoryId],
+    );
+    if (!meta.rowCount) {
+      enriched.push(row);
+      continue;
+    }
+
+    const item = camelize(meta.rows[0]);
+    if (!inventory.isVirtualKitCategory(item)) {
+      enriched.push(row);
+      continue;
+    }
+
+    const bom = await inventory.listBundleComponents(inventoryId, db);
+    const available = bom.length ? await inventory.computeAvailableKits(bom, db) : 0;
+    enriched.push({ ...row, current_stocks: available });
+  }
+  return enriched;
+}
+
 async function loadRequestRow(id) {
   const result = await pool.query(`${requestSelect} WHERE sr.request_id = $1`, [id]);
   if (!result.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
@@ -176,7 +211,9 @@ export async function createStockRequestsFromPsms(input) {
       || `${batchReference}-${index + 1}`;
 
     const categoryLookup = await pool.query(
-      'SELECT category_id, category_name, category_kind FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
+      `SELECT category_id, category_name, category_kind, has_child_skus
+       FROM categories
+       WHERE LOWER(category_name) = LOWER($1) AND status = $2`,
       [item.categoryName, 'ACTIVE'],
     );
     const isLearningKit = inventory.isLearningKitCategory(categoryLookup.rows[0])
@@ -223,16 +260,16 @@ export async function createStockRequestsFromPsms(input) {
       const componentSpecs = Array.isArray(item.components) ? item.components : [];
       const bom = await inventory.listBundleComponents(row.inventory_id);
       if (!bom.length) {
-        failureReason = 'Learning Kit has no bill of materials configured';
+        failureReason = 'Bundle has no bill of materials configured';
       } else if (!componentSpecs.length) {
-        failureReason = 'Learning Kit requests must include component specs for every included category (uniform: gender/type/size; non-uniform: itemName)';
+        failureReason = 'Bundle requests must include component specs for every included category (uniform: gender/type/size; non-uniform: itemName)';
       } else {
         for (const slot of bom) {
           const matching = componentSpecs.some(
             (spec) => String(spec.categoryName || '').toLowerCase() === String(slot.categoryName || '').toLowerCase(),
           );
           if (!matching) {
-            failureReason = `Learning Kit requires component specs for category "${slot.categoryName}"`;
+            failureReason = `Bundle requires component specs for category "${slot.categoryName}"`;
             break;
           }
         }
@@ -242,7 +279,7 @@ export async function createStockRequestsFromPsms(input) {
             (slot) => String(slot.categoryName || '').toLowerCase() === String(spec.categoryName || '').toLowerCase(),
           );
           if (!allowed) {
-            failureReason = `Component category "${spec.categoryName}" is not part of this Learning Kit`;
+            failureReason = `Component category "${spec.categoryName}" is not part of this bundle`;
             break;
           }
           const componentResolved = await resolveInventoryItem(pool, {
@@ -315,12 +352,15 @@ export async function listStockRequests(query) {
     values,
   );
 
-  const withComponents = await attachRequestComponents(result.rows);
+  const withAvailability = await enrichStockRequestAvailability(result.rows);
+  const withComponents = await attachRequestComponents(withAvailability);
   return { data: withComponents.map(shapeStockRequest), total: Number(count.rows[0].count) };
 }
 
 export async function getStockRequest(id) {
-  const [withComponents] = await attachRequestComponents([await enrichProcessorIdentity(await loadRequestRow(id))]);
+  const row = await enrichProcessorIdentity(await loadRequestRow(id));
+  const [withAvailability] = await enrichStockRequestAvailability([row]);
+  const [withComponents] = await attachRequestComponents([withAvailability]);
   return shapeStockRequest(withComponents);
 }
 
@@ -331,7 +371,8 @@ export async function loadStockRequestRowsByIds(ids, db = pool) {
     `${requestSelect} WHERE sr.request_id = ANY($1::uuid[])`,
     [uniqueIds],
   );
-  const withComponents = await attachRequestComponents(result.rows, db);
+  const withAvailability = await enrichStockRequestAvailability(result.rows, db);
+  const withComponents = await attachRequestComponents(withAvailability, db);
   return withComponents.map(shapeStockRequest);
 }
 
@@ -425,7 +466,7 @@ export async function shipStockRequestInDb(db, id, adminId) {
   }
 
   const itemMeta = await db.query(
-    `SELECT i.stocks, c.category_name, c.category_kind
+    `SELECT i.stocks, c.category_name, c.category_kind, c.has_child_skus
      FROM inventory i
      JOIN categories c ON c.category_id = i.category_id
      WHERE i.inventory_id = $1
@@ -443,7 +484,7 @@ export async function shipStockRequestInDb(db, id, adminId) {
 
   if (isLearningKit) {
     if (!bom.length) {
-      throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Learning Kit has no bill of materials configured');
+      throw new AppError(422, 'KIT_BOM_INCOMPLETE', 'Bundle has no bill of materials configured');
     }
 
     for (const slot of bom) {
@@ -454,7 +495,7 @@ export async function shipStockRequestInDb(db, id, adminId) {
         throw new AppError(
           422,
           'KIT_COMPONENT_REQUIRED',
-          `Learning Kit requires component specs for category "${slot.categoryName}" (provided by the requesting system)`,
+          `Bundle requires component specs for category "${slot.categoryName}" (provided by the requesting system)`,
         );
       }
     }
@@ -464,7 +505,7 @@ export async function shipStockRequestInDb(db, id, adminId) {
         (slot) => String(slot.categoryName || '').toLowerCase() === String(spec.categoryName || '').toLowerCase(),
       );
       if (!allowed) {
-        throw new AppError(422, 'KIT_COMPONENT_INVALID', `Component category "${spec.categoryName}" is not part of this Learning Kit`);
+        throw new AppError(422, 'KIT_COMPONENT_INVALID', `Component category "${spec.categoryName}" is not part of this bundle`);
       }
 
       let componentId = spec.inventoryId;
@@ -818,11 +859,15 @@ export async function getAvailability(input) {
 
 export async function getIntegrationCatalog() {
   const categories = await pool.query(
-    `SELECT category_id, category_name, category_kind, category_type FROM categories WHERE status = 'ACTIVE' ORDER BY category_name`,
+    `SELECT category_id, category_name, category_kind, category_type, has_child_skus
+     FROM categories
+     WHERE status = 'ACTIVE'
+     ORDER BY category_name`,
   );
 
   const inventoryRows = await pool.query(
-    `SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.status, i.variation, c.category_name, c.category_kind
+    `SELECT i.inventory_id, i.sku, i.item_name, i.stocks, i.status, i.variation,
+            c.category_name, c.category_kind, c.has_child_skus
      FROM inventory i
      JOIN categories c ON c.category_id = i.category_id
      WHERE i.lifecycle_status = 'ACTIVE'

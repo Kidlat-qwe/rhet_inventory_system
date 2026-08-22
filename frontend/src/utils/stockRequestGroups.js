@@ -8,6 +8,14 @@ export function requestGroupKey(request) {
   return `solo::${kind}::${request?.requestId || ''}`
 }
 
+function normalizedGroupBatchReference(request) {
+  const batch = String(request?.batchReference || '').trim()
+  if (batch) return batch
+  const externalReference = String(request?.externalReference || '').trim()
+  if (externalReference) return externalReference
+  return request?.requestId || ''
+}
+
 export function rollupGroupStatus(requests = []) {
   const statuses = new Set(requests.map((row) => String(row.status || '').toUpperCase()))
   if (statuses.size === 1) return [...statuses][0]
@@ -80,9 +88,9 @@ export function buildStockRequestGroups(requests = []) {
     if (!map.has(key)) {
       map.set(key, {
         key,
-        sourceSystem: request.sourceSystem || 'PSMS',
+        sourceSystem: String(request.sourceSystem || 'PSMS').trim() || 'PSMS',
         requestKind: String(request.requestKind || 'REQUEST').toUpperCase() === 'RETURN' ? 'RETURN' : 'REQUEST',
-        batchReference: request.batchReference || request.externalReference || request.requestId,
+        batchReference: normalizedGroupBatchReference(request),
         branchName: request.branchName,
         requestedBy: request.requestedBy,
         reason: request.reason,

@@ -30,7 +30,7 @@ export const psmsStockRequestSchema = z.object({
       sku: optionalText(64),
       quantity: z.coerce.number().int().positive(),
       externalReference: optionalText(100),
-      // Learning Kit only: concrete component choices (uniforms need gender/type/size).
+      // Bundle / LEARNING_KIT: concrete component choices (uniforms need gender/type/size).
       components: z.array(kitComponentSpec).max(50).optional(),
     })).min(1).max(50),
   }),
@@ -124,7 +124,8 @@ export const stockRequestInvoiceListSchema = z.object({
   body: z.any(),
   params: z.any(),
   query: z.object({
-    batchReference: z.string().trim().min(1).max(100),
+    // Empty/missing batchReference returns [] (see listInvoices controller).
+    batchReference: z.string().trim().max(100).optional(),
     sourceSystem: z.string().trim().max(50).optional(),
   }),
 });

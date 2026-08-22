@@ -411,20 +411,71 @@ button.danger:disabled{opacity:.5;cursor:not-allowed}
   font-size:10px;
   color:#8b93a0;
 }
-.kit-modal{width:min(920px,100%);max-width:100%}
+.kit-modal{
+  width:min(920px,calc(100vw - 48px));
+  max-width:100%;
+  max-height:min(92vh,calc(100dvh - 24px));
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.kit-modal .modal-head,
+.kit-modal .modal-actions{
+  flex-shrink:0;
+}
+.kit-modal-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.kit-modal .form-grid{
+  max-height:none;
+  overflow:visible;
+}
+.kit-modal .full-width{
+  display:block;
+  margin:0 23px 12px;
+}
+.kit-modal .full-width textarea{
+  height:56px;
+  min-height:56px;
+}
 .form-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .uniform-gender-hint{margin:0 23px 16px;padding:12px 14px;border-radius:8px;background:#f8fafc;border:1px dashed #d7dee6;font-size:11px;color:#6d7788;line-height:1.45}
-.kit-components{margin:0 23px 18px;padding-top:4px}
-.kit-components-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.kit-components{margin:0 23px 16px;padding-top:4px;min-width:0;display:flex;flex-direction:column}
+.kit-components-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;flex-shrink:0}
 .kit-components-head strong{display:block;font-size:13px;color:#1f2a3d}
 .kit-components-head p{margin:4px 0 0;font-size:11px;color:#7a8494;line-height:1.4}
 .kit-components-head .secondary{flex-shrink:0}
-.kit-components-scroll{border:1px solid #e4e8ee;background:#fff}
-.kit-components table{border-collapse:collapse}
+.kit-components-scroll{
+  border:1px solid #e4e8ee;
+  background:#fff;
+  overflow-x:auto;
+  overflow-y:auto;
+  max-height:min(240px,32vh);
+  min-height:0;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  scrollbar-color:#cbd5e0 #f7fafc;
+}
+.kit-components table{border-collapse:collapse;width:100%;min-width:420px}
 .kit-components th,.kit-components td{padding:10px 12px;border-bottom:1px solid #eef1f5;vertical-align:middle;font-size:11px}
-.kit-components th{text-align:left;background:#f5f7fa;color:#5a6678;font-size:10px;letter-spacing:.4px;text-transform:uppercase}
+.kit-components th{text-align:left;background:#f5f7fa;color:#5a6678;font-size:10px;letter-spacing:.4px;text-transform:uppercase;position:sticky;top:0;z-index:1}
+.kit-components tbody tr:last-child td{border-bottom:0}
 .kit-components select{width:100%;min-width:0;height:34px;border:1px solid #dfe2e7;border-radius:6px;padding:0 8px;font-size:11px;background:#fff}
-.kit-components .kit-qty{width:52px;text-align:center;height:34px;margin:0}
+.kit-components .kit-qty{
+  width:64px;
+  text-align:center;
+  height:34px;
+  margin:0;
+  border:1px solid #dfe2e7;
+  border-radius:6px;
+  padding:0 6px;
+  font-size:11px;
+  background:#fff;
+}
 .kit-resolved-sku{display:block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;font-size:11px}
 .kit-remove{min-width:34px;padding:0 8px;height:34px;line-height:1}
 .kit-components .form-error{margin:10px 0 0;color:#b42318;font-size:12px}
@@ -466,8 +517,11 @@ button.danger:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:560px){
   .uniform-lines,.uniform-line-grid,.form-grid-3{grid-template-columns:1fr}
   .uniform-modal-single,.uniform-modal-pair,.kit-modal{width:min(100%,calc(100vw - 30px))}
+  .kit-modal{max-height:min(94vh,calc(100dvh - 16px))}
+  .kit-modal .full-width{margin:0 15px 12px}
   .kit-components{margin:0 15px 16px}
   .kit-components-head{flex-direction:column;align-items:stretch}
+  .kit-components-scroll{max-height:min(200px,28vh)}
 }
 
 /* ---- Table readability polish (global + inventory) ---- */
@@ -1411,6 +1465,23 @@ tr.row-selected{background:#f5f8ff}
   .batch-ship-bar{align-items:stretch}
   .batch-ship-bar-actions{width:100%}
   .batch-ship-bar-actions button{flex:1}
+}
+
+.confirm-modal-backdrop{
+  z-index:1100;
+}
+.confirm-modal p{
+  margin:6px 0 0;
+  font-size:12px;
+  line-height:1.5;
+  color:#5a6474;
+  max-width:42ch;
+}
+@media(max-width:760px){
+  .confirm-modal-backdrop{
+    left:0;
+    padding:16px;
+  }
 }
 
 .processing-backdrop{

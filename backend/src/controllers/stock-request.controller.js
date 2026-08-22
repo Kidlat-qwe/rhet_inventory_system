@@ -66,8 +66,13 @@ export async function issueInvoiceAndShip(req, res) {
 }
 
 export async function listInvoices(req, res) {
+  const batchReference = String(req.validated.query.batchReference || '').trim();
+  if (!batchReference) {
+    success(res, []);
+    return;
+  }
   success(res, await invoiceService.listStockRequestInvoices({
-    batchReference: req.validated.query.batchReference,
+    batchReference,
     sourceSystem: req.validated.query.sourceSystem || 'PSMS',
   }));
 }

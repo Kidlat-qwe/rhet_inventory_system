@@ -155,13 +155,13 @@ Typical `data` shape:
 }
 ```
 
-**Important:** Categories may include `categoryKind` (`SCHOOL_UNIFORM`, `PE_UNIFORM`, `LCA_SHIRT`, `LEARNING_KIT`, `OTHER`) and `categoryType` (`MERCHANDISE`, `SUPPLIES`). Prefer kind for form behavior; `categoryType` is the Merchandise vs Supplies grouping. Always send the exact `categoryName` for matching. Names are unique; the same kind may be reused under different names.
+**Important:** Categories may include `categoryKind` (`SCHOOL_UNIFORM`, `PE_UNIFORM`, `LCA_SHIRT`, `LEARNING_KIT`, `OTHER`) and `categoryType` (`MERCHANDISE`, `SUPPLIES`). Prefer kind for form behavior; `categoryType` is the Merchandise vs Supplies grouping. Always send the exact `categoryName` for matching. Names are unique; the same kind may be reused under different names. RHET UI labels `LEARNING_KIT` as **Bundle** (Learning Kit, Moving Up Kit, and similar packs).
 
 **How to use it**
 
 - Uniform dropdowns: filter items by `categoryName` (or `categoryKind`), then expose unique `gender` / `type` / `size` from catalog (or parse `variation` as `Gender · Type · Size`).
 - Non-uniform: pick `itemName` / `sku` from items in that category.
-- Learning Kit **parent** lines: pick kit by Learning Kit category + `itemName` (and optionally confirm `sku`).
+- Bundle / Learning Kit **parent** lines: pick kit by **that category’s name** (`Learning Kit`, `Moving Up Kit`, …) + `itemName` (and optionally confirm `sku`). Trigger the kit form when `categoryKind === "LEARNING_KIT"`, not only when the name is Learning Kit.
 
 **Important limitation today:** `/catalog` lists Learning Kit **items**, but does **not** yet return each kit’s bill of materials (which categories the kit includes).  
 Until that is exposed, coordinate with RHET admins on each kit’s included categories, and keep that recipe in your config or UI. If you omit a required category in `components`, RHET stores a `failureReason` and approve will fail.
@@ -274,11 +274,11 @@ Response `201` (new) / `200` (replay): array of lines (`requestId`, `status: PEN
 
 ## 8. Learning Kits (read carefully)
 
-> **RHET model (2026-07):** Learning Kit stock is **virtual**. The kit BOM lists **categories only**. The requesting system fills concrete items via `components[]` (uniform: gender/type/size; non-uniform: itemName/sku). Displayed available kits ≈ `min(category stock totals)`. Approve deducts the resolved component SKUs. CMS Learning Kit UI may still be out of scope; API `components[]` is required for kit requests.
+> **RHET model:** `categoryKind: LEARNING_KIT` (UI: Bundle) is **virtual**. The kit BOM lists **categories only**. The requesting system fills concrete items via `components[]` (uniform: gender/type/size; non-uniform: itemName/sku). Displayed available kits ≈ `min(category stock totals)`. Approve deducts the resolved component SKUs. This kind is not limited to the category named Learning Kit — **Moving Up Kit** (and other similarly configured categories) use the same path. Always send the exact `categoryName`. API `components[]` is required for these requests.
 
-### 8.1 What a Learning Kit is in RHET
+### 8.1 What a bundle (`LEARNING_KIT`) is in RHET
 
-A Learning Kit is a catalog row (price / SKU / name) plus a **bill of materials (BOM)** of **categories**.
+A bundle is a catalog row (price / SKU / name) plus a **bill of materials (BOM)** of **categories**. Example category names: `Learning Kit`, `Moving Up Kit`.
 
 | Concept | Meaning |
 |---|---|
@@ -291,9 +291,9 @@ RHET admin UI for kits: category-only rows. No gender/type/size and no pinned ba
 
 ### 8.2 What your system must send
 
-When requesting a Learning Kit:
+When requesting a bundle (`categoryKind: LEARNING_KIT`):
 
-1. Identify the kit: `categoryName: "Learning Kit"` + `itemName` (exact).
+1. Identify the kit: exact `categoryName` (e.g. `"Learning Kit"` or `"Moving Up Kit"`) + `itemName` (exact).
 2. Send `quantity` = how many kits.
 3. Send `components[]` covering **every category** in that kit’s BOM.
 4. For each component line, be specific:

@@ -56,7 +56,7 @@ const ALL_TOPICS = [
       steps: [
         'Go to **Categories** from the sidebar.',
         'Click **＋ Add category**.',
-        'Enter a unique Category Name and choose the Category Type (e.g. School Uniform, Workbooks, Learning Kit, etc.).',
+        'Enter a unique name, choose **Category type** (Merchandise / Supplies), then **Kind** (Uniform, Bundle, or Others). Bundle is for Learning Kit, Moving Up Kit, and similar packs.',
         'Click **Save**. Items can now be created under this category. Edit and delete remain admin-only.',
       ],
     },

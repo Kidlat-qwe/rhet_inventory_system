@@ -21,17 +21,17 @@ export const listInventorySchema = z.object({
 const money = z.coerce.number().min(0).max(9999999999.99);
 
 const bundleComponentBody = z.object({
-  // Learning Kit: categoryId required (slot). Tool Kit: inventoryId/componentInventoryId required (pinned).
+  // Bundle (LEARNING_KIT): categoryId required (slot). Tool Kit: inventoryId/componentInventoryId required (pinned).
   categoryId: uuid.optional(),
   inventoryId: uuid.optional(),
   componentInventoryId: uuid.optional().nullable(),
-  quantity: z.coerce.number().int().positive().default(1).refine((v) => v === 1, 'Component quantity must be 1'),
+  quantity: z.coerce.number().int().positive().max(999).default(1),
 }).superRefine((row, ctx) => {
   const pinnedId = row.inventoryId || row.componentInventoryId;
   if (!row.categoryId && !pinnedId) {
     ctx.addIssue({
       code: 'custom',
-      message: 'Each component requires categoryId (Learning Kit) or inventoryId (Tool Kit)',
+      message: 'Each component requires categoryId (Bundle / LEARNING_KIT) or inventoryId (Tool Kit)',
       path: ['categoryId'],
     });
   }

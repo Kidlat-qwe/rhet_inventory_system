@@ -28,6 +28,7 @@ import {
   parseUniformVariation,
   resolveItemVariation,
 } from '../../constants/uniformOptions'
+import { useConfirm } from '../../context/ConfirmContext'
 import { useSettings } from '../../context/SettingsContext'
 import {
   batchCreateInventory,
@@ -87,6 +88,7 @@ export default function InventoryPage({
   onInitialCategoryConsumed,
 }) {
   const settings = useSettings()
+  const confirm = useConfirm()
   const defaultThreshold = settings.defaultLowStockThreshold ?? 20
   const [activeCategoryId, setActiveCategoryId] = useState(null)
   const [search, setSearch] = useState('')
@@ -102,6 +104,7 @@ export default function InventoryPage({
   const [error, setError] = useState('')
   const [activeToolKitId, setActiveToolKitId] = useState(null)
   const [showAddRawModal, setShowAddRawModal] = useState(false)
+  const [editRawItem, setEditRawItem] = useState(null)
   const [rawError, setRawError] = useState('')
   const [expandedLearningKitIds, setExpandedLearningKitIds] = useState(() => new Set())
   const [categoryTypeFilter, setCategoryTypeFilter] = useState(() => {
@@ -325,6 +328,7 @@ export default function InventoryPage({
   function openToolKitRawPage(inventoryId) {
     setActiveToolKitId(inventoryId)
     setShowAddRawModal(false)
+    setEditRawItem(null)
     setRawError('')
     setSearch('')
     setStatusFilter('')
@@ -333,6 +337,7 @@ export default function InventoryPage({
   function closeToolKitRawPage() {
     setActiveToolKitId(null)
     setShowAddRawModal(false)
+    setEditRawItem(null)
     setRawError('')
     setSearch('')
     setStatusFilter('')
@@ -349,7 +354,43 @@ export default function InventoryPage({
 
   function openAddRawModal() {
     setShowAddRawModal(true)
+    setEditRawItem(null)
     setRawError('')
+  }
+
+  function openEditRawModal(childItem) {
+    setEditRawItem(childItem)
+    setShowAddRawModal(false)
+    setRawError('')
+  }
+
+  async function saveRawItemEdit(form) {
+    if (!form.inventoryId) return
+    setBusy(true)
+    setError('')
+    setRawError('')
+    try {
+      const itemName = normalizeInventoryText(form.itemName, { trimEdges: true })
+      const childItem = items.find((entry) => entry.inventoryId === form.inventoryId)
+      if (!childItem) throw new Error('Raw item was not found.')
+      const sku = generateUniqueSku(
+        { itemName, categoryId: childItem.categoryId, inventoryId: childItem.inventoryId },
+        categories,
+        items,
+      )
+      if (!sku) throw new Error('Could not generate a SKU for this raw item.')
+      await updateInventoryItem(form.inventoryId, {
+        itemName,
+        sku,
+        variation: form.variation || null,
+      })
+      setEditRawItem(null)
+      await onRefresh()
+    } catch (err) {
+      setRawError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function saveRawChild(parentItem, form) {
@@ -390,7 +431,14 @@ export default function InventoryPage({
   }
 
   async function removeRawChild(parentItem, childInventoryId) {
-    if (!window.confirm('Remove this raw item from this Tool Kit? If other kits still use it, the shared stock is kept.')) return
+    const confirmed = await confirm({
+      title: 'Remove raw item',
+      message: 'Remove this raw item from this Tool Kit? If other kits still use it, the shared stock is kept.',
+      confirmLabel: 'Remove from kit',
+      cancelLabel: 'Cancel',
+      danger: true,
+    })
+    if (!confirmed) return
     setBusy(true)
     setError('')
     try {
@@ -573,6 +621,17 @@ export default function InventoryPage({
           onSave={(form) => saveRawChild(activeToolKit, form)}
         />
       )}
+      {editRawItem && activeToolKit && (
+        <ToolKitRawItemModal
+          key={editRawItem.inventoryId}
+          parentItem={activeToolKit}
+          editItem={editRawItem}
+          busy={busy}
+          error={rawError}
+          onClose={() => !busy && setEditRawItem(null)}
+          onSave={saveRawItemEdit}
+        />
+      )}
       {canManage && deleteTarget && (
         <DeleteInventoryModal
           item={deleteTarget}
@@ -666,7 +725,14 @@ export default function InventoryPage({
                         disabled={busy}
                         items={[
                           ...(row.childItem
-                            ? [{ key: 'stock', label: 'Adjust stock', onClick: () => setStock(row.childItem) }]
+                            ? [
+                              {
+                                key: 'edit',
+                                label: 'Edit raw item',
+                                onClick: () => openEditRawModal(row.childItem),
+                              },
+                              { key: 'stock', label: 'Adjust stock', onClick: () => setStock(row.childItem) },
+                            ]
                             : []),
                           {
                             key: 'remove',
@@ -712,7 +778,7 @@ export default function InventoryPage({
               {isToolKitCategory(activeCategory.categoryId, categories)
                 ? 'Parent items with raw child SKUs. Stock = how many kits can be built.'
                 : isLearningKitCategory(activeCategory.categoryId, categories)
-                  ? 'Learning Kits with category BOM. Stock = available kits from components.'
+                  ? 'Bundles with a category BOM. Stock = available kits from components.'
                   : 'Raw stocks for this category.'}
             </p>
           </div>
@@ -840,7 +906,7 @@ export default function InventoryPage({
                           ) : (
                             <strong>{item.itemName}</strong>
                           )}
-                          {isLearningKit && <small className="muted">Learning Kit · available kits from BOM</small>}
+                          {isLearningKit && <small className="muted">Bundle · available kits from BOM</small>}
                         </div>
                       </div>
                     </td>
@@ -861,7 +927,7 @@ export default function InventoryPage({
                           if (isVirtualKit) {
                             setError(isToolKit
                               ? 'Tool Kit stock is computed from raw child items. Open the item to manage raw stock.'
-                              : 'Learning Kit stock is computed from included category stocks (BOM). Restock those raw items, or edit the kit BOM — do not adjust kit stock directly.')
+                              : 'Bundle stock is computed from included category stocks (BOM). Restock those raw items, or edit the kit BOM — do not adjust kit stock directly.')
                             return
                           }
                           setStock(item)
@@ -884,7 +950,7 @@ export default function InventoryPage({
                       <StatusBadge
                         status={status}
                         title={isVirtualKit
-                          ? `Based on available kits (${item.stocks}). ${isToolKit ? 'Tool Kit' : 'Learning Kit'} stock is computed from BOM.`
+                          ? `Based on available kits (${item.stocks}). ${isToolKit ? 'Tool Kit' : 'Bundle'} stock is computed from BOM.`
                           : undefined}
                       />
                     </td>

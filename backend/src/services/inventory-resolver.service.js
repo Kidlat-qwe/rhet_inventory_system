@@ -39,7 +39,9 @@ export async function resolveInventoryItem(db, input) {
   const { categoryName, gender, type, size, itemName, sku } = input;
 
   const categoryResult = await db.query(
-    'SELECT category_id, category_name, category_kind FROM categories WHERE LOWER(category_name) = LOWER($1) AND status = $2',
+    `SELECT category_id, category_name, category_kind, has_child_skus
+     FROM categories
+     WHERE LOWER(category_name) = LOWER($1) AND status = $2`,
     [categoryName, 'ACTIVE'],
   );
   if (!categoryResult.rowCount) {

@@ -7,6 +7,7 @@ import { HelpAssistant } from './components/HelpAssistant'
 import { PageLoading } from './components/PageLoading'
 import { ProcessingModalHost } from './components/ProcessingModal'
 import { Sidebar } from './components/Sidebar'
+import { ConfirmProvider } from './context/ConfirmContext'
 import { DEFAULT_SETTINGS, SettingsProvider } from './context/SettingsContext'
 import {
   AdminApiKeys,
@@ -386,7 +387,7 @@ function HomeRedirect() {
 
 export default function App() {
   return (
-    <>
+    <ConfirmProvider>
       <ProcessingModalHost />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
@@ -395,6 +396,6 @@ export default function App() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="*" element={<HomeRedirect />} />
       </Routes>
-    </>
+    </ConfirmProvider>
   )
 }

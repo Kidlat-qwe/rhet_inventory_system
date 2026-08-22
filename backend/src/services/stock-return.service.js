@@ -83,7 +83,7 @@ export async function createStockReturnsFromPsms(input) {
         throw new AppError(
           422,
           'KIT_RETURN_UNSUPPORTED',
-          `Learning Kit / Tool Kit returns are not supported. Return the concrete component items instead (${item.categoryName})`,
+          `Bundle / Tool Kit returns are not supported. Return the concrete component items instead (${item.categoryName})`,
         );
       }
 

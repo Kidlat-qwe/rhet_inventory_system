@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { createPortal } from 'react-dom'
+import { ActionsMenu } from '../../components/ActionsMenu'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -26,7 +27,7 @@ import {
   componentSkuLabel,
 } from '../../utils/stockRequestChecklist'
 import { buildStockRequestGroups, groupMatchesReturnOutcome, groupMatchesTab } from '../../utils/stockRequestGroups'
-import { formatInvoiceMoney, openInvoicePrintWindow } from '../../utils/stockRequestInvoice'
+import { formatInvoiceMoney, openInvoiceInNewTab, openInvoicePrintWindow } from '../../utils/stockRequestInvoice'
 
 const STATUS_TABS = ['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'REJECTED']
 const RETURN_OUTCOME_FILTERS = [
@@ -170,13 +171,14 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
   }, [branchFilter, branchOptions])
 
   useEffect(() => {
-    if (!selectedGroup?.batchReference || selectedGroup.requestKind === 'RETURN') {
+    const batchReference = String(selectedGroup?.batchReference || '').trim()
+    if (!batchReference || selectedGroup.requestKind === 'RETURN') {
       setGroupInvoices([])
       return undefined
     }
     let cancelled = false
     fetchStockRequestInvoices({
-      batchReference: selectedGroup.batchReference,
+      batchReference,
       sourceSystem: selectedGroup.sourceSystem || 'PSMS',
     })
       .then((rows) => {
@@ -298,6 +300,73 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     } catch (err) {
       setError(err.message || 'Unable to open invoice print window.')
     }
+  }
+
+  async function downloadInvoiceForGroup(group) {
+    if (!group || group.requestKind === 'RETURN') {
+      setError('Invoices are only available for stock request shipments, not branch returns.')
+      return
+    }
+    const batchReference = String(group.batchReference || '').trim()
+    if (!batchReference) {
+      setError('This request group has no batch reference to look up invoices.')
+      return
+    }
+
+    // Open the tab during the click gesture so the browser does not block it.
+    const tab = window.open('', '_blank')
+    if (!tab) {
+      setError('Pop-up blocked. Allow pop-ups for this site to open invoices in a new tab.')
+      return
+    }
+    try {
+      tab.document.write('<!doctype html><title>Preparing invoice…</title><p style="font-family:Segoe UI,sans-serif;padding:24px;color:#4b5565">Preparing invoice PDF…</p>')
+    } catch {
+      // Ignore write errors on a freshly opened tab.
+    }
+
+    setError('')
+    setInvoiceBusy(true)
+    try {
+      const rows = await fetchStockRequestInvoices({
+        batchReference,
+        sourceSystem: group.sourceSystem || 'PSMS',
+      })
+      const invoices = Array.isArray(rows) ? rows : []
+      if (!invoices.length) {
+        try { tab.close() } catch { /* ignore */ }
+        setError('No issued invoice found for this request yet. Ship a shipment first.')
+        return
+      }
+      // Prefer the latest shipment when a cart has INV-1, INV-2, …
+      const latest = invoices[invoices.length - 1]
+      await openInvoiceInNewTab({
+        invoice: latest,
+        printedBy: admin?.fullName || latest.createdByName || '',
+        organizationName: settings.organizationName,
+        timezone: settings.timezone,
+      }, tab)
+    } catch (err) {
+      try { tab.close() } catch { /* ignore */ }
+      setError(err.message || 'Unable to download invoice.')
+    } finally {
+      setInvoiceBusy(false)
+    }
+  }
+
+  function actionLabelForGroup(group) {
+    if (group.requestKind === 'RETURN' && group.pendingCount > 0) return 'Inspect'
+    if (group.pendingCount > 0 || group.shippedCount > 0) return 'Manage'
+    return 'View'
+  }
+
+  function canDownloadInvoice(group) {
+    if (!group || group.requestKind === 'RETURN') return false
+    return Number(group.shippedCount || 0) > 0
+      || Number(group.deliveredCount || 0) > 0
+      || group.status === 'SHIPPED'
+      || group.status === 'DELIVERED'
+      || group.status === 'PARTIAL'
   }
 
   async function openInvoicePreview() {
@@ -545,15 +614,24 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                   </td>
                   <td className="muted">{formatDate(group.createdAt)}</td>
                   <td>
-                    <button
-                      type="button"
-                      className={group.pendingCount > 0 ? 'primary small-btn' : 'secondary small-btn'}
-                      onClick={() => openManage(group)}
-                    >
-                      {group.requestKind === 'RETURN' && group.pendingCount > 0
-                        ? 'Inspect'
-                        : (group.pendingCount > 0 || group.shippedCount > 0 ? 'Manage' : 'View')}
-                    </button>
+                    <ActionsMenu
+                      label={`Actions for ${group.batchReference || 'request group'}`}
+                      disabled={invoiceBusy || Boolean(busyId)}
+                      items={[
+                        {
+                          key: 'view',
+                          label: actionLabelForGroup(group),
+                          onClick: () => openManage(group),
+                        },
+                        {
+                          key: 'download-invoice',
+                          label: 'Download invoice',
+                          hidden: !canDownloadInvoice(group),
+                          disabled: invoiceBusy,
+                          onClick: () => downloadInvoiceForGroup(group),
+                        },
+                      ]}
+                    />
                   </td>
                 </tr>
               )) : (

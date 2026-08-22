@@ -2,23 +2,30 @@ import { useMemo, useState } from 'react'
 import { normalizeInventoryText } from '../utils/format'
 
 /**
- * Add / link a raw child under a Tool Kit parent.
+ * Add / link a raw child under a Tool Kit parent, or rename an existing raw item.
  * If the typed name matches an existing shared raw SKU, defaults to linking it
  * so gs-toolkits and nc-kg-toolkits can share one stock pool.
  */
 export function ToolKitRawItemModal({
   parentItem,
   existingRawItems = [],
+  editItem = null,
   busy,
   error,
   onClose,
   onSave,
 }) {
-  const [form, setForm] = useState({
-    itemName: '',
-    variation: '',
-    stocks: 0,
-  })
+  const isEdit = Boolean(editItem)
+  const [form, setForm] = useState(() => (isEdit
+    ? {
+      itemName: normalizeInventoryText(editItem.itemName || ''),
+      variation: normalizeInventoryText(editItem.variation || ''),
+    }
+    : {
+      itemName: '',
+      variation: '',
+      stocks: 0,
+    }))
   const [mode, setMode] = useState('auto') // auto | link | create
   const [pickedId, setPickedId] = useState('')
   const [localError, setLocalError] = useState('')
@@ -62,6 +69,20 @@ export function ToolKitRawItemModal({
     setLocalError('')
     const itemName = normalizeInventoryText(form.itemName, { trimEdges: true })
 
+    if (isEdit) {
+      if (itemName.length < 2) {
+        setLocalError('Item name must be at least 2 characters.')
+        return
+      }
+      onSave({
+        mode: 'edit',
+        inventoryId: editItem.inventoryId,
+        itemName,
+        variation: normalizeInventoryText(form.variation || '', { trimEdges: true }) || null,
+      })
+      return
+    }
+
     if (effectiveMode === 'link') {
       const target = selectedExisting
       if (!target) {
@@ -95,16 +116,50 @@ export function ToolKitRawItemModal({
       <form className="modal modal-sm kit-raw-modal" onSubmit={submit}>
         <div className="modal-head">
           <div>
-            <h2>Add raw item</h2>
+            <h2>{isEdit ? 'Edit raw item' : 'Add raw item'}</h2>
             <p>
-              Add a raw child SKU for <strong>{parentItem?.itemName || 'this Tool Kit'}</strong>.
-              Shared parts (e.g. pencil) keep one stock pool across kits.
+              {isEdit ? (
+                <>
+                  Rename <strong>{editItem?.itemName || 'this raw item'}</strong>
+                  {editItem?.sku ? ` (${editItem.sku})` : ''}.
+                  The SKU updates automatically when you save. Shared parts update everywhere they are used.
+                </>
+              ) : (
+                <>
+                  Add a raw child SKU for <strong>{parentItem?.itemName || 'this Tool Kit'}</strong>.
+                  Shared parts (e.g. pencil) keep one stock pool across kits.
+                </>
+              )}
             </p>
           </div>
           <button type="button" onClick={onClose} disabled={busy}>×</button>
         </div>
 
-        {availableRawItems.length > 0 && (
+        {isEdit ? (
+          <div className="form-grid">
+            <label className="full-width">
+              Item name *
+              <input
+                required
+                minLength={2}
+                value={form.itemName}
+                onChange={(e) => set('itemName', normalizeInventoryText(e.target.value))}
+                disabled={busy}
+                autoFocus
+              />
+              <small className="field-hint">Lowercase only. Spaces become underscores (e.g. blue_notebook).</small>
+            </label>
+            <label className="full-width">
+              Variation
+              <input
+                value={form.variation}
+                onChange={(e) => set('variation', normalizeInventoryText(e.target.value))}
+                placeholder="optional"
+                disabled={busy}
+              />
+            </label>
+          </div>
+        ) : availableRawItems.length > 0 && (
           <div className="kit-raw-mode-tabs">
             <button
               type="button"
@@ -125,6 +180,7 @@ export function ToolKitRawItemModal({
           </div>
         )}
 
+        {!isEdit && (
         <div className="form-grid">
           {effectiveMode === 'link' ? (
             <label className="full-width">
@@ -222,31 +278,23 @@ export function ToolKitRawItemModal({
             </>
           )}
         </div>
+        )}
 
         {(localError || error) && <p className="form-error">{localError || error}</p>}
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose} disabled={busy}>Cancel</button>
           <button
+            type="submit"
             className="primary"
             disabled={busy}
-            onClick={(e) => {
-              // If a name match exists and user hasn't chosen create, submit as link.
-              if (nameMatch && mode === 'auto') {
-                e.preventDefault()
-                setLocalError('')
-                onSave({
-                  mode: 'link',
-                  inventoryId: nameMatch.inventoryId,
-                  itemName: nameMatch.itemName,
-                })
-              }
-            }}
           >
             {busy
               ? 'Saving…'
-              : (nameMatch && mode === 'auto') || effectiveMode === 'link'
-                ? 'Use existing raw item'
-                : 'Add raw item'}
+              : isEdit
+                ? 'Save changes'
+                : (nameMatch && mode === 'auto') || effectiveMode === 'link'
+                  ? 'Use existing raw item'
+                  : 'Add raw item'}
           </button>
         </div>
       </form>

@@ -151,7 +151,7 @@ Typical shape:
 | `categoryKind` | How matching works |
 |---|---|
 | `SCHOOL_UNIFORM` / `PE_UNIFORM` / `LCA_SHIRT` | Require `gender` + `type` + `size` |
-| `LEARNING_KIT` | Match kit by `itemName`; send `components[]` |
+| `LEARNING_KIT` | UI: **Bundle**. Match kit by exact `categoryName` + `itemName`; send `components[]`. Not only the category named Learning Kit (e.g. Moving Up Kit). |
 | `OTHER` | Match by `itemName` and/or `sku` |
 
 **Do not hard-code** category lists or size charts in your UI if RHET can change catalog. Prefer live `/catalog`.

@@ -1,3 +1,5 @@
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 import { formatManilaDateTime } from './stockRequestChecklist'
 
 function escapeHtml(value) {
@@ -525,4 +527,133 @@ export function openInvoicePrintWindow(options) {
   iframe.onload = () => waitForAssetsThenPrint()
   setTimeout(waitForAssetsThenPrint, 400)
   return iframe
+}
+
+function waitForDocumentImages(doc, timeoutMs = 4000) {
+  const images = Array.from(doc.images || [])
+  if (!images.length) return Promise.resolve()
+  return new Promise((resolve) => {
+    let remaining = images.length
+    let settled = false
+    const done = () => {
+      remaining -= 1
+      if (remaining <= 0 && !settled) {
+        settled = true
+        resolve()
+      }
+    }
+    images.forEach((img) => {
+      if (img.complete) {
+        done()
+        return
+      }
+      img.addEventListener('load', done, { once: true })
+      img.addEventListener('error', done, { once: true })
+    })
+    setTimeout(() => {
+      if (!settled) {
+        settled = true
+        resolve()
+      }
+    }, timeoutMs)
+  })
+}
+
+/**
+ * Build an invoice PDF Blob from the same HTML layout used for print,
+ * so Download invoice matches the on-screen / print invoice design.
+ */
+export async function buildInvoicePdfBlob(options = {}) {
+  const html = buildInvoiceHtml(options)
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.title = 'Invoice PDF render'
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    left: '-12000px',
+    top: '0',
+    width: '794px',
+    height: '1123px',
+    border: '0',
+    opacity: '0',
+    pointerEvents: 'none',
+  })
+  document.body.appendChild(iframe)
+
+  try {
+    const frameDoc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!frameDoc) throw new Error('Unable to prepare the invoice for PDF download.')
+
+    frameDoc.open()
+    frameDoc.write(html)
+    frameDoc.close()
+
+    await waitForDocumentImages(frameDoc)
+
+    const sheet = frameDoc.querySelector('.sheet')
+    if (!sheet) throw new Error('Invoice layout was not found.')
+
+    // Match print sheet width so the capture looks like the first (HTML) invoice.
+    sheet.style.width = '720px'
+    sheet.style.maxWidth = '720px'
+    sheet.style.padding = '24px 28px'
+    sheet.style.boxSizing = 'border-box'
+    sheet.style.background = '#ffffff'
+
+    const canvas = await html2canvas(sheet, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      imageTimeout: 4000,
+    })
+
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const imgWidth = pageWidth
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    const imageData = canvas.toDataURL('image/png')
+
+    let heightLeft = imgHeight
+    let position = 0
+    pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
+    heightLeft -= pageHeight
+
+    while (heightLeft > 1) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
+      heightLeft -= pageHeight
+    }
+
+    return pdf.output('blob')
+  } finally {
+    iframe.remove()
+  }
+}
+
+/**
+ * Open the invoice as a PDF blob in a new tab (native browser PDF viewer).
+ * Layout matches the HTML invoice used for print.
+ * Pass an already-opened window from a synchronous click so pop-up blockers allow it.
+ */
+export async function openInvoiceInNewTab(options, targetWindow = null) {
+  const blob = await buildInvoicePdfBlob(options)
+  const url = URL.createObjectURL(blob)
+  const tab = targetWindow || window.open(url, '_blank')
+  if (!tab) {
+    URL.revokeObjectURL(url)
+    throw new Error('Pop-up blocked. Allow pop-ups for this site to open invoices in a new tab.')
+  }
+  try {
+    tab.location.href = url
+    tab.focus()
+  } catch {
+    URL.revokeObjectURL(url)
+    throw new Error('Unable to open the invoice PDF in a new tab.')
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000)
+  return tab
 }

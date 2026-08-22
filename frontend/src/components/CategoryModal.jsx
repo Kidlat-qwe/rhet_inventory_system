@@ -22,7 +22,7 @@ function namePlaceholder(uiType, uniformSubtype) {
     const subtype = UNIFORM_SUBTYPE_OPTIONS.find((entry) => entry.value === uniformSubtype)
     return subtype ? `e.g. ${subtype.categoryName}` : 'e.g. School Uniform'
   }
-  if (uiType === 'LEARNING_KIT') return 'e.g. Learning Kit'
+  if (uiType === 'LEARNING_KIT') return 'e.g. Learning Kit, Moving Up Kit'
   return 'e.g. Bag, Book, Tool Kit'
 }
 
@@ -78,7 +78,7 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
       return 'Choose School Uniform, PE Uniform, or Shirt. Each uses Gender / Type / Size (or Logo) fields on inventory items.'
     }
     if (uiType === 'LEARNING_KIT') {
-      return 'Learning Kit behavior: virtual stock from included categories; concrete SKUs chosen on stock request.'
+      return 'Bundle behavior: virtual stock from included categories; concrete SKUs chosen on stock request. Use this kind for Learning Kit, Moving Up Kit, or any similar pack. Stored as LEARNING_KIT for partner APIs.'
     }
     if (hasChildSkus) {
       return 'Parent items can include raw child SKUs. Parent stock is how many complete sets can be built.'
