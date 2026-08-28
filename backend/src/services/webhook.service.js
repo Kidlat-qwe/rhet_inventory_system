@@ -196,6 +196,10 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
     type: request.item_type || request.type || request.itemType,
     size: request.size_label || request.size || request.sizeLabel,
     quantity: request.quantity,
+    originalQuantity: request.original_quantity ?? request.originalQuantity ?? null,
+    quantityAdjustmentRemarks: request.quantity_adjustment_remarks ?? request.quantityAdjustmentRemarks ?? null,
+    quantityAdjustedAt: request.quantity_adjusted_at ?? request.quantityAdjustedAt ?? null,
+    batchReference: request.batch_reference || request.batchReference || null,
     matchedSku: request.matched_sku || request.matchedSku,
     inventoryId: request.inventory_id || request.inventoryId,
     rejectionReason: request.rejection_reason || request.rejectionReason,
@@ -228,6 +232,14 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
     if (event === 'stock_request.returned') {
       payload.returnedBy = processedByName;
     }
+  }
+
+  if (event === 'stock_request.quantity_adjusted') {
+    const adjustedByName = processor?.displayName || resolveProcessedByDisplayName(request) || 'Inventory Admin';
+    payload.adjustedBy = adjustedByName;
+    payload.processedBy = adjustedByName;
+    payload.processedByName = adjustedByName;
+    payload.processedByUserId = processor?.userId || resolveProcessedByUserId(request) || null;
   }
 
   if (env.NODE_ENV !== 'production') {

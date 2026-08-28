@@ -790,6 +790,118 @@ export async function returnStockRequest(id, admin, options = {}) {
   return shaped;
 }
 
+async function resolveWarehouseAvailableQuantity(inventoryId, db = pool) {
+  const meta = await db.query(
+    `SELECT i.inventory_id, i.stocks, c.category_name, c.category_kind, c.has_child_skus
+     FROM inventory i
+     JOIN categories c ON c.category_id = i.category_id
+     WHERE i.inventory_id = $1`,
+    [inventoryId],
+  );
+  if (!meta.rowCount) {
+    throw new AppError(404, 'ITEM_NOT_FOUND', 'Matched inventory item was not found');
+  }
+  const item = camelize(meta.rows[0]);
+  if (!inventory.isVirtualKitCategory(item)) {
+    return Number(item.stocks) || 0;
+  }
+  const bom = await inventory.listBundleComponents(inventoryId, db);
+  if (!bom.length) return 0;
+  return inventory.computeAvailableKits(bom, db);
+}
+
+/**
+ * RHET staff reduces quantity on a pending CMS line before ship.
+ * Notifies partner via stock_request.quantity_adjusted webhook.
+ */
+export async function adjustStockRequestQuantity(id, admin, input) {
+  const adminId = typeof admin === 'object' ? admin.user_id : admin;
+  const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;
+  const newQty = Number(input.quantity);
+  const remarks = String(input.remarks || '').trim();
+
+  if (!Number.isInteger(newQty) || newQty < 1) {
+    throw new AppError(422, 'INVALID_QUANTITY', 'Quantity must be a positive whole number');
+  }
+
+  await withTransaction(async (db) => {
+    const locked = await db.query('SELECT * FROM stock_requests WHERE request_id = $1 FOR UPDATE', [id]);
+    if (!locked.rowCount) throw new AppError(404, 'REQUEST_NOT_FOUND', 'Stock request was not found');
+
+    const current = locked.rows[0];
+    if (String(current.request_kind || '').toUpperCase() === 'RETURN') {
+      throw new AppError(409, 'INVALID_STATUS_TRANSITION', 'Branch return lines cannot be adjusted');
+    }
+    if (String(current.status || '').toUpperCase() !== 'PENDING') {
+      throw new AppError(
+        409,
+        'REQUEST_NOT_PENDING',
+        `Quantity can only be adjusted while pending (current: ${String(current.status || '').toLowerCase()})`,
+      );
+    }
+    if (!current.inventory_id) {
+      throw new AppError(422, 'ITEM_NOT_MATCHED', 'Cannot adjust quantity until the line matches an inventory item');
+    }
+
+    const oldQty = Number(current.quantity) || 0;
+    if (newQty === oldQty) {
+      throw new AppError(422, 'QUANTITY_UNCHANGED', 'New quantity must be different from the current quantity');
+    }
+    if (newQty > oldQty) {
+      throw new AppError(
+        422,
+        'QUANTITY_INCREASE_NOT_ALLOWED',
+        'Quantity can only be reduced to match available warehouse stock',
+      );
+    }
+
+    const available = await resolveWarehouseAvailableQuantity(current.inventory_id, db);
+    if (newQty > available) {
+      throw new AppError(
+        422,
+        'INSUFFICIENT_STOCK',
+        `Only ${available} unit(s) are available in warehouse stock`,
+      );
+    }
+
+    const originalQty = Number(current.original_quantity) || oldQty;
+    const components = await listRequestComponents(id, db);
+    if (components.length) {
+      for (const comp of components) {
+        const compId = comp.requestComponentId;
+        const oldCompQty = Number(comp.quantity) || 0;
+        if (!compId || oldCompQty <= 0) continue;
+        const scaled = Math.max(1, Math.round((oldCompQty * newQty) / oldQty));
+        await db.query(
+          'UPDATE stock_request_components SET quantity = $1 WHERE request_component_id = $2',
+          [scaled, compId],
+        );
+      }
+    }
+
+    await db.query(
+      `UPDATE stock_requests
+       SET quantity = $1,
+           original_quantity = $2,
+           quantity_adjustment_remarks = $3,
+           quantity_adjusted_at = NOW(),
+           quantity_adjusted_by = $4,
+           updated_at = NOW()
+       WHERE request_id = $5`,
+      [newQty, originalQty, remarks, adminId, id],
+    );
+  });
+
+  const enriched = await enrichProcessorIdentity(await loadRequestRow(id), adminId);
+  const [withComponents] = await attachRequestComponents([enriched]);
+  const resolvedProcessor = processor?.displayName
+    ? processor
+    : processorFromAdmin({ user_id: adminId, full_name: enriched.processed_by_name, email: enriched.processed_by_email });
+
+  await notify(withComponents, 'stock_request.quantity_adjusted', resolvedProcessor);
+  return shapeStockRequest(withComponents);
+}
+
 export async function rejectStockRequest(id, admin, rejectionReason) {
   const adminId = typeof admin === 'object' ? admin.user_id : admin;
   const processor = typeof admin === 'object' ? processorFromAdmin(admin) : null;

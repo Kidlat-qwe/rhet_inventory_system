@@ -54,6 +54,14 @@ export async function reject(req, res) {
   ));
 }
 
+export async function adjustQuantity(req, res) {
+  success(res, await service.adjustStockRequestQuantity(
+    req.validated.params.id,
+    req.admin,
+    req.validated.body,
+  ));
+}
+
 export async function previewInvoice(req, res) {
   success(res, await invoiceService.previewStockRequestInvoice(req.validated.body.requestIds));
 }

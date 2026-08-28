@@ -477,6 +477,7 @@ RHET POSTs JSON to `webhookUrl` (or RHET fallback env if omitted).
 |---|---|---|
 | `stock_request.created` | Stored in RHET | Mark local row as synced / pending RHET |
 | `stock_request.shipped` | RHET shipped; warehouse deducted | Mark shipped; do **not** add branch stock yet |
+| `stock_request.quantity_adjusted` | RHET staff reduced qty before ship | Update local qty + store original + remarks; stay Pending |
 | `stock_request.delivered` / `stock_request.fulfilled` | Branch confirmed receipt | **Increase local/branch stock** once |
 | `stock_request.returned` | Staff marked return on a shipped/delivered **request** | Reverse branch stock if `wasDelivered` |
 | `stock_return.received` | CMS Return Stock accepted into RHET Pending | Keep branch deduction; wait for HQ inspection |

@@ -87,6 +87,9 @@ export const returnStockRequest = (id, notesOrOptions = '', reusable = true) => 
 export const rejectStockRequest = (id, rejectionReason) =>
   api(`/stock-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ rejectionReason }) }).then((response) => response.data)
 
+export const adjustStockRequestQuantity = (id, body) =>
+  api(`/stock-requests/${id}/quantity`, { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
+
 export const previewStockRequestInvoice = (requestIds) =>
   api('/stock-requests/invoices/preview', {
     method: 'POST',

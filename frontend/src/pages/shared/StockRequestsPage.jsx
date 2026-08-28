@@ -4,6 +4,7 @@ import { ActionsMenu } from '../../components/ActionsMenu'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { StockRequestQuantityCell } from '../../components/stock-requests/StockRequestQuantityCell'
 import { useSettings } from '../../context/SettingsContext'
 import { usePagination } from '../../hooks/usePagination'
 import {
@@ -572,7 +573,24 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             </thead>
             <tbody>
               {pageItems.length ? pageItems.map((group) => (
-                <tr key={group.key}>
+                <tr
+                  key={group.key}
+                  className={`stock-request-group-row${selectedGroupKey === group.key ? ' is-selected' : ''}`}
+                  onClick={() => {
+                    if (invoiceBusy || busyId) return
+                    openManage(group)
+                  }}
+                  onKeyDown={(event) => {
+                    if (invoiceBusy || busyId) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      openManage(group)
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${actionLabelForGroup(group)} for ${group.batchReference || 'request group'}`}
+                >
                   <td>
                     <strong>{group.requestedBy}</strong>
                     <small>{group.requestKind === 'RETURN' ? 'CMS branch return' : group.sourceSystem}</small>
@@ -613,7 +631,11 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                     )}
                   </td>
                   <td className="muted">{formatDate(group.createdAt)}</td>
-                  <td>
+                  <td
+                    className="stock-request-group-actions"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <ActionsMenu
                       label={`Actions for ${group.batchReference || 'request group'}`}
                       disabled={invoiceBusy || Boolean(busyId)}
@@ -681,6 +703,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               </span>
             </div>
 
+            <div className="request-group-modal-scroll">
             {isBranchReturn ? (
               <div className="request-detail-grid">
                 <div><span>Branch</span><strong>{detailValue(selectedGroup.branchName)}</strong></div>
@@ -713,11 +736,11 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             )}
 
             <div className="overflow-x-auto rounded-lg table-scroll group-lines-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-              <table className="batch-ship-table" style={{ width: '100%', minWidth: isBranchReturn ? '760px' : (showShipSelect || showLineActions ? '920px' : '780px') }}>
+              <table className="batch-ship-table">
                 <thead>
                   <tr>
                     {showShipSelect && (
-                      <th className="select-col">
+                      <th className="select-col col-select">
                         <input
                           type="checkbox"
                           checked={allShippableSelected}
@@ -727,14 +750,14 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                         />
                       </th>
                     )}
-                    <th>#</th>
-                    <th>Item</th>
-                    <th>SKU</th>
-                    <th>Qty</th>
-                    <th>Internal price</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    {showLineActions && <th>Action</th>}
+                    <th className="col-index">#</th>
+                    <th className="col-item">Item</th>
+                    <th className="col-sku">SKU</th>
+                    <th className="col-qty">Qty</th>
+                    <th className="col-price">Internal price</th>
+                    <th className="col-amount">Amount</th>
+                    <th className="col-status">Status</th>
+                    {showLineActions && <th className="col-action">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -748,7 +771,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                       <Fragment key={request.requestId}>
                         <tr className={request.status === 'PENDING' && issue ? 'batch-row-blocked' : undefined}>
                           {showShipSelect && (
-                            <td className="select-col">
+                            <td className="select-col col-select">
                               {request.status === 'PENDING' ? (
                                 <input
                                   type="checkbox"
@@ -763,8 +786,8 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                               ) : null}
                             </td>
                           )}
-                          <td>{index + 1}</td>
-                          <td>
+                          <td className="col-index">{index + 1}</td>
+                          <td className="col-item">
                             <strong>{requestItemLabel(request)}</strong>
                             <small>
                               {request.categoryName}
@@ -772,11 +795,18 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                               {request.externalReference ? ` · ${request.externalReference}` : ''}
                             </small>
                           </td>
-                          <td>{requestSkuLabel(request)}</td>
-                          <td><strong>{request.quantity}</strong></td>
-                          <td>{formatCurrency(request.internalSellingPrice)}</td>
-                          <td><strong>{formatCurrency(amount)}</strong></td>
-                          <td>
+                          <td className="col-sku">{requestSkuLabel(request)}</td>
+                          <td className="col-qty">
+                            <StockRequestQuantityCell
+                              request={request}
+                              disabled={invoiceBusy || Boolean(busyId)}
+                              onAdjusted={onRefresh}
+                              onError={setError}
+                            />
+                          </td>
+                          <td className="col-price">{formatCurrency(request.internalSellingPrice)}</td>
+                          <td className="col-amount"><strong>{formatCurrency(amount)}</strong></td>
+                          <td className="col-status">
                             {isBranchReturn && request.status === 'PENDING' ? (
                               <>
                                 <StatusBadge status={request.status} />
@@ -803,7 +833,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                             )}
                           </td>
                           {showLineActions && (
-                            <td>
+                            <td className="col-action">
                               {isBranchReturn && request.status === 'PENDING' && (
                                 <button
                                   type="button"
@@ -903,6 +933,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             )}
 
             {error && <div className="page-error">{error}</div>}
+            </div>
 
             <div className="modal-actions">
               <button type="button" className="secondary" onClick={closeModal} disabled={invoiceBusy || Boolean(busyId)}>
@@ -964,7 +995,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             )}
 
             <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-              <table className="invoice-preview-table" style={{ width: '100%', minWidth: '720px' }}>
+              <table className="invoice-preview-table">
                 <thead>
                   <tr>
                     <th>Description</th>

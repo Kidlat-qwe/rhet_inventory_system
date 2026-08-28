@@ -59,6 +59,7 @@ Use these when changing the **existing** CMS merchandise / stock-request flow. D
 | **[CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_STATUS_LIFECYCLE_PROMPT.md)** | **Paste** — Pending → Shipped → Delivered → Returned (cut out FULFILLED) |
 | **[CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md](./CMS_PSMS_BATCH_REFERENCE_INVOICE_PROMPT.md)** | **Paste** — send `batchReference` so multi-item carts group on RHET Manage/invoice |
 | **[CMS_PSMS_RETURN_STOCK_INSPECTION_PROMPT.md](./CMS_PSMS_RETURN_STOCK_INSPECTION_PROMPT.md)** | **Paste** — Return Stock: treat PENDING 201 as success; `stock_return.received` then `accepted` |
+| **[CMS_PSMS_STOCK_REQUEST_QUANTITY_ADJUST_PROMPT.md](./CMS_PSMS_STOCK_REQUEST_QUANTITY_ADJUST_PROMPT.md)** | **Paste — required** — RHET reduces qty before ship; handle `stock_request.quantity_adjusted` webhook |
 | **[STOCK_REQUEST_INTEGRATION.md](./STOCK_REQUEST_INTEGRATION.md)** § stock-returns | RHET `POST /stock-returns` → Pending inspection, then Returned (reusable / not reusable) |
 | **[CMS_PSMS_PASTE_PROMPT.md](./CMS_PSMS_PASTE_PROMPT.md)** | Short pointer to the paste bundle + locked decisions |
 
