@@ -10,7 +10,7 @@ Base: `/api/v1/stock-requests` (Firebase auth).
 | POST | `/:id/deliver` | Mark delivered |
 | POST | `/:id/return` | HQ inspect for **CMS branch returns** only (`request_kind = RETURN`, Pending). Body: `{ reusable, notes }`. Reusable restocks warehouse + RETURN movement, then status RETURNED. Staff UI has no Return button on Shipped/Delivered request lines. |
 | POST | `/:id/reject` | Reject pending line |
-| PATCH | `/:id/quantity` | Reduce pending line qty before ship (`{ quantity, remarks }`); webhook `stock_request.quantity_adjusted` |
+| PATCH | `/:id/quantity` | Adjust pending line qty before ship (`{ quantity, remarks }`); webhook `stock_request.quantity_adjusted`. Requires migration `041_stock_request_quantity_adjustment.sql`. |
 | POST | `/invoices/preview` | Invoice draft for selected line ids (ready lines only) |
 | POST | `/invoices` | Save invoice snapshot + ship those lines |
 | GET | `/invoices?batchReference=&sourceSystem=` | Invoices for a CMS cart group |

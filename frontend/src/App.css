@@ -164,12 +164,14 @@ button.danger:disabled{opacity:.5;cursor:not-allowed}
 }
 .request-group-modal .batch-ship-table{
   width:100%;
-  table-layout:fixed;
+  table-layout:auto;
 }
 .request-group-modal .batch-ship-table .col-select{width:40px}
 .request-group-modal .batch-ship-table .col-index{width:36px;text-align:center}
 .request-group-modal .batch-ship-table .col-item{width:auto;min-width:140px}
-.request-group-modal .batch-ship-table .col-sku{width:14%}
+.request-group-modal .batch-ship-table .col-sku{
+  white-space:nowrap;
+}
 .request-group-modal .batch-ship-table .col-qty{width:112px;min-width:112px}
 .request-group-modal .batch-ship-table .col-price{width:96px;text-align:right}
 .request-group-modal .batch-ship-table .col-amount{width:96px;text-align:right}
@@ -177,8 +179,7 @@ button.danger:disabled{opacity:.5;cursor:not-allowed}
 .request-group-modal .batch-ship-table .col-action{width:80px}
 .request-group-modal .batch-ship-table th.col-price,
 .request-group-modal .batch-ship-table th.col-amount{text-align:right}
-.request-group-modal .batch-ship-table td.col-item strong,
-.request-group-modal .batch-ship-table td.col-sku{
+.request-group-modal .batch-ship-table td.col-item strong{
   display:block;
   overflow:hidden;
   text-overflow:ellipsis;

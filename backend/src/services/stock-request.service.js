@@ -811,7 +811,7 @@ async function resolveWarehouseAvailableQuantity(inventoryId, db = pool) {
 }
 
 /**
- * RHET staff reduces quantity on a pending CMS line before ship.
+ * RHET staff adjusts quantity on a pending CMS line before ship (increase or decrease).
  * Notifies partner via stock_request.quantity_adjusted webhook.
  */
 export async function adjustStockRequestQuantity(id, admin, input) {
@@ -846,13 +846,6 @@ export async function adjustStockRequestQuantity(id, admin, input) {
     const oldQty = Number(current.quantity) || 0;
     if (newQty === oldQty) {
       throw new AppError(422, 'QUANTITY_UNCHANGED', 'New quantity must be different from the current quantity');
-    }
-    if (newQty > oldQty) {
-      throw new AppError(
-        422,
-        'QUANTITY_INCREASE_NOT_ALLOWED',
-        'Quantity can only be reduced to match available warehouse stock',
-      );
     }
 
     const available = await resolveWarehouseAvailableQuantity(current.inventory_id, db);

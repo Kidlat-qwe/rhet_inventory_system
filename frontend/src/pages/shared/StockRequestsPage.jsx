@@ -736,7 +736,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             )}
 
             <div className="overflow-x-auto rounded-lg table-scroll group-lines-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-              <table className="batch-ship-table">
+              <table className="batch-ship-table" style={{ width: '100%', minWidth: '900px' }}>
                 <thead>
                   <tr>
                     {showShipSelect && (
@@ -872,7 +872,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                             {showShipSelect && <td />}
                             <td />
                             <td className="batch-component-name">↳ {componentItemLabel(component)}</td>
-                            <td>{componentSkuLabel(component)}</td>
+                            <td className="col-sku">{componentSkuLabel(component)}</td>
                             <td>{component.quantity}</td>
                             <td colSpan={showLineActions ? 4 : 3} className="muted">Component</td>
                           </tr>

@@ -56,10 +56,6 @@ export function StockRequestQuantityCell({
       onError?.('New quantity must be different from the current quantity')
       return
     }
-    if (parsed > Number(request.quantity)) {
-      onError?.('Quantity can only be reduced, not increased')
-      return
-    }
     const available = Number(request.currentStocks)
     if (Number.isFinite(available) && parsed > available) {
       onError?.(`Only ${available} unit(s) are available in warehouse stock`)
@@ -104,7 +100,7 @@ export function StockRequestQuantityCell({
             type="button"
             className="qty-adjust-trigger"
             onClick={startEdit}
-            title="Click to adjust quantity before ship"
+            title="Click to adjust quantity before ship (increase or decrease)"
           >
             <strong>{request.quantity}</strong>
           </button>
@@ -198,7 +194,7 @@ export function StockRequestQuantityCell({
                 autoFocus
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="e.g. Only 3 units available in warehouse"
+                placeholder="e.g. Only 3 units available in warehouse, or increasing back to match stock on hand"
               />
             </label>
             <div className="modal-actions">

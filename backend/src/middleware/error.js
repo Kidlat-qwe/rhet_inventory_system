@@ -15,6 +15,8 @@ export function errorHandler(error, _req, res, _next) {
     status = 422; code = 'INVALID_REFERENCE'; message = 'A referenced record does not exist or is still in use';
   } else if (error.code === '23514' || error.code === '22P02') {
     status = 422; code = 'CONSTRAINT_VIOLATION'; message = 'The supplied value violates a data rule';
+  } else if (error.code === '42703') {
+    status = 503; code = 'SCHEMA_OUT_OF_DATE'; message = 'Database schema is missing required columns. Run backend migrations (041_stock_request_quantity_adjustment.sql or later).';
   }
 
   if (status >= 500) console.error(error);

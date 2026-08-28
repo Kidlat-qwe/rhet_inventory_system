@@ -169,7 +169,7 @@ export async function dispatchStockRequestWebhook(request, event, processor = nu
   const url = request.webhook_url || env.PSMS_WEBHOOK_URL;
   if (!url) return { skipped: true };
 
-  const processedByName = processor?.displayName || resolveProcessedByDisplayName(request);
+  let processedByName = processor?.displayName || resolveProcessedByDisplayName(request);
   const processedByUserId = processor?.userId || resolveProcessedByUserId(request);
 
   if (TERMINAL_EVENTS.has(event) && !processedByName) {

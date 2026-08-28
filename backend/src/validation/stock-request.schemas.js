@@ -102,7 +102,7 @@ export const rejectStockRequestSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
 });
 
-/** RHET staff reduces a pending line qty before ship (notifies CMS via webhook). */
+/** RHET staff adjusts a pending line qty before ship (notifies CMS via webhook). */
 export const adjustStockRequestQuantitySchema = z.object({
   body: z.object({
     quantity: z.coerce.number().int().positive(),
