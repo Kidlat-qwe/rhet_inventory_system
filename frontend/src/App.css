@@ -1574,7 +1574,10 @@ tr.row-selected{background:#f5f8ff}
 .qty-adjust-icon.ok{color:#1f7a4c;border-color:#b8e0c8}
 .qty-adjust-icon.cancel{color:#b42318;border-color:#f0c4c0}
 .qty-adjust-icon:hover{background:#f7f9fc}
-.qty-adjust-modal-backdrop{z-index:60}
+.qty-adjust-modal-backdrop{
+  z-index:1200;
+  left:0;
+}
 .batch-row-blocked{background:#fff8f0}
 .batch-component-row td{background:#fafbfc;color:#4a5565}
 .batch-component-name{padding-left:18px}

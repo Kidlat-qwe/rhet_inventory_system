@@ -144,7 +144,10 @@ export function StockRequestQuantityCell({
         <button
           type="button"
           className="qty-adjust-icon ok"
-          onClick={openRemarksModal}
+          onClick={(event) => {
+            event.stopPropagation()
+            openRemarksModal()
+          }}
           title="Save quantity"
           aria-label="Save quantity"
         >
@@ -162,11 +165,19 @@ export function StockRequestQuantityCell({
       </div>
 
       {modalOpen && createPortal(
-        <div className="modal-backdrop qty-adjust-modal-backdrop">
+        <div
+          className="modal-backdrop qty-adjust-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qty-adjust-modal-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) cancelEdit()
+          }}
+        >
           <form className="modal small" onSubmit={confirmAdjust}>
             <div className="modal-head">
               <div>
-                <h2>Adjust quantity</h2>
+                <h2 id="qty-adjust-modal-title">Adjust quantity</h2>
                 <p>
                   Change from <strong>{request.quantity}</strong> to <strong>{draftQty}</strong>
                   {Number.isFinite(Number(request.currentStocks))
