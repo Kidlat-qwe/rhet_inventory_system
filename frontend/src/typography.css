@@ -1079,7 +1079,7 @@ table tbody td .api-key-prefix {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 110px;
+  height: 120px;
   overflow: visible;
   pointer-events: none;
   z-index: 41;
@@ -1112,74 +1112,100 @@ table tbody td .api-key-prefix {
   transform-style: preserve-3d;
 }
 
-/* Landscape countdown banner hitched to Santa’s vehicle (not a freestanding flag). */
+/* Wide SVG wave banner hitched to Santa’s vehicle. */
 .santa-xmas-banner {
   position: relative;
   z-index: 2;
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  margin: 0 -10px 28px 0;
-  transform: rotateY(-3deg);
-  transform-style: preserve-3d;
-  filter: drop-shadow(0 3px 4px rgb(15 30 40 / 22%));
-  animation: santa-xmas-banner-sway 0.68s ease-in-out infinite;
+  margin: 0 -12px 26px 0;
+  filter: drop-shadow(0 4px 6px rgb(15 30 40 / 28%));
+  animation: santa-xmas-banner-sway 1.15s ease-in-out infinite;
 }
 
-.santa-xmas-banner-panel {
-  position: relative;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 1px;
-  min-width: 98px;
-  padding: 7px 12px 8px;
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 14%) 0%, transparent 38%),
-    linear-gradient(135deg, #1f6b3a 0%, #16532c 48%, #0f4022 100%);
-  border: 1.5px solid #f0d48a;
-  color: #fff8e8;
-  text-align: center;
-  line-height: 1.15;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 18%),
-    inset 0 -2px 0 rgb(8 40 20 / 28%),
-    0 2px 0 rgb(8 40 20 / 28%);
-  animation: santa-xmas-banner-flutter 1.5s ease-in-out infinite;
-  transform-origin: right center;
+.santa-xmas-banner-svg {
+  display: block;
+  width: min(280px, 58vw);
+  height: auto;
+  overflow: visible;
 }
 
-.santa-xmas-banner-panel::before,
-.santa-xmas-banner-panel::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffe7a8 0%, #d4a84a 55%, #8a6220 100%);
-  box-shadow: 0 1px 1px rgb(0 0 0 / 25%);
-  transform: translateY(-50%);
+.santa-xmas-banner-stop-a {
+  stop-color: #248a48;
 }
 
-.santa-xmas-banner-panel::before {
-  left: -4px;
+.santa-xmas-banner-stop-b {
+  stop-color: #176536;
 }
 
-.santa-xmas-banner-panel::after {
-  right: -4px;
+.santa-xmas-banner-stop-c {
+  stop-color: #0e3f22;
+}
+
+.santa-xmas-banner.is-christmas .santa-xmas-banner-stop-a {
+  stop-color: #d42b38;
+}
+
+.santa-xmas-banner.is-christmas .santa-xmas-banner-stop-b {
+  stop-color: #a51d28;
+}
+
+.santa-xmas-banner.is-christmas .santa-xmas-banner-stop-c {
+  stop-color: #71141c;
+}
+
+.santa-xmas-banner-shadow {
+  fill: rgb(15 30 40 / 22%);
+  transform: translate(1.5px, 2.5px);
+}
+
+.santa-xmas-banner-fill {
+  stroke: #f0d48a;
+  stroke-width: 1.6;
+}
+
+.santa-xmas-banner-stroke {
+  stroke: rgb(255 255 255 / 22%);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+
+.santa-xmas-banner-text {
+  fill: #fff8e8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  paint-order: stroke fill;
+  stroke: rgb(0 0 0 / 28%);
+  stroke-width: 1.2px;
 }
 
 .santa-xmas-banner-hitch {
   position: relative;
-  width: 22px;
+  width: 26px;
   height: 3px;
-  margin-left: -2px;
+  margin-left: -8px;
   border-radius: 2px;
   background: linear-gradient(90deg, #c9a46a 0%, #8a6230 55%, #5c3d18 100%);
   box-shadow: 0 1px 1px rgb(0 0 0 / 20%);
   flex-shrink: 0;
+  z-index: 3;
+}
+
+.santa-xmas-banner-hitch::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #7a5528;
+  border-radius: 50%;
+  background: #c9a46a;
+  transform: translate(-35%, -50%);
+  box-shadow: inset 0 0 0 1.5px #5c3d18;
 }
 
 .santa-xmas-banner-hitch::after {
@@ -1187,8 +1213,8 @@ table tbody td .api-key-prefix {
   position: absolute;
   right: -3px;
   top: 50%;
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border: 2px solid #7a5528;
   border-radius: 50%;
   background: #c9a46a;
@@ -1196,56 +1222,13 @@ table tbody td .api-key-prefix {
   box-shadow: inset 0 0 0 1.5px #5c3d18;
 }
 
-.santa-xmas-banner.is-christmas .santa-xmas-banner-panel {
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 14%) 0%, transparent 38%),
-    linear-gradient(135deg, #b4232e 0%, #8e1a22 50%, #6d1218 100%);
-  border-color: #f0d48a;
-}
-
-.santa-xmas-banner-eyebrow {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.92;
-  white-space: nowrap;
-}
-
-.santa-xmas-banner-count {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  text-shadow: 0 1px 0 rgb(0 0 0 / 25%);
-}
-
-.santa-xmas-banner-sub {
-  font-size: 7px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  opacity: 0.85;
-  white-space: nowrap;
-}
-
 @keyframes santa-xmas-banner-sway {
   0%,
   100% {
-    transform: rotateY(-3deg) translateY(0) rotate(-1deg);
+    transform: translateY(0) rotate(-1.5deg);
   }
   50% {
-    transform: rotateY(-3deg) translateY(-2px) rotate(1deg);
-  }
-}
-
-@keyframes santa-xmas-banner-flutter {
-  0%,
-  100% {
-    transform: skewY(0deg) scaleX(1);
-  }
-  50% {
-    transform: skewY(-1.2deg) scaleX(0.985);
+    transform: translateY(-2px) rotate(1.2deg);
   }
 }
 
@@ -1361,9 +1344,12 @@ table tbody td .api-key-prefix {
   .santa-sleigh-img.santa-frame-a,
   .santa-sleigh-img.santa-frame-b,
   .santa-sleigh-shadow,
-  .santa-xmas-banner,
-  .santa-xmas-banner-panel {
+  .santa-xmas-banner {
     animation: none !important;
+  }
+
+  .santa-xmas-banner-svg animate {
+    display: none;
   }
 
   .santa-sleigh-img.santa-frame-a {
@@ -1382,7 +1368,7 @@ table tbody td .api-key-prefix {
 
 @media (max-width: 760px) {
   .santa-sleigh-parade {
-    height: 88px;
+    height: 96px;
   }
 
   .santa-sleigh-figure {
@@ -1394,24 +1380,20 @@ table tbody td .api-key-prefix {
   }
 
   .santa-xmas-banner {
-    margin: 0 -8px 22px 0;
+    margin: 0 -8px 20px 0;
   }
 
-  .santa-xmas-banner-panel {
-    min-width: 84px;
-    padding: 5px 9px 6px;
+  .santa-xmas-banner-svg {
+    width: min(210px, 52vw);
+  }
+
+  .santa-xmas-banner-text {
+    font-size: 10px;
   }
 
   .santa-xmas-banner-hitch {
-    width: 16px;
-  }
-
-  .santa-xmas-banner-count {
-    font-size: 11px;
-  }
-
-  .santa-xmas-banner-eyebrow {
-    font-size: 7px;
+    width: 18px;
+    margin-left: -6px;
   }
 }
 

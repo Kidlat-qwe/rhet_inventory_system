@@ -21,7 +21,7 @@ Reusable presentational and modal components used across admin and user pages.
 | `ToolKitRawItemModal.jsx` | Popup to add or **edit** a Tool Kit raw child: **Create new**, **Use existing** (shared SKU/stock across parents), or rename item name / variation on an existing raw item. Typing a name that already exists prompts to link the shared item. |
 | `UniformItemModal.jsx` | Add / edit School or PE uniform. Toggle **Per piece** (Polo+Short / Shirt+Pants, each own stock) or **Set** (one SKU with independent set stock, type `Set` / SKU code `SET`). LCA T-Shirt uses `ItemModal` instead. |
 | `HelpAssistant.jsx` | Floating help button (bottom-right). Cleared from pagination via content/pager padding. Rule-based FAQ; visibility from org Settings (`helpAssistantEnabled`). |
-| `SantaSleighParade.jsx` | Compact Santa + reindeer (2-frame gallop) left→right, with a mini landscape **banner hitched to Santa’s vehicle** showing **Christmas Day countdown** in `Asia/Manila` (UTC+8). Part of snowfall. |
+| `SantaSleighParade.jsx` | Compact Santa + reindeer (2-frame gallop) left→right, with a **wide SVG wave banner** hitched to the vehicle (morphing S-curve cloth + text on a waving path) showing **Christmas Day countdown** in `Asia/Manila` (UTC+8). Part of snowfall. |
 | `SnowfallOverlay.jsx` | Full-viewport `react-snowfall` with real snowflake SVGs, plus `SantaSleighParade` (sleigh banner + reindeer + Santa). Pointer-events none. Toggled from org Settings (`snowfallEnabled`). |
 | `ActionsMenu.jsx` | Floating ellipsis (•••) actions menu rendered in a portal |
 | `StockRequestExportModal.jsx` | 2-step export: select all/multiple branches, then period (today / date / week / month). Delivered lines only → XLSX. |
