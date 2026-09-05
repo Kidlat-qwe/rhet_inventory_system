@@ -29,6 +29,29 @@ import * as usersController from '../controllers/users.controller.js';
 import * as settingsController from '../controllers/settings.controller.js';
 import { addShirtLogoSchema, updateSettingsSchema } from '../validation/settings.schemas.js';
 
+function normalizeCategoryImageUrl(value) {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  // ~10 MB binary ≈ ~13.3 MB base64 data URL; keep headroom under express.json 15mb.
+  if (raw.length > 14_000_000) {
+    const err = new Error('Category image is too large (max 10 MB).');
+    err.status = 422;
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  if (raw.startsWith('data:image/') || /^https?:\/\//i.test(raw)) return raw;
+  const err = new Error('categoryImageUrl must be a data:image URL or http(s) URL.');
+  err.status = 422;
+  err.code = 'VALIDATION_ERROR';
+  throw err;
+}
+
+function readCategoryImageBody(body) {
+  if (!body || (body.imageUrl === undefined && body.image_url === undefined)) return undefined;
+  return normalizeCategoryImageUrl(body.imageUrl ?? body.image_url ?? '');
+}
+
 export const api = Router();
 
 api.get('/me', (req, res) => success(res, camelize(req.admin)));
@@ -84,9 +107,10 @@ api.post('/categories', asyncHandler(async (req, res) => {
     });
   }
   try {
+    const imageUrl = readCategoryImageBody(req.body);
     const result = await pool.query(
-      'INSERT INTO categories(category_name, category_kind, has_child_skus, category_type) VALUES($1, $2, $3, $4) RETURNING *',
-      [name, kind, hasChildSkus, type],
+      'INSERT INTO categories(category_name, category_kind, has_child_skus, category_type, image_url) VALUES($1, $2, $3, $4, $5) RETURNING *',
+      [name, kind, hasChildSkus, type, imageUrl ?? null],
     );
     success(res, camelize(result.rows[0]), null, 201);
   } catch (err) {
@@ -170,16 +194,26 @@ api.patch('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(
       }
     }
 
+    const hasImage = req.body.imageUrl !== undefined || req.body.image_url !== undefined;
+    const imageUrl = hasImage ? readCategoryImageBody(req.body) : undefined;
+
+    const params = [name, nextKind, nextHasChild, nextType, id];
+    let imageSql = '';
+    if (hasImage) {
+      imageSql = ', image_url = $6';
+      params.push(imageUrl);
+    }
+
     const result = await pool.query(
       `UPDATE categories
        SET category_name = $1,
            category_kind = $2,
            has_child_skus = $3,
            category_type = $4,
-           updated_at = NOW()
+           updated_at = NOW()${imageSql}
        WHERE category_id = $5
        RETURNING *`,
-      [name, nextKind, nextHasChild, nextType, id],
+      params,
     );
     success(res, camelize(result.rows[0]));
   } catch (err) {

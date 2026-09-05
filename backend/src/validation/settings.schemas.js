@@ -12,6 +12,7 @@ export const updateSettingsSchema = z.object({
     shirtSizes: z.array(z.string().trim().min(1).max(20)).min(1).max(30).optional(),
     shirtLogos: z.array(z.string().trim().min(1).max(20)).min(1).max(30).optional(),
     helpAssistantEnabled: z.boolean().optional(),
+    snowfallEnabled: z.boolean().optional(),
   }).refine(
     (body) => Object.keys(body).length > 0,
     { message: 'Provide at least one settings field to update' },

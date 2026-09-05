@@ -137,6 +137,7 @@ export const createCategory = ({
   categoryType = 'MERCHANDISE',
   categoryKind = 'OTHER',
   hasChildSkus = false,
+  imageUrl = null,
 }) =>
   api('/categories', {
     method: 'POST',
@@ -145,10 +146,17 @@ export const createCategory = ({
       categoryType,
       categoryKind,
       hasChildSkus: Boolean(hasChildSkus),
+      ...(imageUrl !== undefined ? { imageUrl } : {}),
     }),
   }).then((response) => response.data)
 
-export const updateCategory = (categoryId, { categoryName, categoryType, categoryKind, hasChildSkus }) =>
+export const updateCategory = (categoryId, {
+  categoryName,
+  categoryType,
+  categoryKind,
+  hasChildSkus,
+  imageUrl,
+}) =>
   api(`/categories/${categoryId}`, {
     method: 'PATCH',
     body: JSON.stringify({
@@ -156,6 +164,7 @@ export const updateCategory = (categoryId, { categoryName, categoryType, categor
       ...(categoryType ? { categoryType } : {}),
       ...(categoryKind ? { categoryKind } : {}),
       ...(hasChildSkus !== undefined ? { hasChildSkus: Boolean(hasChildSkus) } : {}),
+      ...(imageUrl !== undefined ? { imageUrl } : {}),
     }),
   }).then((response) => response.data)
 

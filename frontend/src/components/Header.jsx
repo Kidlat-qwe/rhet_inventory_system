@@ -40,7 +40,15 @@ function formatBadgeCount(count) {
   return String(count)
 }
 
-export function Header({ page, menu, logout, admin, pendingRequests = [], onOpenStockRequests }) {
+export function Header({
+  page,
+  menu,
+  logout,
+  admin,
+  pendingRequests = [],
+  onOpenStockRequests,
+  breadcrumbs = null,
+}) {
   const roleLabel = String(admin?.role || '').toUpperCase() === 'USER' ? 'User' : 'Admin'
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -205,7 +213,26 @@ export function Header({ page, menu, logout, admin, pendingRequests = [], onOpen
     <>
       <header>
         <button type="button" className="menu-btn" onClick={menu} aria-label="Open menu">☰</button>
-        <div className="breadcrumbs">{roleLabel} <span>/</span> <strong>{page}</strong></div>
+        <div className="breadcrumbs">
+          {breadcrumbs?.length ? (
+            breadcrumbs.map((crumb, index) => (
+              <span key={`${crumb.label}-${index}`} className="breadcrumb-segment">
+                {index > 0 && <span className="breadcrumb-sep">/</span>}
+                {crumb.current || !crumb.onClick ? (
+                  <strong>{crumb.label}</strong>
+                ) : (
+                  <button type="button" className="breadcrumb-link" onClick={crumb.onClick}>
+                    {crumb.label}
+                  </button>
+                )}
+              </span>
+            ))
+          ) : (
+            <>
+              {roleLabel} <span>/</span> <strong>{page}</strong>
+            </>
+          )}
+        </div>
         <div className="header-actions">
           <div className="notification-wrap" ref={notificationsRef}>
             <button

@@ -6,6 +6,8 @@ import {
   categoryTypeOf,
   isUniformFamilyKind,
 } from '../constants/uniformOptions'
+import { readCategoryImageFile } from '../utils/categoryImage'
+import { CategoryThumb } from './CategoryThumb'
 
 function resolveUiType(categoryKind) {
   if (isUniformFamilyKind(categoryKind)) return 'UNIFORM'
@@ -34,6 +36,9 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
   const [uniformSubtype, setUniformSubtype] = useState(() => resolveUniformSubtype(initialKind))
   const [name, setName] = useState(category?.categoryName || '')
   const [hasChildSkus, setHasChildSkus] = useState(Boolean(category?.hasChildSkus) || initialKind === 'TOOL_KIT')
+  const [imageUrl, setImageUrl] = useState(category?.imageUrl || '')
+  const [imageError, setImageError] = useState('')
+  const [imageBusy, setImageBusy] = useState(false)
 
   const existingNames = useMemo(
     () => new Set(
@@ -70,7 +75,24 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
       categoryType,
       categoryKind: resolvedKind,
       hasChildSkus: resolvedKind === 'OTHER' ? hasChildSkus : false,
+      imageUrl: imageUrl || null,
     })
+  }
+
+  async function onImageSelected(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setImageError('')
+    setImageBusy(true)
+    try {
+      const dataUrl = await readCategoryImageFile(file)
+      setImageUrl(dataUrl)
+    } catch (err) {
+      setImageError(err.message || 'Could not attach image.')
+    } finally {
+      setImageBusy(false)
+    }
   }
 
   const typeHint = (() => {
@@ -136,6 +158,37 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
             <small className="field-hint">
               Unique display name. You can reuse a type with a different name.
             </small>
+          </label>
+          <label className="full-width category-image-field">
+            Category image
+            <div className="category-image-picker">
+              <CategoryThumb category={{ categoryName: resolvedName || 'Category', imageUrl }} size={56} />
+              <div className="category-image-actions">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={onImageSelected}
+                  disabled={busy || imageBusy}
+                />
+                {imageUrl && (
+                  <button
+                    type="button"
+                    className="secondary small-btn"
+                    onClick={() => {
+                      setImageUrl('')
+                      setImageError('')
+                    }}
+                    disabled={busy || imageBusy}
+                  >
+                    Remove image
+                  </button>
+                )}
+                <small className="field-hint">
+                  Optional icon shown on inventory rows for this category. PNG, JPG, WEBP, or GIF up to 10 MB.
+                </small>
+              </div>
+            </div>
+            {imageError && <small className="form-error">{imageError}</small>}
           </label>
           {uiType === 'OTHER' && (
             <label className="full-width category-toggle">

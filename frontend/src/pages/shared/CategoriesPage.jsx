@@ -33,18 +33,22 @@ export default function CategoriesPage({
 
   const { page, setPage, pageItems, total } = usePagination(categories, 15)
 
-  async function saveCategory({ categoryName, categoryType, categoryKind, hasChildSkus }) {
+  async function saveCategory({ categoryName, categoryType, categoryKind, hasChildSkus, imageUrl }) {
     if (modal?.mode === 'edit' && !canManage) return
     if (modal?.mode !== 'edit' && !allowCreate) return
     setBusy(true)
     setError('')
     try {
       if (modal?.mode === 'edit') {
-        await updateCategory(modal.category.categoryId, { categoryName, categoryType, categoryKind, hasChildSkus })
+        await updateCategory(modal.category.categoryId, {
+          categoryName, categoryType, categoryKind, hasChildSkus, imageUrl,
+        })
         setModal(null)
         await onRefresh()
       } else {
-        const created = await createCategory({ categoryName, categoryType, categoryKind, hasChildSkus })
+        const created = await createCategory({
+          categoryName, categoryType, categoryKind, hasChildSkus, imageUrl,
+        })
         setModal(null)
         await onRefresh()
         setCreatedOffer({

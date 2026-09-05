@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, Fragment } from 
 import { createPortal } from 'react-dom'
 import { ActionsMenu } from '../../components/ActionsMenu'
 import { EmptyState } from '../../components/EmptyState'
+import { Icon } from '../../components/Icon'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
+import { StockRequestExportModal } from '../../components/StockRequestExportModal'
 import { StockRequestQuantityCell } from '../../components/stock-requests/StockRequestQuantityCell'
 import { useSettings } from '../../context/SettingsContext'
 import { usePagination } from '../../hooks/usePagination'
@@ -74,6 +76,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
   const [issuedInvoice, setIssuedInvoice] = useState(null)
   const [groupInvoices, setGroupInvoices] = useState([])
   const [selectedShipIds, setSelectedShipIds] = useState(() => new Set())
+  const [exportOpen, setExportOpen] = useState(false)
 
   const branchOptions = useMemo(() => {
     const map = new Map()
@@ -471,6 +474,12 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             Each CMS cart is one request group. Open Manage, check the lines for this shipment, preview the invoice,
             then confirm ship. CMS Return Stock arrives on Pending for inspection, then moves to Returned as reusable or not reusable.
           </p>
+        </div>
+        <div>
+          <button type="button" className="secondary inventory-tool-btn" onClick={() => setExportOpen(true)}>
+            <Icon name="export" size={16} />
+            Export
+          </button>
         </div>
       </div>
       <div className="quick-filters">
@@ -1150,6 +1159,12 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             </div>
           </form>
         </div>
+      )}
+      {exportOpen && (
+        <StockRequestExportModal
+          requests={requests}
+          onClose={() => setExportOpen(false)}
+        />
       )}
     </>
   )

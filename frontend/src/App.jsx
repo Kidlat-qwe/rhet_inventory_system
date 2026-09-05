@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
+import './typography.css'
 import { EmptyState } from './components/EmptyState'
 import { Header } from './components/Header'
 import { HelpAssistant } from './components/HelpAssistant'
 import { PageLoading } from './components/PageLoading'
 import { ProcessingModalHost } from './components/ProcessingModal'
 import { Sidebar } from './components/Sidebar'
+import { SnowfallOverlay } from './components/SnowfallOverlay'
 import { ConfirmProvider } from './context/ConfirmContext'
 import { DEFAULT_SETTINGS, SettingsProvider } from './context/SettingsContext'
 import {
@@ -73,10 +75,17 @@ function AppShell() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [inventoryFocusCategoryId, setInventoryFocusCategoryId] = useState(null)
+  const [headerBreadcrumbs, setHeaderBreadcrumbs] = useState(null)
   const stockRequestsRefreshInFlight = useRef(false)
 
   const routeInfo = useMemo(() => pageFromPath(location.pathname), [location.pathname])
   const page = routeInfo?.page || 'Dashboard'
+
+  useEffect(() => {
+    if (page !== 'Inventory') {
+      setHeaderBreadcrumbs(null)
+    }
+  }, [page])
 
   const reload = useCallback(async (options = {}) => {
     const silent = Boolean(options?.silent)
@@ -242,6 +251,7 @@ function AppShell() {
               onRefresh={refreshQuietly}
               initialCategoryId={inventoryFocusCategoryId}
               onInitialCategoryConsumed={() => setInventoryFocusCategoryId(null)}
+              onBreadcrumbChange={setHeaderBreadcrumbs}
             />
           )
         case 'Stock Requests':
@@ -288,6 +298,7 @@ function AppShell() {
             onRefresh={refreshQuietly}
             initialCategoryId={inventoryFocusCategoryId}
             onInitialCategoryConsumed={() => setInventoryFocusCategoryId(null)}
+            onBreadcrumbChange={setHeaderBreadcrumbs}
           />
         )
       case 'Stock Requests':
@@ -336,10 +347,12 @@ function AppShell() {
             admin={admin}
             pendingRequests={stockRequests.filter((request) => request.status === 'PENDING')}
             onOpenStockRequests={() => goTo('Stock Requests')}
+            breadcrumbs={page === 'Inventory' ? headerBreadcrumbs : null}
           />
           <div className="content">{content}</div>
         </main>
         {settings.helpAssistantEnabled !== false && <HelpAssistant admin={admin} />}
+        <SnowfallOverlay />
       </div>
     </SettingsProvider>
   )

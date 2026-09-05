@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   shirtSizes: Object.freeze(['XS', 'S', 'M', 'L', 'XL', 'Teen']),
   shirtLogos: Object.freeze(['Beeli', 'LCA']),
   helpAssistantEnabled: true,
+  snowfallEnabled: false,
   updatedAt: null,
   updatedBy: null,
 })

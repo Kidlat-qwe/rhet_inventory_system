@@ -13,6 +13,8 @@ const icons = {
   help: <><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>,
   back: <><path d="M19 12H5M12 19l-7-7 7-7"/></>,
   search: <><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></>,
+  filter: <><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></>,
+  export: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>,
 }
 
 export function Icon({ name, size = 20 }) {

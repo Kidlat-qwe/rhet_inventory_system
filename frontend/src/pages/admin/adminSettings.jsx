@@ -108,6 +108,7 @@ function cloneForm(settings) {
     shirtSizes: [...(settings.shirtSizes || [])],
     shirtLogos: [...(settings.shirtLogos?.length ? settings.shirtLogos : ['Beeli', 'LCA'])],
     helpAssistantEnabled: settings.helpAssistantEnabled !== false,
+    snowfallEnabled: settings.snowfallEnabled === true,
   }
 }
 
@@ -125,6 +126,7 @@ export default function AdminSettings({ settings, onRefresh }) {
     source.timezone,
     source.defaultLowStockThreshold,
     source.helpAssistantEnabled,
+    source.snowfallEnabled,
     source.courierPresets,
     source.uniformSizes,
     source.shirtSizes,
@@ -145,6 +147,7 @@ export default function AdminSettings({ settings, onRefresh }) {
     source.timezone,
     source.defaultLowStockThreshold,
     source.helpAssistantEnabled,
+    source.snowfallEnabled,
     source.courierPresets,
     source.uniformSizes,
     source.shirtSizes,
@@ -156,6 +159,7 @@ export default function AdminSettings({ settings, onRefresh }) {
     || form.timezone !== baseline.timezone
     || Number(form.defaultLowStockThreshold) !== Number(baseline.defaultLowStockThreshold)
     || Boolean(form.helpAssistantEnabled) !== Boolean(baseline.helpAssistantEnabled)
+    || Boolean(form.snowfallEnabled) !== Boolean(baseline.snowfallEnabled)
     || !sameList(form.courierPresets, baseline.courierPresets)
     || !sameList(form.uniformSizes, baseline.uniformSizes)
     || !sameList(form.shirtSizes, baseline.shirtSizes)
@@ -189,6 +193,7 @@ export default function AdminSettings({ settings, onRefresh }) {
         shirtSizes: form.shirtSizes,
         shirtLogos: form.shirtLogos,
         helpAssistantEnabled: Boolean(form.helpAssistantEnabled),
+        snowfallEnabled: Boolean(form.snowfallEnabled),
       })
       await onRefresh?.()
       setSavedMessage('Settings saved.')
@@ -295,6 +300,25 @@ export default function AdminSettings({ settings, onRefresh }) {
                   </span>
                   <span className="settings-switch-state">
                     {form.helpAssistantEnabled ? 'On' : 'Off'}
+                  </span>
+                </span>
+              </label>
+              <label className="settings-switch-row">
+                <span>
+                  <strong>Snowfall</strong>
+                  <em>Falling snowflakes plus a mini Santa and reindeer parade along the bottom.</em>
+                </span>
+                <span className="settings-switch">
+                  <input
+                    type="checkbox"
+                    checked={form.snowfallEnabled}
+                    onChange={(e) => setField('snowfallEnabled', e.target.checked)}
+                  />
+                  <span className="settings-switch-track" aria-hidden="true">
+                    <span className="settings-switch-thumb" />
+                  </span>
+                  <span className="settings-switch-state">
+                    {form.snowfallEnabled ? 'On' : 'Off'}
                   </span>
                 </span>
               </label>

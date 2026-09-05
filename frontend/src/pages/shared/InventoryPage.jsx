@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
+import { CategoryThumb } from '../../components/CategoryThumb'
 import { TableHeadSelect } from '../../components/TableHeadSelect'
 import { DeleteInventoryModal } from '../../components/DeleteInventoryModal'
 import { EmptyState } from '../../components/EmptyState'
@@ -79,6 +80,66 @@ function CategoryStatus({ row }) {
   )
 }
 
+function StockMeter({ stocks, threshold, onAdjust, disabled, virtualLabel }) {
+  if (virtualLabel) {
+    return (
+      <div className="stock-meter">
+        <strong className="stock-meter-value">{stocks}</strong>
+        <small className="stock-meter-threshold">{virtualLabel}</small>
+      </div>
+    )
+  }
+
+  const safeThreshold = Math.max(0, Number(threshold) || 0)
+  const qty = Math.max(0, Number(stocks) || 0)
+  const max = Math.max(safeThreshold * 2, qty, 1)
+  const pct = Math.min(100, Math.round((qty / max) * 100))
+  const tone = qty <= 0 ? 'danger' : qty <= safeThreshold ? 'warn' : 'ok'
+
+  const content = (
+    <>
+      <strong className={`stock-meter-value${qty === 0 ? ' zero' : qty <= safeThreshold ? ' low' : ''}`}>{qty}</strong>
+      <div className="stock-meter-track" aria-hidden="true">
+        <div className={`stock-meter-fill tone-${tone}`} style={{ width: `${pct}%` }} />
+      </div>
+      <small className="stock-meter-threshold">Threshold: {safeThreshold}</small>
+    </>
+  )
+
+  if (!onAdjust) {
+    return <div className="stock-meter">{content}</div>
+  }
+
+  return (
+    <button type="button" className="stock-meter stock-meter-btn" onClick={onAdjust} disabled={disabled} title="Adjust stock">
+      {content}
+    </button>
+  )
+}
+
+function exportInventoryCsv(rows, categoryName) {
+  const headers = ['Item', 'SKU', 'Variation', 'Remarks', 'Stock', 'Selling price', 'Internal price', 'Status', 'Last updated']
+  const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+  const lines = rows.map((item) => [
+    item.itemName,
+    item.sku,
+    item.variation || '',
+    item.remarks || '',
+    item.stocks,
+    item.price,
+    item.internalSellingPrice,
+    effectiveItemStatus(item),
+    item.updatedAt,
+  ].map(escape).join(','))
+  const blob = new Blob([[headers.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${String(categoryName || 'inventory').replace(/[^\w.-]+/g, '_')}-items.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function InventoryPage({
   items,
   categories,
@@ -86,6 +147,7 @@ export default function InventoryPage({
   onRefresh,
   initialCategoryId = null,
   onInitialCategoryConsumed,
+  onBreadcrumbChange,
 }) {
   const settings = useSettings()
   const confirm = useConfirm()
@@ -107,6 +169,7 @@ export default function InventoryPage({
   const [editRawItem, setEditRawItem] = useState(null)
   const [rawError, setRawError] = useState('')
   const [expandedLearningKitIds, setExpandedLearningKitIds] = useState(() => new Set())
+  const [showDetailFilters, setShowDetailFilters] = useState(false)
   const [categoryTypeFilter, setCategoryTypeFilter] = useState(() => {
     try {
       const saved = sessionStorage.getItem('inventoryCategoryTypeFilter')
@@ -228,13 +291,6 @@ export default function InventoryPage({
     }
   }, [isUniformDetail, activeCategoryId, categories, detailItems, settings.uniformSizes, settings.shirtSizes])
 
-  const detailCounts = useMemo(() => ({
-    all: detailItems.length,
-    low: detailItems.filter((item) => effectiveItemStatus(item) === 'LOW_STOCK').length,
-    out: detailItems.filter((item) => effectiveItemStatus(item) === 'OUT_OF_STOCK').length,
-    inactive: detailItems.filter((item) => effectiveItemStatus(item) === 'INACTIVE').length,
-  }), [detailItems])
-
   const detailShown = useMemo(() => detailItems.filter((item) => {
     const matchesSearch = !search || `${item.itemName} ${item.sku}`.toLowerCase().includes(search.toLowerCase())
     const matchesStatus = !statusFilter || effectiveItemStatus(item) === statusFilter
@@ -324,6 +380,20 @@ export default function InventoryPage({
     setUniformSizeFilter('')
     setExpandedLearningKitIds(new Set())
   }
+
+  useEffect(() => {
+    if (!onBreadcrumbChange) return undefined
+    if (activeCategory) {
+      onBreadcrumbChange([
+        { label: 'Inventory', onClick: closeCategory },
+        { label: 'Categories', onClick: closeCategory },
+        { label: activeCategory.categoryName, current: true },
+      ])
+    } else {
+      onBreadcrumbChange([{ label: 'Inventory', current: true }])
+    }
+    return () => onBreadcrumbChange(null)
+  }, [activeCategory, onBreadcrumbChange])
 
   function openToolKitRawPage(inventoryId) {
     setActiveToolKitId(inventoryId)
@@ -768,98 +838,124 @@ export default function InventoryPage({
 
   // ---- Detail view: raw stocks for a single category ----
   if (activeCategory) {
+    const detailSubtitle = isToolKitCategory(activeCategory.categoryId, categories)
+      ? 'Parent items with raw child SKUs. Stock = how many kits can be built.'
+      : isLearningKitCategory(activeCategory.categoryId, categories)
+        ? 'Bundles with a category BOM. Stock = available kits from components.'
+        : 'Manage raw stocks and item availability.'
+
     return (
-      <>
-        <div className="page-title inventory-title">
+      <div className="inventory-detail-page">
+        <div className="page-title inventory-title inventory-detail-head">
           <div>
-            <button type="button" className="back-link" onClick={closeCategory}>← Back to categories</button>
             <h1>{activeCategory.categoryName}</h1>
-            <p>
-              {isToolKitCategory(activeCategory.categoryId, categories)
-                ? 'Parent items with raw child SKUs. Stock = how many kits can be built.'
-                : isLearningKitCategory(activeCategory.categoryId, categories)
-                  ? 'Bundles with a category BOM. Stock = available kits from components.'
-                  : 'Raw stocks for this category.'}
-            </p>
+            <p>{detailSubtitle}</p>
           </div>
           <div>
             <button type="button" className="primary" onClick={startAdd}>＋ Add new item</button>
           </div>
         </div>
-        <div className="quick-filters">
-          {[
-            ['All items', detailCounts.all, ''],
-            ['Low stock', detailCounts.low, 'LOW_STOCK'],
-            ['Out of stock', detailCounts.out, 'OUT_OF_STOCK'],
-            ['Inactive', detailCounts.inactive, 'INACTIVE'],
-          ].map(([label, count, status], index) => (
-            <button key={label} type="button" className={statusFilter === status ? 'selected' : ''} onClick={() => setStatusFilter(status)}>
-              <span className={index === 1 ? 'amber' : index === 2 ? 'red' : ''}>{count}</span>{label}
-            </button>
-          ))}
-        </div>
         {error && <div className="page-error">{error}</div>}
-        <section className="panel inventory-panel">
-          <div className="toolbar">
-            <label className="search">⌕<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by SKU or item name..." /></label>
-            {isUniformDetail && (
-              <>
-                <select
-                  aria-label="Filter by gender"
-                  value={uniformGenderFilter}
-                  onChange={(e) => {
-                    setUniformGenderFilter(e.target.value)
-                    setUniformTypeFilter('')
-                  }}
-                >
-                  <option value="">All genders</option>
-                  {uniformFilterOptions.genders.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-                <select
-                  aria-label="Filter by type"
-                  value={uniformTypeFilter}
-                  onChange={(e) => setUniformTypeFilter(e.target.value)}
-                >
-                  <option value="">All types</option>
-                  {(uniformGenderFilter
-                    ? [
-                      ...getUniformTypesForCategory(activeCategoryId, categories, uniformGenderFilter, {
-                        shirtLogos: settings.shirtLogos,
-                      }),
-                      ...(isLcaShirtCategory(activeCategoryId, categories) ? [] : [UNIFORM_SET_TYPE]),
-                    ].filter((value, index, list) => list.indexOf(value) === index)
-                    : uniformFilterOptions.types
-                  ).map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-                <select
-                  aria-label="Filter by size"
-                  value={uniformSizeFilter}
-                  onChange={(e) => setUniformSizeFilter(e.target.value)}
-                >
-                  <option value="">All sizes</option>
-                  {uniformFilterOptions.sizes.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </>
-            )}
-            <span>{detailShown.length} items</span>
+        <div className="inventory-detail-controls">
+          <label className="inventory-detail-search">
+            <Icon name="search" size={18} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by SKU or item name..."
+            />
+          </label>
+          <div className="inventory-detail-toolbar-actions">
+            <button
+              type="button"
+              className={`secondary inventory-tool-btn${showDetailFilters ? ' selected' : ''}`}
+              onClick={() => setShowDetailFilters((open) => !open)}
+            >
+              <Icon name="filter" size={16} />
+              Filters
+            </button>
+            <button
+              type="button"
+              className="secondary inventory-tool-btn"
+              onClick={() => exportInventoryCsv(detailShown, activeCategory.categoryName)}
+              disabled={!detailShown.length}
+            >
+              <Icon name="export" size={16} />
+              Export
+            </button>
           </div>
+        </div>
+        {showDetailFilters && (
+          <div className="inventory-detail-filters">
+              <select
+                aria-label="Filter by status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="LOW_STOCK">Low stock</option>
+                <option value="OUT_OF_STOCK">Out of stock</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+              {isUniformDetail && (
+                <>
+                  <select
+                    aria-label="Filter by gender"
+                    value={uniformGenderFilter}
+                    onChange={(e) => {
+                      setUniformGenderFilter(e.target.value)
+                      setUniformTypeFilter('')
+                    }}
+                  >
+                    <option value="">All genders</option>
+                    {uniformFilterOptions.genders.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Filter by type"
+                    value={uniformTypeFilter}
+                    onChange={(e) => setUniformTypeFilter(e.target.value)}
+                  >
+                    <option value="">All types</option>
+                    {(uniformGenderFilter
+                      ? [
+                        ...getUniformTypesForCategory(activeCategoryId, categories, uniformGenderFilter, {
+                          shirtLogos: settings.shirtLogos,
+                        }),
+                        ...(isLcaShirtCategory(activeCategoryId, categories) ? [] : [UNIFORM_SET_TYPE]),
+                      ].filter((value, index, list) => list.indexOf(value) === index)
+                      : uniformFilterOptions.types
+                    ).map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Filter by size"
+                    value={uniformSizeFilter}
+                    onChange={(e) => setUniformSizeFilter(e.target.value)}
+                  >
+                    <option value="">All sizes</option>
+                    {uniformFilterOptions.sizes.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+          )}
+        <section className="panel inventory-panel inventory-detail-panel">
           <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-            <table className="inventory-table" style={{ width: '100%', minWidth: '1180px' }}>
+            <table className="inventory-table inventory-detail-table" style={{ width: '100%', minWidth: '1180px' }}>
               <thead>
                 <tr>
-                  <th>Item name</th>
+                  <th>Item</th>
                   <th>SKU</th>
                   <th>Variation</th>
                   <th>Remarks</th>
                   <th>Stock</th>
                   <th>Selling price</th>
-                  <th>Internal selling price</th>
+                  <th>Internal price</th>
                   <th>Status</th>
                   <th>Last updated</th>
                   <th />
@@ -880,7 +976,7 @@ export default function InventoryPage({
                   <tr key={item.inventoryId}>
                     <td>
                       <div className="item-cell">
-                        <div className="product-thumb"><Icon name="box" /></div>
+                        <CategoryThumb category={activeCategory} size={44} />
                         <div>
                           {isToolKit ? (
                             <button
@@ -920,29 +1016,19 @@ export default function InventoryPage({
                       )}
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="stock-link"
-                        onClick={() => {
-                          if (isVirtualKit) {
-                            setError(isToolKit
-                              ? 'Tool Kit stock is computed from raw child items. Open the item to manage raw stock.'
-                              : 'Bundle stock is computed from included category stocks (BOM). Restock those raw items, or edit the kit BOM — do not adjust kit stock directly.')
-                            return
-                          }
-                          setStock(item)
-                        }}
-                        title={isVirtualKit
-                          ? (isToolKit
-                            ? 'Available kits = limited by raw child item stocks'
-                            : 'Available kits = limited by included category stocks')
-                          : 'Adjust stock'}
-                      >
-                        <strong className={item.stocks === 0 ? 'zero' : item.stocks <= item.lowStockThreshold ? 'low' : ''}>{item.stocks}</strong>
-                        <small>
-                          {isVirtualKit ? 'Available kits (from BOM)' : `Threshold: ${item.lowStockThreshold}`}
-                        </small>
-                      </button>
+                      <StockMeter
+                        stocks={item.stocks}
+                        threshold={item.lowStockThreshold}
+                        virtualLabel={isVirtualKit
+                          ? (isToolKit ? 'Available kits (from BOM)' : 'Available kits (from BOM)')
+                          : null}
+                        disabled={busy}
+                        onAdjust={isVirtualKit ? () => {
+                          setError(isToolKit
+                            ? 'Tool Kit stock is computed from raw child items. Open the item to manage raw stock.'
+                            : 'Bundle stock is computed from included category stocks (BOM). Restock those raw items, or edit the kit BOM — do not adjust kit stock directly.')
+                        } : () => setStock(item)}
+                      />
                     </td>
                     <td className="metric-cell"><strong>{formatCurrency(item.price)}</strong></td>
                     <td className="metric-cell"><strong>{formatCurrency(item.internalSellingPrice)}</strong></td>
@@ -1039,7 +1125,7 @@ export default function InventoryPage({
           <Pagination page={detailPager.page} pageSize={15} total={detailPager.total} onPageChange={detailPager.setPage} noun="items" />
         </section>
         {modals}
-      </>
+      </div>
     )
   }
 
@@ -1055,9 +1141,10 @@ export default function InventoryPage({
       {error && <div className="page-error">{error}</div>}
       <section className="panel inventory-panel">
         <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-          <table className="inventory-table" style={{ width: '100%', minWidth: '760px' }}>
+          <table className="inventory-table" style={{ width: '100%', minWidth: '820px' }}>
             <thead>
               <tr>
+                <th className="inventory-icon-col" aria-label="Category image" />
                 <th>
                   <TableHeadSelect
                     value={categoryTypeFilter}
@@ -1075,6 +1162,16 @@ export default function InventoryPage({
             <tbody>
               {summaryRows.length ? summaryPager.pageItems.map((row) => (
                 <tr key={row.categoryId}>
+                  <td className="inventory-icon-col">
+                    <button
+                      type="button"
+                      className="category-thumb-link"
+                      onClick={() => openCategory(row.categoryId)}
+                      aria-label={`Open ${row.categoryName}`}
+                    >
+                      <CategoryThumb category={row} size={40} />
+                    </button>
+                  </td>
                   <td>
                     <button type="button" className="category-link" onClick={() => openCategory(row.categoryId)}>
                       <strong>{row.categoryName}</strong>
@@ -1090,7 +1187,7 @@ export default function InventoryPage({
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <EmptyState
                       title={
                         categoryTypeFilter === 'SUPPLIES'

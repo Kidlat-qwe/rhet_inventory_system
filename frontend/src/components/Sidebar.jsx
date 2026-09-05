@@ -28,8 +28,10 @@ export function Sidebar({ open, close, admin, pendingRequests, attentionOrders =
     <aside className={`sidebar ${open ? 'open' : ''}`}>
       <div className="brand">
         <img className="brand-logo" src="/rhet-logo.png" alt="RHET logo" />
-        <div><strong>{settings.organizationName || 'RHET Inventory System'}</strong><span>Merchandise Management</span></div>
-        <button type="button" className="close-menu" onClick={close}>×</button>
+        <div className="brand-text">
+          <strong>{settings.organizationName || 'RHET Inventory System'}</strong>
+        </div>
+        <button type="button" className="close-menu" onClick={close} aria-label="Close menu">×</button>
       </div>
       <nav>
         <p>Workspace</p>

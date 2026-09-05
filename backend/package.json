@@ -16,6 +16,7 @@
     "db:rename-shirt-skus": "node scripts/rename-shirt-skus-to-shi.mjs",
     "db:rename-shirt-items": "node scripts/rename-shirt-items-to-beeli-lca.mjs",
     "db:seed-shirt-logo-sizes": "node scripts/seed-shirt-logo-sizes.mjs",
+    "db:seed-school-uniform-blouse-skirt": "node scripts/seed-school-uniform-blouse-skirt.mjs",
     "db:update-uniform-internal-prices": "node scripts/update-uniform-internal-prices.mjs",
     "db:purge-operational-data": "node scripts/purge-operational-data.mjs"
   },

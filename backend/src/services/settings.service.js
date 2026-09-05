@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   shirtSizes: Object.freeze(['XS', 'S', 'M', 'L', 'XL', 'Teen']),
   shirtLogos: Object.freeze(['Beeli', 'LCA']),
   helpAssistantEnabled: true,
+  snowfallEnabled: false,
 });
 
 const ALLOWED_TIMEZONES = new Set(['Asia/Manila', 'Asia/Singapore', 'UTC']);
@@ -72,6 +73,7 @@ function mergeSettings(stored = {}) {
     shirtSizes,
     shirtLogos,
     helpAssistantEnabled: stored.helpAssistantEnabled === false ? false : true,
+    snowfallEnabled: stored.snowfallEnabled === true,
   };
 }
 
@@ -168,6 +170,10 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     next.helpAssistantEnabled = Boolean(patch.helpAssistantEnabled);
   }
 
+  if (patch.snowfallEnabled !== undefined) {
+    next.snowfallEnabled = Boolean(patch.snowfallEnabled);
+  }
+
   const document = {
     organizationName: next.organizationName,
     timezone: next.timezone,
@@ -177,6 +183,7 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     shirtSizes: next.shirtSizes,
     shirtLogos: next.shirtLogos,
     helpAssistantEnabled: next.helpAssistantEnabled,
+    snowfallEnabled: next.snowfallEnabled,
   };
 
   const result = await pool.query(
