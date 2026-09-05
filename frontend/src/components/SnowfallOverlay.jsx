@@ -11,7 +11,7 @@ const SNOWFLAKE_SRCS = [
 ]
 
 /**
- * Full-viewport decorative snowfall + Santa/reindeer parade.
+ * Full-viewport decorative snowfall + Santa/reindeer parade with Christmas countdown flag.
  * Pointer-events none so UI stays clickable.
  * Controlled by Settings → Features → Snowfall.
  */

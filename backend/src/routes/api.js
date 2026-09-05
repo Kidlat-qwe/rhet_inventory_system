@@ -123,7 +123,9 @@ api.post('/categories', asyncHandler(async (req, res) => {
     throw err;
   }
 }));
-api.patch('/categories/:id', requireAdminRole, validate(idParams), asyncHandler(async (req, res) => {
+// Authenticated staff may update categories (including image), matching POST /categories.
+// Delete remains admin-only.
+api.patch('/categories/:id', validate(idParams), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const name = String(req.body.categoryName || '').trim();
   if (name.length < 2 || name.length > 100) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
+import { CategoryModal } from '../../components/CategoryModal'
 import { CategoryThumb } from '../../components/CategoryThumb'
 import { TableHeadSelect } from '../../components/TableHeadSelect'
 import { DeleteInventoryModal } from '../../components/DeleteInventoryModal'
@@ -38,6 +39,7 @@ import {
   createToolKitChildItem,
   deleteInventoryItem,
   removeToolKitChildItem,
+  updateCategory,
   updateInventoryItem,
 } from '../../services/inventoryApi'
 import { formatCurrency, formatDate, normalizeInventoryText, truncateText } from '../../utils/format'
@@ -144,6 +146,7 @@ export default function InventoryPage({
   items,
   categories,
   canManage = false,
+  canEditCategory = true,
   onRefresh,
   initialCategoryId = null,
   onInitialCategoryConsumed,
@@ -160,6 +163,7 @@ export default function InventoryPage({
   const [uniformSizeFilter, setUniformSizeFilter] = useState('')
   const [editItem, setEditItem] = useState(null)
   const [uniformModal, setUniformModal] = useState(null) // { category, editSeed? }
+  const [editCategory, setEditCategory] = useState(null)
   const [stock, setStock] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -656,8 +660,38 @@ export default function InventoryPage({
     }
   }
 
+  async function saveCategory({ categoryName, categoryType, categoryKind, hasChildSkus, imageUrl }) {
+    if (!canEditCategory || !editCategory?.categoryId) return
+    setBusy(true)
+    setError('')
+    try {
+      await updateCategory(editCategory.categoryId, {
+        categoryName,
+        categoryType,
+        categoryKind,
+        hasChildSkus,
+        imageUrl,
+      })
+      setEditCategory(null)
+      await onRefresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const modals = (
     <>
+      {editCategory && canEditCategory && (
+        <CategoryModal
+          category={editCategory}
+          categories={categories}
+          busy={busy}
+          onClose={() => !busy && setEditCategory(null)}
+          onSave={saveCategory}
+        />
+      )}
       {editItem && (
         <ItemModal
           item={editItem}
@@ -851,7 +885,17 @@ export default function InventoryPage({
             <h1>{activeCategory.categoryName}</h1>
             <p>{detailSubtitle}</p>
           </div>
-          <div>
+          <div className="inventory-title-actions">
+            {canEditCategory && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setEditCategory(activeCategory)}
+                disabled={busy}
+              >
+                Edit category
+              </button>
+            )}
             <button type="button" className="primary" onClick={startAdd}>＋ Add new item</button>
           </div>
         </div>
@@ -1182,7 +1226,18 @@ export default function InventoryPage({
                   <td><CategoryStatus row={row} /></td>
                   <td><span className="muted">{formatDate(row.lastUpdated)}</span></td>
                   <td>
-                    <ActionsMenu items={[{ key: 'view', label: 'View raw stocks', onClick: () => openCategory(row.categoryId) }]} />
+                    <ActionsMenu
+                      items={[
+                        { key: 'view', label: 'View raw stocks', onClick: () => openCategory(row.categoryId) },
+                        ...(canEditCategory
+                          ? [{
+                              key: 'edit-category',
+                              label: 'Edit category',
+                              onClick: () => setEditCategory(row),
+                            }]
+                          : []),
+                      ]}
+                    />
                   </td>
                 </tr>
               )) : (

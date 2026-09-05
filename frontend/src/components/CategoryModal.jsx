@@ -159,37 +159,46 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
               Unique display name. You can reuse a type with a different name.
             </small>
           </label>
-          <label className="full-width category-image-field">
-            Category image
+          <div className="full-width category-image-field">
+            <span className="field-label">Category image</span>
             <div className="category-image-picker">
               <CategoryThumb category={{ categoryName: resolvedName || 'Category', imageUrl }} size={56} />
               <div className="category-image-actions">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  onChange={onImageSelected}
-                  disabled={busy || imageBusy}
-                />
-                {imageUrl && (
-                  <button
-                    type="button"
-                    className="secondary small-btn"
-                    onClick={() => {
-                      setImageUrl('')
-                      setImageError('')
-                    }}
-                    disabled={busy || imageBusy}
-                  >
-                    Remove image
-                  </button>
-                )}
+                <div className="category-image-buttons">
+                  <label className={`secondary small-btn category-image-upload${busy || imageBusy ? ' is-disabled' : ''}`}>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      onChange={onImageSelected}
+                      disabled={busy || imageBusy}
+                      hidden
+                    />
+                    {imageBusy ? 'Reading…' : imageUrl ? 'Change image' : 'Upload image'}
+                  </label>
+                  {imageUrl && (
+                    <button
+                      type="button"
+                      className="secondary small-btn"
+                      onClick={() => {
+                        setImageUrl('')
+                        setImageError('')
+                      }}
+                      disabled={busy || imageBusy}
+                    >
+                      Remove image
+                    </button>
+                  )}
+                </div>
                 <small className="field-hint">
-                  Optional icon shown on inventory rows for this category. PNG, JPG, WEBP, or GIF up to 10 MB.
+                  {isEdit
+                    ? 'Replace or remove the icon shown on inventory rows for this category.'
+                    : 'Optional icon shown on inventory rows for this category.'}
+                  {' '}PNG, JPG, WEBP, or GIF up to 10 MB.
                 </small>
               </div>
             </div>
             {imageError && <small className="form-error">{imageError}</small>}
-          </label>
+          </div>
           {uiType === 'OTHER' && (
             <label className="full-width category-toggle">
               <span className="category-toggle-row">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ActionsMenu } from '../../components/ActionsMenu'
 import { CategoryModal } from '../../components/CategoryModal'
+import { CategoryThumb } from '../../components/CategoryThumb'
 import { DeleteCategoryModal } from '../../components/DeleteCategoryModal'
 import { EmptyState } from '../../components/EmptyState'
 import { Pagination } from '../../components/Pagination'
@@ -19,6 +20,7 @@ export default function CategoriesPage({
   onOpenInventory,
 }) {
   const allowCreate = Boolean(canCreate || canManage)
+  const canEdit = Boolean(canManage || allowCreate)
   const [modal, setModal] = useState(null) // { mode: 'create' } | { mode: 'edit', category }
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [createdOffer, setCreatedOffer] = useState(null) // { categoryId, categoryName }
@@ -34,7 +36,7 @@ export default function CategoriesPage({
   const { page, setPage, pageItems, total } = usePagination(categories, 15)
 
   async function saveCategory({ categoryName, categoryType, categoryKind, hasChildSkus, imageUrl }) {
-    if (modal?.mode === 'edit' && !canManage) return
+    if (modal?.mode === 'edit' && !canEdit) return
     if (modal?.mode !== 'edit' && !allowCreate) return
     setBusy(true)
     setError('')
@@ -95,7 +97,7 @@ export default function CategoriesPage({
             {canManage
               ? 'Manage merchandise categories used across inventory items. Delete is only available here (not on Inventory).'
               : allowCreate
-                ? 'Browse categories and add new ones. Edit and delete remain admin-only.'
+                ? 'Browse categories, add new ones, and update details including the category image. Delete remains admin-only.'
                 : 'Browse merchandise categories used across inventory items.'}
           </p>
         </div>
@@ -111,49 +113,58 @@ export default function CategoriesPage({
       <section className="panel recent">
         <div className="panel-head"><div><h2>All categories</h2><p>{categories.length} categories available</p></div></div>
         <div className="overflow-x-auto rounded-lg table-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: canManage ? '820px' : '700px' }}>
+          <table style={{ width: '100%', minWidth: canManage ? '900px' : canEdit ? '820px' : '760px' }}>
             <thead>
               <tr>
+                <th className="inventory-icon-col" aria-label="Category image" />
                 <th>Category</th>
                 <th>Type</th>
                 <th>Kind</th>
                 <th>Items</th>
                 <th>Status</th>
                 <th>Created</th>
-                {canManage && <th>Actions</th>}
+                {(canEdit || canManage) && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {pageItems.length ? pageItems.map((category) => {
                 const itemCount = itemCountByCategory.get(category.categoryId) || 0
+                const actionItems = [
+                  ...(canEdit
+                    ? [{ key: 'edit', label: 'Edit', onClick: () => setModal({ mode: 'edit', category }) }]
+                    : []),
+                  ...(canManage
+                    ? [{
+                        key: 'delete',
+                        label: 'Delete',
+                        danger: true,
+                        title: itemCount
+                          ? `Delete category and ${itemCount} item${itemCount === 1 ? '' : 's'} (type name to confirm)`
+                          : 'Delete category (type name to confirm)',
+                        onClick: () => {
+                          setError('')
+                          setDeleteTarget(category)
+                        },
+                      }]
+                    : []),
+                ]
                 return (
                   <tr key={category.categoryId}>
+                    <td className="inventory-icon-col">
+                      <CategoryThumb category={category} size={40} />
+                    </td>
                     <td><strong>{category.categoryName}</strong></td>
                     <td className="muted">{categoryTypeLabel(category.categoryType)}</td>
                     <td className="muted">{categoryKindLabel(category.categoryKind, category.hasChildSkus)}</td>
                     <td className="muted">{itemCount}</td>
                     <td><StatusBadge status={category.status} /></td>
                     <td className="muted">{formatDate(category.createdAt)}</td>
-                    {canManage && (
+                    {actionItems.length > 0 && (
                       <td>
                         <ActionsMenu
                           label={`Actions for ${category.categoryName}`}
                           disabled={busy}
-                          items={[
-                            { key: 'edit', label: 'Edit', onClick: () => setModal({ mode: 'edit', category }) },
-                            {
-                              key: 'delete',
-                              label: 'Delete',
-                              danger: true,
-                              title: itemCount
-                                ? `Delete category and ${itemCount} item${itemCount === 1 ? '' : 's'} (type name to confirm)`
-                                : 'Delete category (type name to confirm)',
-                              onClick: () => {
-                                setError('')
-                                setDeleteTarget(category)
-                              },
-                            },
-                          ]}
+                          items={actionItems}
                         />
                       </td>
                     )}
@@ -161,7 +172,7 @@ export default function CategoriesPage({
                 )
               }) : (
                 <tr>
-                  <td colSpan={canManage ? 7 : 6}>
+                  <td colSpan={(canEdit || canManage) ? 8 : 7}>
                     <EmptyState
                       title="No categories found"
                       message={allowCreate
@@ -179,7 +190,7 @@ export default function CategoriesPage({
           <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="categories" />
         </div>
       </section>
-      {allowCreate && modal && (modal.mode !== 'edit' || canManage) && (
+      {allowCreate && modal && (modal.mode !== 'edit' || canEdit) && (
         <CategoryModal
           category={modal.mode === 'edit' ? modal.category : null}
           categories={categories}

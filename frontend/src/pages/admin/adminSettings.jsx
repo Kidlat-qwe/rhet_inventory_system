@@ -306,7 +306,7 @@ export default function AdminSettings({ settings, onRefresh }) {
               <label className="settings-switch-row">
                 <span>
                   <strong>Snowfall</strong>
-                  <em>Falling snowflakes plus a mini Santa and reindeer parade along the bottom.</em>
+                  <em>Falling snowflakes plus a mini Santa and reindeer parade (countdown banner on the sleigh, Asia/Manila) along the bottom.</em>
                 </span>
                 <span className="settings-switch">
                   <input
