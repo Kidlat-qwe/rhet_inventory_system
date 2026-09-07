@@ -39,6 +39,7 @@ function branchKey(row) {
 }
 
 function isShippablePreview(row) {
+  if (String(row.requestKind || row.request_kind || 'REQUEST').toUpperCase() === 'RETURN') return false;
   if (String(row.status || '').toUpperCase() !== 'PENDING') return false;
   const matched = Boolean(row.matchedSku || row.matched_sku || row.inventoryId || row.inventory_id);
   if (!matched) return false;
@@ -49,6 +50,9 @@ function isShippablePreview(row) {
 }
 
 function blockedReason(row) {
+  if (String(row.requestKind || row.request_kind || 'REQUEST').toUpperCase() === 'RETURN') {
+    return 'Branch return lines are inspected, not shipped';
+  }
   if (String(row.status || '').toUpperCase() !== 'PENDING') {
     return `Request is already ${String(row.status || 'unknown').toLowerCase()}`;
   }
@@ -169,10 +173,16 @@ export async function previewStockRequestInvoice(requestIds) {
 export async function issueStockRequestInvoiceAndShip(requestIds, admin) {
   const preview = await previewStockRequestInvoice(requestIds);
   if (!preview.shippableLineCount) {
+    const blockedSummary = (preview.blocked || [])
+      .map((row) => `${row.itemName}: ${row.reason}`)
+      .filter(Boolean)
+      .join('; ');
     throw new AppError(
       409,
       'NO_SHIPPABLE_LINES',
-      'No pending lines in this group have enough warehouse stock to ship',
+      blockedSummary
+        || 'No pending lines in this group have enough warehouse stock to ship',
+      { blocked: preview.blocked || [] },
     );
   }
 

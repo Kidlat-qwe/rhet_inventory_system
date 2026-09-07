@@ -12,7 +12,7 @@ Base: `/api/v1/stock-requests` (Firebase auth).
 | POST | `/:id/reject` | Reject pending line |
 | PATCH | `/:id/quantity` | Adjust pending line qty before ship (`{ quantity, remarks }`); webhook `stock_request.quantity_adjusted`. Requires migration `041_stock_request_quantity_adjustment.sql`. |
 | POST | `/invoices/preview` | Invoice draft for selected line ids (ready lines only) |
-| POST | `/invoices` | Save invoice snapshot + ship those lines |
+| POST | `/invoices` | Save invoice snapshot + ship those lines. Returns **409 NO_SHIPPABLE_LINES** (with per-line reasons) when none of the selected pending lines have enough warehouse stock. |
 | GET | `/invoices?batchReference=&sourceSystem=` | Invoices for a CMS cart group |
 | GET | `/invoices/:invoiceId` | Reprint payload |
 

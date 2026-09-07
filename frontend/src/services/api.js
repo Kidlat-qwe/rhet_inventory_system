@@ -78,7 +78,18 @@ export async function api(path, options = {}) {
       },
     })
     const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error?.message || 'Request failed')
+    if (!response.ok) {
+      const message = payload.error?.message || 'Request failed'
+      const blocked = payload.error?.details?.blocked
+      if (Array.isArray(blocked) && blocked.length) {
+        const detail = blocked
+          .map((row) => `${row.itemName || row.requestId}: ${row.reason}`)
+          .filter(Boolean)
+          .join('; ')
+        throw new Error(detail ? `${message} (${detail})` : message)
+      }
+      throw new Error(message)
+    }
     return payload
   } finally {
     if (showProcessing) endProcessing()

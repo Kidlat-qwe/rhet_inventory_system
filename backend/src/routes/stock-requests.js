@@ -15,6 +15,12 @@ import {
 
 export const stockRequests = Router();
 
+// Avoid stale browser 304 caches of pending/stock fields during ship workflows.
+stockRequests.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 stockRequests.get('/', validate(stockRequestListSchema), controller.list);
 stockRequests.post('/invoices/preview', validate(stockRequestInvoicePreviewSchema), controller.previewInvoice);
 stockRequests.post('/invoices', validate(stockRequestInvoicePreviewSchema), controller.issueInvoiceAndShip);

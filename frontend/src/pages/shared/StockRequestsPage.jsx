@@ -384,6 +384,17 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
     setError('')
     try {
       const preview = await previewStockRequestInvoice(readyIds)
+      if (!preview?.shippableLineCount || !(preview.lines || []).length) {
+        const reasons = (preview?.blocked || [])
+          .map((row) => `${row.itemName || row.requestId}: ${row.reason}`)
+          .filter(Boolean)
+          .join('; ')
+        setError(
+          reasons
+            || 'No selected lines have enough warehouse stock to ship. Reduce quantity or restock first.',
+        )
+        return
+      }
       setIssuedInvoice(null)
       setInvoicePreview(preview)
       setMode('invoice')
@@ -396,8 +407,14 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
 
   async function confirmInvoiceAndShip() {
     if (!selectedGroup || !pickedVerified) return
-    const readyIds = selectedShippableLines.map((request) => request.requestId)
-    if (!readyIds.length) return
+    // Ship exactly the lines from the draft preview (not a re-derived selection that may be stale).
+    const readyIds = (invoicePreview?.lines || [])
+      .map((line) => line.requestId)
+      .filter(Boolean)
+    if (!readyIds.length) {
+      setError('Invoice draft has no shippable lines. Go back, refresh stock, and preview again.')
+      return
+    }
     setInvoiceBusy(true)
     setError('')
     try {
