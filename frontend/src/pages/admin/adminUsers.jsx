@@ -219,8 +219,8 @@ export default function AdminUsers({ users, currentAdmin, onRefresh }) {
               )}
             </tbody>
           </table>
-          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="users" />
         </div>
+        <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="users" />
       </section>
 
       {showAddModal && (

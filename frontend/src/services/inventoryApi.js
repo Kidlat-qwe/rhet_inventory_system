@@ -10,7 +10,8 @@ function queryString(params = {}) {
 }
 
 export const fetchMe = () => api('/me').then((response) => response.data)
-export const fetchDashboard = () => api('/dashboard').then((response) => response.data)
+export const fetchDashboard = (params = {}) =>
+  api(`/dashboard${queryString(params)}`).then((response) => response.data)
 export const fetchSettings = () => api('/settings').then((response) => response.data)
 export const updateSettings = (body) =>
   api('/settings', { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatDate, initials } from '../utils/format'
+import { isDarkModeEnabled, setDarkModeEnabled } from '../utils/theme'
 import { firebaseConfigured, sendPasswordResetForCurrentUser } from '../services/firebase'
 import { Icon } from './Icon'
 
@@ -56,6 +57,7 @@ export function Header({
   const [resetBusy, setResetBusy] = useState(false)
   const [resetError, setResetError] = useState('')
   const [resetSent, setResetSent] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => isDarkModeEnabled())
   const [seenIds, setSeenIds] = useState(() => readSeenIds())
   const [toast, setToast] = useState(null)
   const notificationsRef = useRef(null)
@@ -209,9 +211,14 @@ export function Header({
     await logout?.()
   }
 
+  function toggleDarkMode(enabled) {
+    setDarkMode(enabled)
+    setDarkModeEnabled(enabled)
+  }
+
   return (
     <>
-      <header>
+      <header className="app-header">
         <button type="button" className="menu-btn" onClick={menu} aria-label="Open menu">☰</button>
         <div className="breadcrumbs">
           {breadcrumbs?.length ? (
@@ -326,6 +333,20 @@ export function Header({
                   <strong>{admin?.fullName || 'User'}</strong>
                   <span>{accountEmail || 'No email on file'}</span>
                 </div>
+                <label className="account-menu-switch" role="menuitemcheckbox" aria-checked={darkMode}>
+                  <span>Dark mode</span>
+                  <span className="settings-switch">
+                    <input
+                      type="checkbox"
+                      checked={darkMode}
+                      onChange={(e) => toggleDarkMode(e.target.checked)}
+                    />
+                    <span className="settings-switch-track" aria-hidden="true">
+                      <span className="settings-switch-thumb" />
+                    </span>
+                    <span className="settings-switch-state">{darkMode ? 'On' : 'Off'}</span>
+                  </span>
+                </label>
                 <button type="button" role="menuitem" onClick={openForgotPassword}>
                   Forgot password
                 </button>

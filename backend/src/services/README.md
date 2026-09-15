@@ -4,9 +4,9 @@ Business logic modules used by Express controllers and routes.
 
 | File | Purpose |
 |------|---------|
-| `settings.service.js` | Org settings singleton (`system_settings`): branding, timezone, default low-stock threshold, courier presets, uniform/shirt sizes, **shirt logos** (Beeli / LCA), Help Assistant flag. `POST /settings/shirt-logos` appends a logo for any authenticated user. |
+| `settings.service.js` | Org settings singleton (`system_settings`): branding, timezone, default low-stock threshold, courier presets, uniform/shirt sizes, **shirt logos** (Beeli / LCA), Help Assistant, Snowfall flags. `POST /settings/shirt-logos` appends a logo for any authenticated user. |
 | `inventory.service.js` | Categories (`category_type` Merchandise/Supplies + `category_kind`). Kind `LEARNING_KIT` is shown as **Bundle** in the UI and can apply to Learning Kit, Moving Up Kit, and similar packs. Bundle BOM quantity is configurable per slot (default 1). Inventory CRUD, movements, Tool Kit children |
-| `dashboard.service.js` | Dashboard summary, category stocks/value, recent activity, monthly consumption, reorder alerts, **MTD channel sales** (RELEASED / ONLINE_SALE / MANUAL_SALE units + ₱) |
+| `dashboard.service.js` | Dashboard summary, category stocks/value, recent activity, monthly consumption, reorder alerts, **channel sales** filtered by period (`period=year` default / `period=month&month=YYYY-MM`, Asia/Manila). Snapshot cards (items/stocks/alerts) stay current inventory. |
 | `users.service.js` | User list / create / role / status |
 | `manual-order.service.js` | HQ / Scoring courier shipments + partner ingest webhooks |
 | `manual-order-fulfillment.js` | Status transitions (Shipping Management–aligned) |

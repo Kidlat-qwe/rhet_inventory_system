@@ -700,8 +700,8 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
               )}
             </tbody>
           </table>
-          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="request groups" />
         </div>
+        <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="request groups" />
       </section>
 
       {selectedGroup && mode === 'manage' && (

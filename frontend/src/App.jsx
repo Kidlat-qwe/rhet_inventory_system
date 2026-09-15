@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import './typography.css'
+import './theme-dark.css'
 import { EmptyState } from './components/EmptyState'
 import { Header } from './components/Header'
 import { HelpAssistant } from './components/HelpAssistant'
@@ -95,7 +96,7 @@ function AppShell() {
       const me = await fetchMe()
       const roleIsAdmin = String(me?.role || 'ADMIN').toUpperCase() === 'ADMIN'
       const [dash, cats, inv, mov, onlineMov, requests, online, manual, adminList, clients, appSettings] = await Promise.all([
-        fetchDashboard(),
+        fetchDashboard({ period: 'year' }),
         fetchCategories(),
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
         fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
@@ -153,7 +154,7 @@ function AppShell() {
         fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
         fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
         fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),
-        fetchDashboard(),
+        fetchDashboard({ period: 'year' }),
       ])
       setStockRequests(requests.data)
       setInventory(inv.data)

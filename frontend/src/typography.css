@@ -42,13 +42,15 @@
 }
 
 /* ── Header (clean top bar like mock) ── */
-header {
+.app-header {
   min-height: 58px;
   height: auto;
   padding: 12px 24px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--header-accent);
   box-shadow: none;
+  /* Keep account / notification menus above page cards and snowfall. */
+  z-index: 50;
 }
 
 .menu-btn {
@@ -254,23 +256,23 @@ header {
 /* ── Page layout ── */
 .content {
   padding: 24px 28px 40px;
-  background: #f4f6f8;
+  background: var(--bg, #f4f6f8);
 }
 
 .app > main {
-  background: #f4f6f8;
+  background: var(--bg, #f4f6f8);
 }
 
 .page-title h1 {
   font-size: 1.65rem;
   line-height: 1.2;
-  color: #1a2a3f;
+  color: var(--text, #1a2a3f);
 }
 
 .page-title p {
   font-size: var(--fs-sm);
   line-height: 1.45;
-  color: #6b7588;
+  color: var(--muted, #6b7588);
 }
 
 /* ── Buttons ── */
@@ -327,7 +329,7 @@ table tbody td {
   font-size: var(--fs-sm);
   padding: 12px 14px;
   line-height: 1.45;
-  color: #3a4556;
+  color: var(--text, #3a4556);
   font-weight: 700;
 }
 
@@ -342,27 +344,27 @@ table tbody td a {
 }
 
 table tbody tr:nth-child(even) {
-  background: #f8fafb;
+  background: var(--surface-row-alt, #f8fafb);
 }
 
 table tbody tr:hover {
-  background: #eef4f7;
+  background: var(--surface-row-hover, #eef4f7);
 }
 
 td small {
   font-size: var(--fs-xs);
-  color: #6b7588;
+  color: var(--muted, #6b7588);
 }
 
 table tbody td strong {
   font-size: var(--fs-sm);
-  color: #1f2a3a;
+  color: var(--text-strong, #1f2a3a);
   font-weight: 700;
 }
 
 table tbody td small {
   font-size: var(--fs-xs);
-  color: #6b7588;
+  color: var(--muted, #6b7588);
   margin-top: 3px;
 }
 
@@ -381,7 +383,7 @@ table tbody td small {
 
 .category-link small {
   font-size: var(--fs-xs);
-  color: #6b7588;
+  color: var(--muted, #6b7588);
   margin-top: 3px;
   font-weight: 700;
 }
@@ -394,7 +396,7 @@ table tbody td small {
 td strong.metric-cell {
   font-size: var(--fs-md);
   font-weight: 700;
-  color: #1f2a3a;
+  color: var(--text-strong, #1f2a3a);
   letter-spacing: -0.01em;
 }
 
@@ -415,7 +417,7 @@ td strong.metric-cell {
 .inventory-panel td .muted,
 table tbody td .muted {
   font-size: var(--fs-xs);
-  color: #6b7588;
+  color: var(--muted, #6b7588);
   font-weight: 700;
 }
 
@@ -543,6 +545,28 @@ table tbody td .api-key-prefix {
 .notification-link,
 .account-menu button {
   font-size: var(--fs-sm);
+}
+
+.account-menu-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: var(--fs-sm);
+  color: #2b3448;
+  cursor: pointer;
+}
+
+.account-menu-switch:hover {
+  background: #f4f6fa;
+}
+
+.account-menu-switch .settings-switch-state {
+  min-width: 22px;
+  font-size: var(--fs-2xs);
 }
 
 /* ── Login ── */
@@ -706,14 +730,14 @@ table tbody td .api-key-prefix {
   flex: 1 1 360px;
   min-width: 240px;
   height: 44px;
-  border: 1px solid #dfe5eb;
+  border: 1px solid var(--line, #dfe5eb);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface, #fff);
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0 14px;
-  color: #8b94a1;
+  color: var(--muted, #8b94a1);
   box-shadow: 0 1px 2px rgb(21 48 63 / 4%);
 }
 
@@ -722,7 +746,7 @@ table tbody td .api-key-prefix {
   outline: 0;
   width: 100%;
   font-size: var(--fs-sm);
-  color: #2f3a4d;
+  color: var(--text, #2f3a4d);
   background: transparent;
   padding: 0;
 }
@@ -741,9 +765,9 @@ table tbody td .api-key-prefix {
   height: 44px;
   padding: 0 16px;
   border-radius: 10px;
-  background: #fff;
-  border: 1px solid #dfe5eb;
-  color: #4a5565;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #dfe5eb);
+  color: var(--text, #4a5565);
   font-weight: 600;
   box-shadow: 0 1px 2px rgb(21 48 63 / 4%);
 }
@@ -760,24 +784,24 @@ table tbody td .api-key-prefix {
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid #e3e8ee;
+  border: 1px solid var(--line, #e3e8ee);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface, #fff);
 }
 
 .inventory-detail-filters select {
   height: 36px;
-  border: 1px solid #dfe2e7;
+  border: 1px solid var(--line, #dfe2e7);
   border-radius: 8px;
-  background: #fff;
-  color: #4a5565;
+  background: var(--surface-2, #fff);
+  color: var(--text, #4a5565);
   padding: 0 10px;
   font-size: var(--fs-sm);
 }
 
 .inventory-detail-panel {
   overflow: hidden;
-  border: 1px solid #e3e8ee;
+  border: 1px solid var(--line, #e3e8ee);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgb(21 48 63 / 6%);
 }
@@ -787,20 +811,21 @@ table tbody td .api-key-prefix {
 }
 
 .inventory-detail-table thead th {
-  background: #f7f9fb;
-  color: #667281;
-  border-bottom: 1px solid #e3e8ee;
+  background: var(--surface-toolbar, #f7f9fb);
+  color: var(--muted, #667281);
+  border-bottom: 1px solid var(--line, #e3e8ee);
   padding: 14px 16px;
 }
 
 .inventory-detail-table tbody td {
   padding: 16px;
-  background: #fff;
+  background: transparent;
+  color: var(--text);
 }
 
 .inventory-detail-table .item-cell strong {
   font-size: var(--fs-md);
-  color: #1a2a3f;
+  color: var(--text-strong, #1a2a3f);
 }
 
 .inventory-detail-table .sku-chip {
@@ -849,12 +874,36 @@ table tbody td .api-key-prefix {
   align-items: center;
 }
 
-.category-image-upload {
-  display: inline-flex;
+.category-image-upload,
+.modal .category-image-upload {
+  position: relative;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
+  width: auto !important;
   cursor: pointer;
-  margin: 0;
+  margin: 0 !important;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  color: #485365;
+}
+
+/* Beat `.modal input { display:block }` so the native file control never paints. */
+.category-image-upload .category-image-file-input,
+.modal .category-image-upload input[type='file'] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  appearance: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .category-image-upload.is-disabled {
@@ -926,7 +975,7 @@ table tbody td .api-key-prefix {
 
 /* ── Stock request export modal ── */
 .stock-request-export-modal .export-period-fieldset {
-  border: 1px solid #e3e8ee;
+  border: 1px solid var(--line, #e3e8ee);
   border-radius: 10px;
   padding: 12px 14px 14px;
   margin: 0 0 14px;
@@ -936,7 +985,7 @@ table tbody td .api-key-prefix {
   padding: 0 6px;
   font-size: var(--fs-sm);
   font-weight: 700;
-  color: #1a2a3f;
+  color: var(--text-strong, #1a2a3f);
 }
 
 .export-step-indicator {
@@ -946,7 +995,7 @@ table tbody td .api-key-prefix {
   gap: 8px;
   margin-bottom: 14px;
   font-size: var(--fs-sm);
-  color: #8b94a1;
+  color: var(--muted, #8b94a1);
 }
 
 .export-step-indicator .is-active {
@@ -955,7 +1004,7 @@ table tbody td .api-key-prefix {
 }
 
 .export-step-indicator .is-done {
-  color: #4a5565;
+  color: var(--text, #4a5565);
   font-weight: 600;
 }
 
@@ -969,9 +1018,9 @@ table tbody td .api-key-prefix {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #e3e8ee;
+  border: 1px solid var(--line, #e3e8ee);
   border-radius: 10px;
-  background: #f8fafb;
+  background: var(--surface-inset, #f8fafb);
   cursor: pointer;
 }
 
@@ -987,21 +1036,21 @@ table tbody td .api-key-prefix {
 .export-period-option strong {
   display: block;
   font-size: var(--fs-sm);
-  color: #1a2a3f;
+  color: var(--text-strong, #1a2a3f);
 }
 
 .export-period-option small {
   display: block;
   margin-top: 2px;
   font-size: var(--fs-xs);
-  color: #6b7588;
+  color: var(--muted, #6b7588);
   font-weight: 500;
 }
 
 .export-branch-list {
-  border: 1px solid #e3e8ee;
+  border: 1px solid var(--line, #e3e8ee);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface, #fff);
   padding: 12px;
   margin-bottom: 12px;
 }
@@ -1016,7 +1065,7 @@ table tbody td .api-key-prefix {
 
 .export-branch-list-head strong {
   font-size: var(--fs-sm);
-  color: #1a2a3f;
+  color: var(--text-strong, #1a2a3f);
 }
 
 .export-branch-list-actions {
@@ -1038,15 +1087,15 @@ table tbody td .api-key-prefix {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid #e8edf2;
+  border: 1px solid var(--line, #e8edf2);
   border-radius: 8px;
-  background: #f8fafb;
+  background: var(--surface-inset, #f8fafb);
   cursor: pointer;
 }
 
 .export-branch-check span {
   font-size: var(--fs-sm);
-  color: #2f3a4d;
+  color: var(--text, #2f3a4d);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1057,9 +1106,9 @@ table tbody td .api-key-prefix {
   margin-top: 4px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #f4f6f8;
+  background: var(--surface-inset, #f4f6f8);
   font-size: var(--fs-sm);
-  color: #4a5565;
+  color: var(--muted, #4a5565);
 }
 
 .settings-card-body .settings-switch-row + .settings-switch-row {
@@ -1399,7 +1448,7 @@ table tbody td .api-key-prefix {
 
 /* ── Responsive fine-tuning ── */
 @media (max-width: 760px) {
-  header {
+  .app-header {
     min-height: 62px;
     padding: 8px 14px;
   }

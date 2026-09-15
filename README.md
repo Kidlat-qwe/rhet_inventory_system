@@ -60,7 +60,7 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
 - `stock_requests` lines share `batch_reference` (one CMS cart). `request_kind` is `REQUEST` (HQ restock) or `RETURN` (CMS Return Stock). CMS returns start **Pending** for inspection; reusable adds warehouse qty + RETURN movement, then both outcomes move to **Returned**. `stock_request_invoices (1) → (many) stock_request_invoice_lines`: one invoice per warehouse shipment at internal selling price.
 - `users (1) → (many) stock_movements`: records the responsible authenticated user.
 - `users` also relates to inventory through `created_by` and `updated_by`.
-- `system_settings`: singleton JSON document for org defaults (branding, timezone, low-stock default, couriers, uniform sizes, Help Assistant).
+- `system_settings`: singleton JSON document for org defaults (branding, timezone, low-stock default, couriers, uniform sizes, Help Assistant, Snowfall).
 
 IDs are UUIDs, money is `NUMERIC(12,2)`, quantities are non-negative integers, identifiers and emails are unique, timestamps are timezone-aware, and foreign keys prevent orphan records. Search, status, category, update-time, and movement-history indexes cover common access paths. Timestamp updates are explicitly written by the API rather than PostgreSQL trigger functions, keeping the schema usable on Windows installations where Application Control blocks `plpgsql.dll`.
 

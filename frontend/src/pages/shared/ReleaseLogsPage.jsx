@@ -124,59 +124,61 @@ export default function ReleaseLogsPage({ requests, onlineMovements = [] }) {
         </div>
 
         {tab === 'stock-requests' ? (
-          <div
-            className="overflow-x-auto rounded-lg table-scroll"
-            style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
-          >
-            <table style={{ width: '100%', minWidth: '1100px' }}>
-              <thead>
-                <tr>
-                  <th>Released</th>
-                  <th>Requested by</th>
-                  <th>Item</th>
-                  <th>Qty released</th>
-                  <th>Matched SKU</th>
-                  <th>Reason</th>
-                  <th>Processed by</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {releaseLogs.length ? stockPager.pageItems.map((request) => (
-                  <tr key={request.requestId}>
-                    <td className="muted">{formatDate(request.processedAt || request.updatedAt || request.createdAt)}</td>
-                    <td>
-                      <strong>{request.requestedBy}</strong>
-                      <small>{request.sourceSystem}{request.externalReference ? ` · ${request.externalReference}` : ''}</small>
-                    </td>
-                    <td>
-                      <strong>{request.itemName || request.categoryName}</strong>
-                      <small>
-                        {[request.categoryName, request.gender, request.itemType, request.sizeLabel]
-                          .filter(Boolean)
-                          .join(' · ') || '—'}
-                      </small>
-                    </td>
-                    <td>
-                      <b className="negative">-{request.quantity}</b>
-                    </td>
-                    <td><code className="api-key-prefix">{request.matchedSku || '—'}</code></td>
-                    <td className="reason-cell">{request.reason || '—'}</td>
-                    <td>{request.processedByName || '—'}</td>
-                    <td><StatusBadge status={request.status} /></td>
-                  </tr>
-                )) : (
+          <>
+            <div
+              className="overflow-x-auto rounded-lg table-scroll"
+              style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc', WebkitOverflowScrolling: 'touch' }}
+            >
+              <table style={{ width: '100%', minWidth: '1100px' }}>
+                <thead>
                   <tr>
-                    <td colSpan={8}>
-                      <EmptyState
-                        title="No releasing logs yet"
-                        message="Approved stock requests that deduct inventory will appear here as release logs."
-                      />
-                    </td>
+                    <th>Released</th>
+                    <th>Requested by</th>
+                    <th>Item</th>
+                    <th>Qty released</th>
+                    <th>Matched SKU</th>
+                    <th>Reason</th>
+                    <th>Processed by</th>
+                    <th>Status</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {releaseLogs.length ? stockPager.pageItems.map((request) => (
+                    <tr key={request.requestId}>
+                      <td className="muted">{formatDate(request.processedAt || request.updatedAt || request.createdAt)}</td>
+                      <td>
+                        <strong>{request.requestedBy}</strong>
+                        <small>{request.sourceSystem}{request.externalReference ? ` · ${request.externalReference}` : ''}</small>
+                      </td>
+                      <td>
+                        <strong>{request.itemName || request.categoryName}</strong>
+                        <small>
+                          {[request.categoryName, request.gender, request.itemType, request.sizeLabel]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                        </small>
+                      </td>
+                      <td>
+                        <b className="negative">-{request.quantity}</b>
+                      </td>
+                      <td><code className="api-key-prefix">{request.matchedSku || '—'}</code></td>
+                      <td className="reason-cell">{request.reason || '—'}</td>
+                      <td>{request.processedByName || '—'}</td>
+                      <td><StatusBadge status={request.status} /></td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={8}>
+                        <EmptyState
+                          title="No releasing logs yet"
+                          message="Approved stock requests that deduct inventory will appear here as release logs."
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
             <Pagination
               page={stockPager.page}
               pageSize={15}
@@ -184,7 +186,7 @@ export default function ReleaseLogsPage({ requests, onlineMovements = [] }) {
               onPageChange={stockPager.setPage}
               noun="releases"
             />
-          </div>
+          </>
         ) : (
           <>
             <MovementTable

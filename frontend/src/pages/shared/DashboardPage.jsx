@@ -14,25 +14,51 @@ import {
   YAxis,
 } from 'recharts'
 import { EmptyState } from '../../components/EmptyState'
+import { DashboardMonthPicker } from '../../components/DashboardMonthPicker'
 import { Icon } from '../../components/Icon'
 import { MovementTable } from '../../components/MovementTable'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { usePagination } from '../../hooks/usePagination'
+import { fetchDashboard } from '../../services/inventoryApi'
 import { formatCurrency, greetingName, truncateText } from '../../utils/format'
+import { chartThemeColors, useIsDarkTheme } from '../../utils/theme'
 
 const CHART_COLORS = ['#395fc7', '#7656c5', '#2e9b82', '#df9a43', '#5b8def', '#9b6bcc', '#e06b6b', '#4aa3a2']
 const REORDER_PAGE_SIZE = 8
+const CATEGORY_STOCKS_PAGE_SIZE = 6
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 
-function chartTooltipStyle() {
+function chartTooltipStyle(theme) {
   return {
     borderRadius: 10,
-    border: '1px solid #e5e9f0',
+    border: `1px solid ${theme.tooltipBorder}`,
+    background: theme.tooltipBg,
+    color: theme.tooltipText,
     fontSize: 12,
   }
 }
 
+function dashboardFetchParams(periodKey) {
+  if (!periodKey || periodKey === 'year') return { period: 'year' }
+  return { period: 'month', month: periodKey }
+}
+
+function periodScopeLabel(periodKey, periodMeta) {
+  if (periodMeta?.label) return periodMeta.label
+  if (!periodKey || periodKey === 'year') return 'this year'
+  const match = String(periodKey).match(/^(\d{4})-(\d{2})$/)
+  if (!match) return 'this period'
+  const monthIndex = Number(match[2]) - 1
+  return `${MONTH_NAMES[monthIndex] || match[2]} ${match[1]}`
+}
+
 function InventoryValueChart({ categories, totalValue }) {
+  const isDark = useIsDarkTheme()
+  const theme = chartThemeColors(isDark)
   const data = (categories || [])
     .map((row) => ({
       name: row.categoryName,
@@ -65,7 +91,7 @@ function InventoryValueChart({ categories, totalValue }) {
             ))}
           </Pie>
           <Tooltip
-            contentStyle={chartTooltipStyle()}
+            contentStyle={chartTooltipStyle(theme)}
             formatter={(value, _name, props) => [
               formatCurrency(value),
               props?.payload?.name || 'Category',
@@ -94,36 +120,106 @@ function InventoryValueChart({ categories, totalValue }) {
 }
 
 function CategoryStocksChart({ categories }) {
-  const data = (categories || [])
-    .map((row) => ({
-      name: row.categoryName,
-      stocks: Number(row.stocks) || 0,
-      items: Number(row.itemCount) || 0,
-    }))
-    .filter((row) => row.stocks > 0 || row.items > 0)
+  const isDark = useIsDarkTheme()
+  const theme = chartThemeColors(isDark)
+  const data = useMemo(() => (
+    (categories || [])
+      .map((row) => ({
+        name: row.categoryName,
+        stocks: Number(row.stocks) || 0,
+        items: Number(row.itemCount) || 0,
+      }))
+      .filter((row) => row.stocks > 0 || row.items > 0)
+      .sort((a, b) => b.stocks - a.stocks || a.name.localeCompare(b.name))
+  ), [categories])
+
+  const totalPages = Math.max(1, Math.ceil(data.length / CATEGORY_STOCKS_PAGE_SIZE))
+  const [page, setPage] = useState(0)
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages - 1))
+  }, [totalPages])
 
   if (!data.length) {
     return <EmptyState title="No category stock yet" message="Category stock levels will appear here once items are added." />
   }
 
+  const start = page * CATEGORY_STOCKS_PAGE_SIZE
+  const pageData = data.slice(start, start + CATEGORY_STOCKS_PAGE_SIZE)
+  const end = start + pageData.length
+  const yMax = Math.max(...data.map((row) => row.stocks), 1)
+  const canPrev = page > 0
+  const canNext = page < totalPages - 1
+  const tickStyle = { fontSize: 11, fill: theme.tick }
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" />
-        <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-28} textAnchor="end" height={60} />
-        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-        <Tooltip contentStyle={chartTooltipStyle()} />
-        <Bar dataKey="stocks" name="Stocks" radius={[6, 6, 0, 0]}>
-          {data.map((entry, index) => (
-            <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="category-stocks-chart">
+      <div className="category-stocks-chart-toolbar">
+        <span className="category-stocks-chart-range">
+          Showing {start + 1}–{end} of {data.length}
+        </span>
+        <div className="category-stocks-chart-nav" role="group" aria-label="Category chart pages">
+          <button
+            type="button"
+            className="category-stocks-chart-arrow"
+            aria-label="Previous categories"
+            disabled={!canPrev}
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
+          >
+            ‹
+          </button>
+          <span className="category-stocks-chart-page">
+            {page + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            className="category-stocks-chart-arrow"
+            aria-label="Next categories"
+            disabled={!canNext}
+            onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart data={pageData} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} />
+          <XAxis
+            dataKey="name"
+            tick={tickStyle}
+            interval={0}
+            angle={-22}
+            textAnchor="end"
+            height={60}
+            stroke={theme.axis}
+            tickFormatter={(value) => truncateText(String(value || ''), 16)}
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={tickStyle}
+            stroke={theme.axis}
+            domain={[0, Math.ceil(yMax * 1.05) || 1]}
+          />
+          <Tooltip contentStyle={chartTooltipStyle(theme)} />
+          <Bar dataKey="stocks" name="Stocks" radius={[6, 6, 0, 0]} maxBarSize={48}>
+            {pageData.map((entry, index) => (
+              <Cell
+                key={entry.name}
+                fill={CHART_COLORS[(start + index) % CHART_COLORS.length]}
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
 
 function MonthlyConsumptionChart({ rows }) {
+  const isDark = useIsDarkTheme()
+  const theme = chartThemeColors(isDark)
   const data = (rows || []).map((row) => ({
     month: row.monthLabel || row.monthKey,
     quantity: Number(row.quantity) || 0,
@@ -138,13 +234,23 @@ function MonthlyConsumptionChart({ rows }) {
     )
   }
 
+  const tickStyle = { fontSize: 11, fill: theme.tick }
+
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" />
-        <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={50} />
-        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-        <Tooltip contentStyle={chartTooltipStyle()} />
+        <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} />
+        <XAxis
+          dataKey="month"
+          tick={{ fontSize: 10, fill: theme.tick }}
+          interval={0}
+          angle={-20}
+          textAnchor="end"
+          height={50}
+          stroke={theme.axis}
+        />
+        <YAxis allowDecimals={false} tick={tickStyle} stroke={theme.axis} />
+        <Tooltip contentStyle={chartTooltipStyle(theme)} />
         <Line
           type="monotone"
           dataKey="quantity"
@@ -327,24 +433,64 @@ function ReorderPointPanel({ items }) {
             )}
           </tbody>
         </table>
-        <Pagination
+      </div>
+      <Pagination
           page={page}
           pageSize={REORDER_PAGE_SIZE}
           total={total}
           onPageChange={setPage}
           noun="reorder items"
         />
-      </div>
     </div>
   )
 }
 
 export default function DashboardPage({ dashboard, admin, goInventory, goMovements }) {
-  const summary = dashboard?.summary || {}
-  const categories = dashboard?.categories || []
-  const recentMovements = dashboard?.recentMovements || []
-  const monthlyConsumption = dashboard?.monthlyConsumption || []
-  const reorderItems = dashboard?.reorderItems || []
+  const [periodKey, setPeriodKey] = useState('year')
+  const [periodDashboard, setPeriodDashboard] = useState(dashboard || null)
+  const [periodBusy, setPeriodBusy] = useState(false)
+  const [periodError, setPeriodError] = useState('')
+
+  useEffect(() => {
+    if (periodKey === 'year' && dashboard) {
+      setPeriodDashboard(dashboard)
+    }
+  }, [dashboard, periodKey])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPeriod() {
+      if (periodKey === 'year' && dashboard) {
+        setPeriodDashboard(dashboard)
+        setPeriodError('')
+        return
+      }
+
+      setPeriodBusy(true)
+      setPeriodError('')
+      try {
+        const data = await fetchDashboard(dashboardFetchParams(periodKey))
+        if (!cancelled) setPeriodDashboard(data)
+      } catch (err) {
+        if (!cancelled) setPeriodError(err.message || 'Unable to load dashboard period.')
+      } finally {
+        if (!cancelled) setPeriodBusy(false)
+      }
+    }
+
+    loadPeriod()
+    return () => { cancelled = true }
+  }, [periodKey, dashboard])
+
+  const activeDashboard = periodDashboard || dashboard || {}
+  const summary = activeDashboard.summary || dashboard?.summary || {}
+  const categories = activeDashboard.categories || dashboard?.categories || []
+  const recentMovements = activeDashboard.recentMovements || []
+  const monthlyConsumption = activeDashboard.monthlyConsumption || []
+  const reorderItems = activeDashboard.reorderItems || dashboard?.reorderItems || []
+  const periodMeta = activeDashboard.period || {}
+  const scopeLabel = periodScopeLabel(periodKey, periodMeta)
 
   const totalStocks = Number(summary.totalStocks) || 0
   const totalValue = Number(summary.totalValue) || 0
@@ -352,7 +498,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
   const outOfStock = Number(summary.outOfStockItems) || 0
   const totalItems = Number(summary.totalItems) || 0
 
-  const channelSales = dashboard?.channelSales || {}
+  const channelSales = activeDashboard.channelSales || {}
   const stockRequestSales = channelSales.stockRequests || {}
   const onlineOrderSales = channelSales.onlineOrders || {}
   const manualOrderSales = channelSales.manualOrders || {}
@@ -360,9 +506,11 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
   const overviewCards = [
     {
       key: 'merchandise',
-      label: 'Total merchandise',
+      label: 'Total items',
       value: totalItems,
-      note: totalItems ? 'Active items in inventory' : 'No merchandise added yet',
+      note: totalItems
+        ? 'Active merchandise and supplies'
+        : 'No active inventory items yet',
       color: 'blue',
       icon: 'tag',
     },
@@ -389,7 +537,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
       key: 'stock-requests',
       label: 'Stock requests',
       value: formatCurrency(stockRequestSales.value),
-      note: `${Number(stockRequestSales.units) || 0} units released this month`,
+      note: `${Number(stockRequestSales.units) || 0} units released · ${scopeLabel}`,
       color: 'green',
       icon: 'swap',
     },
@@ -397,7 +545,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
       key: 'online-orders',
       label: 'Online orders',
       value: formatCurrency(onlineOrderSales.value),
-      note: `${Number(onlineOrderSales.units) || 0} units sold this month`,
+      note: `${Number(onlineOrderSales.units) || 0} units sold · ${scopeLabel}`,
       color: 'blue',
       icon: 'cart',
     },
@@ -405,7 +553,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
       key: 'manual-orders',
       label: 'Manual orders',
       value: formatCurrency(manualOrderSales.value),
-      note: `${Number(manualOrderSales.units) || 0} units sold this month`,
+      note: `${Number(manualOrderSales.units) || 0} units sold · ${scopeLabel}`,
       color: 'violet',
       icon: 'box',
     },
@@ -416,10 +564,19 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
       <div className="page-title">
         <div>
           <h1>Good afternoon, {greetingName(admin?.fullName)}</h1>
-          <p>Inventory overview, channel sales this month, and reorder signals.</p>
+          <p>Inventory overview, channel sales, and reorder signals.</p>
         </div>
-        <button type="button" className="primary" onClick={goInventory}>＋ Add new item</button>
+        <div className="dashboard-title-actions">
+          <DashboardMonthPicker
+            value={periodKey}
+            disabled={periodBusy}
+            onChange={setPeriodKey}
+          />
+          <button type="button" className="primary" onClick={goInventory}>＋ Add new item</button>
+        </div>
       </div>
+
+      {periodError && <div className="page-error">{periodError}</div>}
 
       <section className="stat-grid overview-stat-grid" aria-label="Inventory overview">
         {overviewCards.map((card) => (
@@ -434,11 +591,16 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
         ))}
       </section>
 
-      <section className="dashboard-sales" aria-label="Sales this month by channel">
+      <section className="dashboard-sales" aria-label={`Sales for ${scopeLabel} by channel`}>
         <div className="dashboard-sales-head">
-          <h2>Sales this month</h2>
-          <p>Outbound value by channel · stock requests use internal price when set</p>
-                    </div>
+          <div>
+            <h2>Sales · {scopeLabel}</h2>
+            <p>
+              Outbound value by channel · stock requests use internal price when set
+              {periodBusy ? ' · Updating…' : ''}
+            </p>
+          </div>
+        </div>
         <div className="stat-grid sales-stat-grid">
           {salesCards.map((card) => (
             <div className="stat-card sales-stat-card" key={card.key}>
@@ -468,7 +630,7 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
           <div className="panel-head">
             <div>
               <h2>Stocks by category</h2>
-              <p>On-hand units per merchandise category</p>
+              <p>On-hand units per category · use arrows to browse</p>
             </div>
           </div>
           <CategoryStocksChart categories={categories} />
@@ -478,7 +640,11 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
           <div className="panel-head">
             <div>
               <h2>Monthly consumption</h2>
-              <p>Last 12 months · online / manual sale · released · stock out</p>
+              <p>
+                {periodKey === 'year'
+                  ? `${new Date().getFullYear()} · online / manual sale · released · stock out`
+                  : `${scopeLabel} year view · online / manual sale · released · stock out`}
+              </p>
             </div>
           </div>
           <MonthlyConsumptionChart rows={monthlyConsumption} />
@@ -488,11 +654,15 @@ export default function DashboardPage({ dashboard, admin, goInventory, goMovemen
           <div className="panel-head">
             <div>
               <h2>Recent stock movements</h2>
-              <p>Latest inventory transactions</p>
+              <p>Latest activity for {scopeLabel}</p>
             </div>
             <button type="button" onClick={goMovements}>View history →</button>
           </div>
-          <MovementTable rows={recentMovements} compact />
+          <MovementTable
+            rows={recentMovements}
+            compact
+            emptyMessage="No stock movements in this period yet."
+          />
         </div>
 
         <div className="panel chart-panel reorder-panel-wrap">

@@ -34,6 +34,10 @@ URLs update as you navigate (admin and user):
 
 Login is `/login`. Production example: `https://inventory.lca-app.com/admin/dashboard`.
 
+## Theme
+
+**Dark mode** is a per-user preference (avatar menu → Dark mode). It is stored in `localStorage` (`rhet_ui_theme`) and applied via `document.documentElement.dataset.theme`. Styles live in `src/theme-dark.css` and cover tables (striped rows), pages, menus, and modals.
+
 ## Coolify (Nixpacks)
 
 Base directory: `/frontend`

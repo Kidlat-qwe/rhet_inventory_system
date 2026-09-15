@@ -1,0 +1,1331 @@
+/**
+ * Dark theme — applied via document.documentElement[data-theme="dark"].
+ * Covers the app shell, pages, menus, and modals without rewriting App.css.
+ */
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --navy: #9ec4d6;
+  --navy-deep: #7eabbf;
+  --blue: #7eb6d4;
+  --gold: #e0a63c;
+  --gold-tint: #3a3220;
+  --navy-tint: #1c303c;
+  --text: #eef3f6;
+  --muted: #b8c6d0;
+  --line: #2a3c48;
+  --bg: #0f171d;
+  --white: #152229;
+  --surface: #152229;
+  --surface-2: #1a2a33;
+  --surface-row-alt: #1a2a33;
+  --surface-row-hover: #1f2d36;
+  --surface-inset: #1a2a33;
+  --surface-toolbar: #1a2a33;
+  --text-strong: #eef3f6;
+  --danger: #f0a19a;
+  --danger-bg: #3a2220;
+  --header-bg: #152229;
+  --header-text: #e8eef2;
+  --header-muted: #9fb0bc;
+  --header-accent: #2a3c48;
+  --sidebar-bg: linear-gradient(180deg, #0c1419 0%, #101a21 100%);
+  --sidebar-text: #e8eef2;
+  --sidebar-muted: #9fb0bc;
+  color: var(--text);
+  background: var(--bg);
+}
+
+html[data-theme='dark'] body,
+html[data-theme='dark'] #root {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Shell — typography.css hardcodes light #f4f6f8 on .content / main */
+html[data-theme='dark'] .app,
+html[data-theme='dark'] .app > main,
+html[data-theme='dark'] .content {
+  background: var(--bg) !important;
+  color: var(--text);
+}
+
+html[data-theme='dark'] .app-header {
+  background: var(--header-bg) !important;
+  border-bottom-color: var(--header-accent);
+}
+
+html[data-theme='dark'] .icon-button {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+  box-shadow: none;
+}
+
+html[data-theme='dark'] .icon-button:hover {
+  background: var(--navy-tint);
+  border-color: #3d5563;
+}
+
+html[data-theme='dark'] .header-avatar {
+  background: var(--navy-tint);
+  color: var(--navy);
+  border-color: rgb(224 166 60 / 55%);
+}
+
+html[data-theme='dark'] .account-menu,
+html[data-theme='dark'] .notification-panel,
+html[data-theme='dark'] .actions-dropdown {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 45%);
+}
+
+html[data-theme='dark'] .account-menu-head,
+html[data-theme='dark'] .notification-panel-head {
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] .account-menu-head strong,
+html[data-theme='dark'] .notification-panel-head strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .account-menu-head span,
+html[data-theme='dark'] .notification-panel-head p,
+html[data-theme='dark'] .notification-empty {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .account-menu button {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .account-menu button:hover,
+html[data-theme='dark'] .notification-item:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .account-menu .danger-action {
+  color: var(--danger);
+}
+
+html[data-theme='dark'] .account-menu-switch {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .account-menu-switch:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .notification-item {
+  background: var(--surface);
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] .notification-item-body strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .notification-item-body span,
+html[data-theme='dark'] .notification-item-body small {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .notification-badge {
+  border-color: var(--surface);
+}
+
+html[data-theme='dark'] .notification-toast {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .notification-toast-body strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .notification-toast-body span {
+  color: var(--muted);
+}
+
+/* Content surfaces */
+html[data-theme='dark'] .page-title h1,
+html[data-theme='dark'] .panel-head h2,
+html[data-theme='dark'] .stat-card > strong,
+html[data-theme='dark'] .settings-card-head h2,
+html[data-theme='dark'] .dashboard-sales-head h2,
+html[data-theme='dark'] .value-chart-center strong,
+html[data-theme='dark'] .value-chart-legend strong,
+html[data-theme='dark'] .category-stocks-chart-page {
+  color: var(--text) !important;
+}
+
+html[data-theme='dark'] .page-title p,
+html[data-theme='dark'] .panel-head p,
+html[data-theme='dark'] .stat-card p,
+html[data-theme='dark'] .stat-card > span,
+html[data-theme='dark'] .settings-card-head p,
+html[data-theme='dark'] .settings-hint,
+html[data-theme='dark'] .settings-meta,
+html[data-theme='dark'] .muted,
+html[data-theme='dark'] .breadcrumbs,
+html[data-theme='dark'] .dashboard-sales-head p,
+html[data-theme='dark'] .dashboard-month-picker-label,
+html[data-theme='dark'] .value-chart-center span,
+html[data-theme='dark'] .value-chart-legend > div,
+html[data-theme='dark'] .value-chart-legend span,
+html[data-theme='dark'] .category-stocks-chart-range {
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .breadcrumbs strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .panel,
+html[data-theme='dark'] .stat-card,
+html[data-theme='dark'] .settings-card,
+html[data-theme='dark'] .settings-footer,
+html[data-theme='dark'] .integration-card,
+html[data-theme='dark'] .login-card {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%), 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+html[data-theme='dark'] .panel-head,
+html[data-theme='dark'] .toolbar,
+html[data-theme='dark'] .pagination,
+html[data-theme='dark'] th {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] td {
+  color: var(--text);
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] td small {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .secondary,
+html[data-theme='dark'] .ghost,
+html[data-theme='dark'] .filter-btn,
+html[data-theme='dark'] .quick-filters button,
+html[data-theme='dark'] .pagination button,
+html[data-theme='dark'] .toolbar select,
+html[data-theme='dark'] .search {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .search input,
+html[data-theme='dark'] .toolbar select {
+  color: var(--text);
+  background: transparent;
+}
+
+html[data-theme='dark'] .quick-filters button.selected {
+  background: var(--navy-tint);
+  border-color: #3d5563;
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .primary {
+  background: #2a5a76;
+  border-color: #2a5a76;
+  color: #fff;
+}
+
+html[data-theme='dark'] .primary:hover {
+  background: #356d8f;
+  border-color: #356d8f;
+}
+
+/* Forms + modals */
+html[data-theme='dark'] .modal-backdrop,
+html[data-theme='dark'] .confirm-modal-backdrop {
+  background: rgb(5 10 14 / 72%);
+}
+
+html[data-theme='dark'] .modal,
+html[data-theme='dark'] .confirm-modal {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 55%);
+}
+
+html[data-theme='dark'] .modal-head,
+html[data-theme='dark'] .modal-actions {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+html[data-theme='dark'] .modal-actions {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .modal-head h2,
+html[data-theme='dark'] .modal label,
+html[data-theme='dark'] .category-toggle-row strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .modal-head p,
+html[data-theme='dark'] .field-hint,
+html[data-theme='dark'] .category-type-hint {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .modal-head button {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .modal input,
+html[data-theme='dark'] .modal select,
+html[data-theme='dark'] .modal textarea,
+html[data-theme='dark'] .modal select,
+html[data-theme='dark'] .settings-field input,
+html[data-theme='dark'] .settings-field select,
+html[data-theme='dark'] .settings-tag-add input,
+html[data-theme='dark'] .inline-form input,
+html[data-theme='dark'] .login-card input {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .modal input.readonly-input {
+  background: #10181e;
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .toggle {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .toggle button {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .toggle button.selected {
+  background: var(--navy-tint);
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .toggle-switch {
+  background: #2a3c48;
+  border-color: #3d5563;
+}
+
+html[data-theme='dark'] .toggle-switch.on {
+  background: #2a5a76;
+  border-color: #2a5a76;
+}
+
+html[data-theme='dark'] .stock-preview {
+  background: var(--navy-tint);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .stock-preview strong {
+  color: var(--navy);
+}
+
+/* Settings */
+html[data-theme='dark'] .settings-label,
+html[data-theme='dark'] .settings-count {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .settings-tags-box,
+html[data-theme='dark'] .settings-preview {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .settings-tag {
+  background: var(--navy-tint);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .settings-tag button {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .settings-switch-row strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .settings-switch-row em,
+html[data-theme='dark'] .settings-switch-state,
+html[data-theme='dark'] .settings-tags-empty {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .settings-switch-track {
+  background: #2a3c48;
+}
+
+html[data-theme='dark'] .settings-switch input:checked + .settings-switch-track {
+  background: #2a5a76;
+}
+
+html[data-theme='dark'] .settings-card-icon {
+  background: linear-gradient(145deg, #1c303c, #243844);
+  color: var(--navy);
+  border-color: #314754;
+}
+
+html[data-theme='dark'] .settings-dirty-chip {
+  background: var(--gold-tint);
+  border-color: #5a4a28;
+  color: #e0c58a;
+}
+
+/* Status chips / alerts keep readable contrast */
+html[data-theme='dark'] .status.active,
+html[data-theme='dark'] .status.fulfilled,
+html[data-theme='dark'] .status.matched,
+html[data-theme='dark'] .status.deducted,
+html[data-theme='dark'] .status.received,
+html[data-theme='dark'] .status.return-confirmed,
+html[data-theme='dark'] .status.delivered,
+html[data-theme='dark'] .status.connected {
+  color: #7ddec4;
+  background: #15352e;
+}
+
+html[data-theme='dark'] .status.low-stock,
+html[data-theme='dark'] .status.pending,
+html[data-theme='dark'] .status.needs-attention,
+html[data-theme='dark'] .status.unmatched,
+html[data-theme='dark'] .status.oversold,
+html[data-theme='dark'] .status.configured {
+  color: #e0b56a;
+  background: #3a2e18;
+}
+
+html[data-theme='dark'] .status.out-of-stock,
+html[data-theme='dark'] .status.rejected,
+html[data-theme='dark'] .status.failed,
+html[data-theme='dark'] .status.return,
+html[data-theme='dark'] .status.returned {
+  color: #f0a19a;
+  background: #3a2220;
+}
+
+html[data-theme='dark'] .status.inactive,
+html[data-theme='dark'] .status.cancelled {
+  color: #a8b0ba;
+  background: #243038;
+}
+
+html[data-theme='dark'] .alert-row {
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] .alert-row strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .alert-row span {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .donut:before {
+  background: var(--surface);
+}
+
+html[data-theme='dark'] .legend div {
+  border-bottom-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .legend span {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .category-chip,
+html[data-theme='dark'] .product-thumb {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .stock-link strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .empty-state,
+html[data-theme='dark'] .empty-page,
+html[data-theme='dark'] .page-loading {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .empty-state-title,
+html[data-theme='dark'] .empty-page h1 {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .page-error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: #5a3330;
+}
+
+html[data-theme='dark'] .integration-note {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .integration-note.warn {
+  background: var(--gold-tint);
+  color: #e0c58a;
+}
+
+html[data-theme='dark'] .api-key-reveal code {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .login-page {
+  background:
+    radial-gradient(circle at 78% 12%, rgb(224 166 60 / 18%) 0, transparent 38%),
+    radial-gradient(circle at 15% 85%, rgb(46 110 140 / 18%) 0, transparent 40%),
+    var(--bg);
+}
+
+html[data-theme='dark'] .login-brand strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .login-card > p,
+html[data-theme='dark'] .login-brand span {
+  color: var(--muted);
+}
+
+/* Help assistant */
+html[data-theme='dark'] .ha-panel,
+html[data-theme='dark'] .ha-fab {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+}
+
+html[data-theme='dark'] .ha-head,
+html[data-theme='dark'] .ha-topic-btn,
+html[data-theme='dark'] .ha-search {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .ha-greeting,
+html[data-theme='dark'] .ha-empty,
+html[data-theme='dark'] .ha-answer-text,
+html[data-theme='dark'] .ha-question {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .table-head-menu {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 45%);
+}
+
+html[data-theme='dark'] .table-head-menu button {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .table-head-menu button:hover,
+html[data-theme='dark'] .table-head-menu button.is-selected {
+  background: var(--navy-tint);
+}
+
+html[data-theme='dark'] .dashboard-month-picker-trigger,
+html[data-theme='dark'] .dashboard-month-picker-menu,
+html[data-theme='dark'] .dashboard-month-picker-year-btn,
+html[data-theme='dark'] .dashboard-month-picker-year-option,
+html[data-theme='dark'] .dashboard-month-picker-month {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .dashboard-month-picker-label {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .dashboard-month-picker-trigger.is-open,
+html[data-theme='dark'] .dashboard-month-picker-month.is-selected,
+html[data-theme='dark'] .dashboard-month-picker-year-option.is-selected {
+  background: var(--navy-tint);
+  color: var(--navy);
+  border-color: #3d5563;
+}
+
+html[data-theme='dark'] .processing-backdrop {
+  background: rgb(5 10 14 / 72%);
+}
+
+html[data-theme='dark'] .processing-modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 55%);
+}
+
+html[data-theme='dark'] .processing-modal h2 {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .processing-modal p {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .notification-panel {
+  z-index: 60;
+}
+
+html[data-theme='dark'] .sidebar nav button {
+  color: var(--sidebar-muted);
+}
+
+html[data-theme='dark'] .sidebar nav button.active {
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+}
+
+html[data-theme='dark'] .processing-bar {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .category-stocks-chart-arrow {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .category-stocks-chart-arrow:hover:not(:disabled) {
+  background: var(--navy-tint);
+  border-color: #3d5563;
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .panel-head button {
+  color: var(--blue);
+}
+
+html[data-theme='dark'] .chart-scroll {
+  scrollbar-color: #4a5f6e var(--surface-2);
+}
+
+html[data-theme='dark'] .empty-state-title {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .empty-state-message {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .movement-icon.in {
+  background: #15352e;
+  color: #7ddec4;
+}
+
+html[data-theme='dark'] .movement-icon.out {
+  background: #3a2220;
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .positive {
+  color: #7ddec4;
+}
+
+html[data-theme='dark'] .negative {
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .alert-row .warn {
+  background: #3a2e18;
+  color: #e0b56a;
+}
+
+html[data-theme='dark'] .alert-row .danger {
+  background: #3a2220;
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .stat-icon.blue {
+  background: var(--navy-tint);
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .stat-icon.violet {
+  background: #2a2438;
+  color: #b9a6f0;
+}
+
+html[data-theme='dark'] .stat-icon.green {
+  background: #15352e;
+  color: #7ddec4;
+}
+
+html[data-theme='dark'] .stat-icon.orange {
+  background: var(--gold-tint);
+  color: #e0c58a;
+}
+
+html[data-theme='dark'] .sidebar-user strong {
+  color: #fff;
+}
+
+html[data-theme='dark'] .sidebar-user span {
+  color: var(--sidebar-muted);
+}
+
+/* ── Tables (striped rows, inventory, reorder, movements) ── */
+html[data-theme='dark'] table tbody tr {
+  background: var(--surface);
+}
+
+html[data-theme='dark'] table tbody tr:nth-child(even) {
+  background: var(--surface-row-alt) !important;
+}
+
+html[data-theme='dark'] table tbody tr:hover {
+  background: var(--surface-row-hover) !important;
+}
+
+html[data-theme='dark'] table tbody td {
+  color: var(--text) !important;
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] table tbody td strong,
+html[data-theme='dark'] .metric-cell strong,
+html[data-theme='dark'] .category-link strong,
+html[data-theme='dark'] .item-cell strong,
+html[data-theme='dark'] .stock-link strong {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme='dark'] table tbody td small,
+html[data-theme='dark'] .category-link small,
+html[data-theme='dark'] .stock-link small,
+html[data-theme='dark'] .reorder-table td small {
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .inventory-panel .toolbar,
+html[data-theme='dark'] .table-pagination {
+  background: var(--surface-toolbar) !important;
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .table-pagination-info {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .table-pagination-page {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .table-head-select {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .table-head-select:hover,
+html[data-theme='dark'] .table-head-select:focus,
+html[data-theme='dark'] .table-head-select[aria-expanded='true'] {
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .sku-chip {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .product-thumb {
+  background: linear-gradient(145deg, #1c303c, #243844);
+  border-color: var(--line);
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .dots {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .dots:hover {
+  background: var(--navy-tint);
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .variation-cell,
+html[data-theme='dark'] .remarks-cell {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .notification-item.is-unread {
+  background: var(--surface-2) !important;
+}
+
+html[data-theme='dark'] tr.row-selected,
+html[data-theme='dark'] .stock-request-group-row:focus-visible,
+html[data-theme='dark'] .stock-request-group-row.is-selected {
+  background: #1c3040 !important;
+}
+
+html[data-theme='dark'] .batch-row-blocked {
+  background: #3a2e18 !important;
+}
+
+html[data-theme='dark'] .batch-component-row td {
+  background: var(--surface-row-alt) !important;
+  color: var(--muted) !important;
+}
+
+/* ── Reorder panel ── */
+html[data-theme='dark'] .reorder-chip {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .reorder-chip strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .reorder-chip.out {
+  background: #3a2220;
+  border-color: #5a3330;
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .reorder-chip.out strong {
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .reorder-chip.low {
+  background: #3a2e18;
+  border-color: #5a4a28;
+  color: #e0c58a;
+}
+
+html[data-theme='dark'] .reorder-chip.low strong {
+  color: #e0b56a;
+}
+
+html[data-theme='dark'] .reorder-filters button {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .reorder-filters button.selected {
+  background: var(--navy-tint);
+  border-color: #3d5563;
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .reorder-sort {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .reorder-sort select {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .reorder-meter-track {
+  background: #243038;
+}
+
+html[data-theme='dark'] .reorder-meter-label {
+  color: var(--muted);
+}
+
+/* ── Modals & detail panels ── */
+html[data-theme='dark'] .modal-body {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .request-detail-grid > div {
+  background: var(--surface-inset) !important;
+  border-color: var(--line) !important;
+}
+
+html[data-theme='dark'] .request-detail-grid span {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .request-detail-grid strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .request-detail-grid small {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .request-detail-grid .danger-text {
+  color: var(--danger);
+}
+
+html[data-theme='dark'] .uniform-line {
+  background: var(--surface-inset) !important;
+  border-color: var(--line) !important;
+}
+
+html[data-theme='dark'] .uniform-line-head strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .uniform-line-head small,
+html[data-theme='dark'] .uniform-mode-lock-hint,
+html[data-theme='dark'] .uniform-gender-hint {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .uniform-gender-hint {
+  background: var(--surface-inset);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .kit-components th,
+html[data-theme='dark'] .kit-bom-table th {
+  background: var(--surface-2) !important;
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .kit-bom-table {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .kit-bom-row td {
+  background: var(--surface-inset) !important;
+  border-bottom-color: var(--line) !important;
+}
+
+html[data-theme='dark'] .kit-components select {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .stock-warning-banner {
+  background: var(--danger-bg);
+  border-color: #5a3330;
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .stock-warning-banner strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .invoice-preview-table thead th {
+  background: var(--surface-2) !important;
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .invoice-preview-table td {
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] .invoice-preview-table small,
+html[data-theme='dark'] .group-invoice-row small {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .invoice-total-row {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .online-order-map-config-intro span,
+html[data-theme='dark'] .online-order-map-config-field > span:first-child {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .online-order-map-config-intro strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .online-order-map-config-field select {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .online-order-map-config-field select:disabled {
+  background: #10181e;
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .online-order-line-active td,
+html[data-theme='dark'] .online-order-map-config-row td {
+  background: var(--surface-inset) !important;
+}
+
+html[data-theme='dark'] .online-order-item-cell strong {
+  color: var(--text);
+}
+
+/* ── Users / API / misc pages ── */
+html[data-theme='dark'] .role-select,
+html[data-theme='dark'] .api-config-field input {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .api-key-prefix {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .api-env-block {
+  background: var(--surface-inset);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .integration-card-head h2,
+html[data-theme='dark'] .integration-meta div strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .integration-description,
+html[data-theme='dark'] .integration-code,
+html[data-theme='dark'] .integration-meta div span,
+html[data-theme='dark'] .integration-stats span {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .integration-stats {
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .rollup-pill {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .rollup-pill.amber {
+  background: #3a2e18;
+  color: #e0b56a;
+}
+
+html[data-theme='dark'] .rollup-pill.red {
+  background: #3a2220;
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .branch-col-menu button:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .qty-adjust-icon:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .actions-dropdown button:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .table-head-menu button.is-selected {
+  background: var(--navy-tint);
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .settings-switch-row {
+  background: var(--surface-inset);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .chart-scroll {
+  scrollbar-color: #4a5f6e var(--surface-2);
+}
+
+html[data-theme='dark'] .table-scroll {
+  scrollbar-color: #4a5f6e var(--surface);
+}
+
+html[data-theme='dark'] .secondary {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .secondary:hover:not(:disabled) {
+  background: var(--navy-tint);
+  border-color: #3d5563;
+}
+
+html[data-theme='dark'] .form-error,
+html[data-theme='dark'] .modal .form-error {
+  color: var(--danger);
+}
+
+html[data-theme='dark'] .confirm-modal p {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .status.ineligible {
+  color: #a8b0ba;
+  background: #243038;
+}
+
+html[data-theme='dark'] .status.expired {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+html[data-theme='dark'] .status.error {
+  color: #f0a19a;
+  background: #3a2220;
+}
+
+html[data-theme='dark'] .ha-head-title-text span,
+html[data-theme='dark'] .ha-chevron {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .ha-close {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .ha-back {
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .batch-ship-bar {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .batch-ship-bar strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .kit-components-head strong,
+html[data-theme='dark'] .kit-bom-panel > strong,
+html[data-theme='dark'] .kit-bom-panel-head strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .danger-text {
+  color: var(--danger);
+}
+
+html[data-theme='dark'] .stock-request-group-row:hover,
+html[data-theme='dark'] .stock-request-group-row:focus-visible {
+  background: var(--surface-row-hover) !important;
+}
+
+html[data-theme='dark'] .actions-dropdown button {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .branch-col-trigger:hover,
+html[data-theme='dark'] .branch-col-trigger.is-open,
+html[data-theme='dark'] .branch-col-trigger.is-active {
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .branch-col-menu {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .stock-request-export-modal .modal-body label,
+html[data-theme='dark'] .forgot-password-modal label {
+  color: var(--text);
+}
+
+/* ── Stock request export modal ── */
+html[data-theme='dark'] .stock-request-export-modal .export-period-fieldset {
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .stock-request-export-modal .export-period-fieldset legend {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .export-step-indicator {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .export-step-indicator .is-active {
+  color: var(--navy);
+}
+
+html[data-theme='dark'] .export-step-indicator .is-done {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .export-period-option {
+  background: var(--surface-inset) !important;
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .export-period-option.is-selected {
+  background: var(--navy-tint) !important;
+  border-color: #3d5563;
+}
+
+html[data-theme='dark'] .export-period-option strong {
+  color: var(--text) !important;
+}
+
+html[data-theme='dark'] .export-period-option.is-selected strong {
+  color: var(--navy) !important;
+}
+
+html[data-theme='dark'] .export-period-option small {
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .export-branch-list {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .export-branch-list-head strong {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .export-branch-check {
+  background: var(--surface-inset);
+  border-color: var(--line);
+}
+
+html[data-theme='dark'] .export-branch-check span {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .export-preview-note {
+  background: var(--surface-inset) !important;
+  border: 1px solid var(--line);
+  color: var(--text) !important;
+}
+
+html[data-theme='dark'] .export-preview-note .muted {
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .stock-request-export-modal .modal-body input[type='date'],
+html[data-theme='dark'] .stock-request-export-modal .modal-body input[type='week'],
+html[data-theme='dark'] .stock-request-export-modal .modal-body input[type='month'] {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+  color-scheme: dark;
+}
+
+/* ── API Keys documentation cards ── */
+html[data-theme='dark'] .api-keys-doc-link {
+  background: var(--surface-inset) !important;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .api-keys-doc-link:hover {
+  background: var(--navy-tint) !important;
+  border-color: #3d5563;
+}
+
+html[data-theme='dark'] .api-keys-doc-link strong {
+  color: var(--text) !important;
+}
+
+html[data-theme='dark'] .api-keys-doc-link span {
+  color: var(--muted) !important;
+}
+
+/* ── Inventory category detail ── */
+html[data-theme='dark'] .inventory-detail-search,
+html[data-theme='dark'] .inventory-tool-btn,
+html[data-theme='dark'] .inventory-detail-filters {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .inventory-detail-search input,
+html[data-theme='dark'] .inventory-detail-filters select {
+  color: var(--text);
+  background: transparent;
+}
+
+html[data-theme='dark'] .inventory-detail-filters select {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .inventory-detail-panel {
+  border-color: var(--line);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+
+html[data-theme='dark'] .inventory-detail-table thead th {
+  background: var(--surface-toolbar) !important;
+  color: var(--muted) !important;
+  border-bottom-color: var(--line);
+}
+
+html[data-theme='dark'] .inventory-detail-table tbody td {
+  background: transparent !important;
+  color: var(--text) !important;
+}
+
+html[data-theme='dark'] .inventory-detail-table .item-cell strong {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme='dark'] .inventory-detail-table tbody tr:nth-child(even) td {
+  background: transparent !important;
+}
+
+html[data-theme='dark'] table thead th {
+  background: var(--surface-toolbar) !important;
+  color: var(--muted) !important;
+  border-bottom-color: var(--line) !important;
+}
+
+html[data-theme='dark'] table tbody td,
+html[data-theme='dark'] table tbody td span,
+html[data-theme='dark'] table tbody td a {
+  color: var(--text) !important;
+}
+
+html[data-theme='dark'] table tbody td strong {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme='dark'] table tbody td small,
+html[data-theme='dark'] table tbody td .muted {
+  color: var(--muted) !important;
+}
+
+html[data-theme='dark'] .metric-cell,
+html[data-theme='dark'] td strong.metric-cell {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme='dark'] .api-config-field > label,
+html[data-theme='dark'] .api-env-block > span {
+  color: var(--muted);
+}
+

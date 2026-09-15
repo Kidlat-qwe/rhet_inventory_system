@@ -84,7 +84,8 @@ function TagListEditor({
 function SettingsCard({ icon, title, description, children, wide = false }) {
   return (
     <section className={`settings-card${wide ? ' wide' : ''}`}>
-      <header className="settings-card-head">
+      {/* Use div — bare <header> inherits app chrome sticky/z-index and can cover the account menu. */}
+      <div className="settings-card-head">
         <div className="settings-card-icon" aria-hidden="true">
           <Icon name={icon} size={18} />
         </div>
@@ -92,7 +93,7 @@ function SettingsCard({ icon, title, description, children, wide = false }) {
           <h2>{title}</h2>
           {description ? <p>{description}</p> : null}
         </div>
-      </header>
+      </div>
       <div className="settings-card-body">{children}</div>
     </section>
   )

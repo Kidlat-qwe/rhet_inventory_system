@@ -515,8 +515,8 @@ export default function OnlineOrdersPage({ orders, inventory, onRefresh, canMana
               )}
             </tbody>
           </table>
-          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="orders" />
         </div>
+        <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="orders" />
       </section>
 
       {mode === 'import-preview' && canManage && importPreview && (

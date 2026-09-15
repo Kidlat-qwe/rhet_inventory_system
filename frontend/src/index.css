@@ -10,8 +10,8 @@ html {
   font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 15px;
   line-height: 1.5;
-  color: #202634;
-  background: #f6f7f9;
+  color: var(--text, #202634);
+  background: var(--bg, #f6f7f9);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

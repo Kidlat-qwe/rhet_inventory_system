@@ -168,12 +168,12 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
                   <label className={`secondary small-btn category-image-upload${busy || imageBusy ? ' is-disabled' : ''}`}>
                     <input
                       type="file"
+                      className="category-image-file-input"
                       accept="image/png,image/jpeg,image/webp,image/gif"
                       onChange={onImageSelected}
                       disabled={busy || imageBusy}
-                      hidden
                     />
-                    {imageBusy ? 'Reading…' : imageUrl ? 'Change image' : 'Upload image'}
+                    <span>{imageBusy ? 'Reading…' : imageUrl ? 'Change image' : 'Upload image'}</span>
                   </label>
                   {imageUrl && (
                     <button

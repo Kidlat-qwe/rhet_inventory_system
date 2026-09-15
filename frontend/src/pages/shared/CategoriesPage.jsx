@@ -187,8 +187,8 @@ export default function CategoriesPage({
               )}
             </tbody>
           </table>
-          <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="categories" />
         </div>
+        <Pagination page={page} pageSize={15} total={total} onPageChange={setPage} noun="categories" />
       </section>
       {allowCreate && modal && (modal.mode !== 'edit' || canEdit) && (
         <CategoryModal
