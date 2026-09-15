@@ -430,6 +430,35 @@ html[data-theme='dark'] .status.cancelled {
   background: #243038;
 }
 
+html[data-theme='dark'] .status.shipped {
+  color: #c4b5fd;
+  background: #2d2640;
+}
+
+html[data-theme='dark'] .status.shipped i {
+  background: #9b87e8;
+}
+
+html[data-theme='dark'] .status.not-configured {
+  color: #d4a8f0;
+  background: #2d1f38;
+}
+
+html[data-theme='dark'] .status.not-configured i {
+  background: #a878c8;
+}
+
+html[data-theme='dark'] .status.processing,
+html[data-theme='dark'] .status.ready-to-ship {
+  color: #8ecae6;
+  background: #1a2f3d;
+}
+
+html[data-theme='dark'] .status.processing i,
+html[data-theme='dark'] .status.ready-to-ship i {
+  background: #4a9ec4;
+}
+
 html[data-theme='dark'] .alert-row {
   border-bottom-color: var(--line);
 }
@@ -1305,7 +1334,7 @@ html[data-theme='dark'] table thead th {
 }
 
 html[data-theme='dark'] table tbody td,
-html[data-theme='dark'] table tbody td span,
+html[data-theme='dark'] table tbody td span:not(.status),
 html[data-theme='dark'] table tbody td a {
   color: var(--text) !important;
 }
