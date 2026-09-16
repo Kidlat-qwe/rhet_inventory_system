@@ -17,9 +17,9 @@ export function dateKeyInZone(date = new Date(), timeZone = CHRISTMAS_COUNTDOWN_
 }
 
 /**
- * Days until next December 25 in the given zone.
- * Uses an inclusive calendar span (today through Christmas Day), so
- * 2026-09-05 → 2026-12-25 = 112 days in Asia/Manila.
+ * Whole calendar days remaining until next December 25 in Asia/Manila (UTC+8).
+ * Exclusive of today: on 2026-09-16 PHT → 100 days until Dec 25.
+ * Dec 24 → 1 day; Dec 25 → Christmas Day.
  * @param {Date} [now]
  * @param {string} [timeZone]
  * @returns {{
@@ -51,11 +51,11 @@ export function getChristmasCountdown(now = new Date(), timeZone = CHRISTMAS_COU
   if (month === 12 && day > 25) year += 1
 
   const christmasKey = `${year}-12-25`
+  const isChristmas = todayKey === christmasKey
   const todayUtc = Date.UTC(Number(yearStr), month - 1, day)
   const christmasUtc = Date.UTC(year, 11, 25)
-  // Inclusive: Sep 5 → Dec 25 is 112 calendar days (not the exclusive 111 gap).
-  const days = Math.max(0, Math.round((christmasUtc - todayUtc) / 86_400_000) + 1)
-  const isChristmas = todayKey === christmasKey
+  // Exclusive calendar gap in the Manila calendar date (not the browser's local TZ).
+  const days = Math.max(0, Math.round((christmasUtc - todayUtc) / 86_400_000))
 
   if (isChristmas) {
     return {
