@@ -2,14 +2,17 @@ import { useMemo, useState } from 'react'
 import {
   CATEGORY_KIND_OPTIONS,
   CATEGORY_TYPE_OPTIONS,
+  FREEBIE_SUBTYPE_OPTIONS,
   UNIFORM_SUBTYPE_OPTIONS,
   categoryTypeOf,
+  isFreebieKind,
   isUniformFamilyKind,
 } from '../constants/uniformOptions'
 import { readCategoryImageFile } from '../utils/categoryImage'
 import { CategoryThumb } from './CategoryThumb'
 
 function resolveUiType(categoryKind) {
+  if (isFreebieKind(categoryKind)) return 'FREEBIES'
   if (isUniformFamilyKind(categoryKind)) return 'UNIFORM'
   if (categoryKind === 'LEARNING_KIT') return 'LEARNING_KIT'
   return 'OTHER'
@@ -19,10 +22,18 @@ function resolveUniformSubtype(categoryKind) {
   return isUniformFamilyKind(categoryKind) ? categoryKind : 'SCHOOL_UNIFORM'
 }
 
-function namePlaceholder(uiType, uniformSubtype) {
+function resolveFreebieSubtype(categoryKind) {
+  return isFreebieKind(categoryKind) ? categoryKind : 'FREEBIE_SCHOOL_UNIFORM'
+}
+
+function namePlaceholder(uiType, uniformSubtype, freebieSubtype) {
   if (uiType === 'UNIFORM') {
     const subtype = UNIFORM_SUBTYPE_OPTIONS.find((entry) => entry.value === uniformSubtype)
     return subtype ? `e.g. ${subtype.categoryName}` : 'e.g. School Uniform'
+  }
+  if (uiType === 'FREEBIES') {
+    const subtype = FREEBIE_SUBTYPE_OPTIONS.find((entry) => entry.value === freebieSubtype)
+    return subtype ? `e.g. Freebie ${subtype.categoryName}` : 'e.g. Freebie School Uniform'
   }
   if (uiType === 'LEARNING_KIT') return 'e.g. Learning Kit, Moving Up Kit'
   return 'e.g. Bag, Book, Tool Kit'
@@ -34,6 +45,7 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
   const [categoryType, setCategoryType] = useState(() => categoryTypeOf(category))
   const [uiType, setUiType] = useState(() => resolveUiType(initialKind))
   const [uniformSubtype, setUniformSubtype] = useState(() => resolveUniformSubtype(initialKind))
+  const [freebieSubtype, setFreebieSubtype] = useState(() => resolveFreebieSubtype(initialKind))
   const [name, setName] = useState(category?.categoryName || '')
   const [hasChildSkus, setHasChildSkus] = useState(Boolean(category?.hasChildSkus) || initialKind === 'TOOL_KIT')
   const [imageUrl, setImageUrl] = useState(category?.imageUrl || '')
@@ -51,9 +63,11 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
 
   const resolvedKind = uiType === 'UNIFORM'
     ? uniformSubtype
-    : uiType === 'LEARNING_KIT'
-      ? 'LEARNING_KIT'
-      : 'OTHER'
+    : uiType === 'FREEBIES'
+      ? freebieSubtype
+      : uiType === 'LEARNING_KIT'
+        ? 'LEARNING_KIT'
+        : 'OTHER'
 
   const resolvedName = name.trim()
   const alreadyExists = resolvedName.length >= 2 && existingNames.has(resolvedName.toLowerCase())
@@ -63,6 +77,9 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
     setUiType(value)
     if (value === 'UNIFORM' && !isUniformFamilyKind(uniformSubtype)) {
       setUniformSubtype('SCHOOL_UNIFORM')
+    }
+    if (value === 'FREEBIES' && !isFreebieKind(freebieSubtype)) {
+      setFreebieSubtype('FREEBIE_SCHOOL_UNIFORM')
     }
     if (value !== 'OTHER') setHasChildSkus(false)
   }
@@ -98,6 +115,9 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
   const typeHint = (() => {
     if (uiType === 'UNIFORM') {
       return 'Choose School Uniform, PE Uniform, or Shirt. Each uses Gender / Type / Size (or Logo) fields on inventory items.'
+    }
+    if (uiType === 'FREEBIES') {
+      return 'Promotional freebies. Pick School Uniform, PE Uniform, Shirt, or Bundle — inventory behavior matches that type (uniform fields or virtual bundle stock).'
     }
     if (uiType === 'LEARNING_KIT') {
       return 'Bundle behavior: virtual stock from included categories; concrete SKUs chosen on stock request. Use this kind for Learning Kit, Moving Up Kit, or any similar pack. Stored as LEARNING_KIT for partner APIs.'
@@ -146,14 +166,23 @@ export function CategoryModal({ category = null, categories = [], busy, onClose,
               </select>
             </label>
           )}
-          <label className={uiType === 'UNIFORM' ? 'full-width' : undefined}>Category name *
+          {uiType === 'FREEBIES' && (
+            <label>Freebie type *
+              <select value={freebieSubtype} onChange={(e) => setFreebieSubtype(e.target.value)}>
+                {FREEBIE_SUBTYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className={uiType === 'UNIFORM' || uiType === 'FREEBIES' ? 'full-width' : undefined}>Category name *
             <input
               required
               minLength={2}
               maxLength={100}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={namePlaceholder(uiType, uniformSubtype)}
+              placeholder={namePlaceholder(uiType, uniformSubtype, freebieSubtype)}
             />
             <small className="field-hint">
               Unique display name. You can reuse a type with a different name.

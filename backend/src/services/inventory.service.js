@@ -20,9 +20,19 @@ export const CATEGORY_KINDS = Object.freeze([
   'LEARNING_KIT',
   'TOOL_KIT',
   'OTHER',
+  'FREEBIE_SCHOOL_UNIFORM',
+  'FREEBIE_PE_UNIFORM',
+  'FREEBIE_LCA_SHIRT',
+  'FREEBIE_LEARNING_KIT',
 ]);
 
 export const CATEGORY_TYPES = Object.freeze(['MERCHANDISE', 'SUPPLIES']);
+
+/** Strip FREEBIE_ prefix so freebie kinds share base Uniform / Bundle behavior. */
+export function baseCategoryKind(value) {
+  const kind = String(value || '').trim().toUpperCase();
+  return kind.startsWith('FREEBIE_') ? kind.slice('FREEBIE_'.length) : kind;
+}
 
 export function isLearningKitCategoryName(categoryName = '') {
   return String(categoryName || '').trim().toLowerCase() === 'learning kit';
@@ -36,7 +46,7 @@ export function isToolKitCategoryName(categoryName = '') {
 export function isLearningKitCategory(category = {}) {
   if (!category) return false;
   const kind = category.categoryKind || category.category_kind;
-  if (kind === 'LEARNING_KIT') return true;
+  if (baseCategoryKind(kind) === 'LEARNING_KIT') return true;
   if (kind && kind !== 'OTHER') return false;
   return isLearningKitCategoryName(category.categoryName || category.category_name);
 }

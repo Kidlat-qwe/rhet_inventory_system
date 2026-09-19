@@ -89,6 +89,20 @@ export function formatOnlineFulfillmentStatus(status) {
 }
 
 
+/** Stock Requests board labels (internal status codes unchanged). */
+const stockRequestStatusLabels = {
+  PENDING: 'Pending',
+  SHIPPED: 'Arranged Delivery',
+  DELIVERED: 'Delivered',
+  RETURNED: 'Returned',
+  REJECTED: 'Rejected',
+  PARTIAL: 'Partial',
+}
+
+export function formatStockRequestStatus(status) {
+  return stockRequestStatusLabels[status] || formatStatus(status)
+}
+
 export function formatMovementType(type) {
   return movementLabels[type] || type?.replaceAll('_', ' ') || '—'
 }

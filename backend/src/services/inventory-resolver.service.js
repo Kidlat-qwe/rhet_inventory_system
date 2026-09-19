@@ -2,7 +2,19 @@ export function buildUniformVariation(gender, type, size) {
   return `${gender} · ${type} · ${size}`;
 }
 
-const UNIFORM_KINDS = new Set(['SCHOOL_UNIFORM', 'PE_UNIFORM', 'LCA_SHIRT']);
+const UNIFORM_KINDS = new Set([
+  'SCHOOL_UNIFORM',
+  'PE_UNIFORM',
+  'LCA_SHIRT',
+  'FREEBIE_SCHOOL_UNIFORM',
+  'FREEBIE_PE_UNIFORM',
+  'FREEBIE_LCA_SHIRT',
+]);
+
+function baseCategoryKind(value) {
+  const kind = String(value || '').trim().toUpperCase();
+  return kind.startsWith('FREEBIE_') ? kind.slice('FREEBIE_'.length) : kind;
+}
 
 // Categories whose items are identified by gender/type/size. Kept in sync with
 // the frontend category-type presets (see constants/uniformOptions.js).
@@ -28,7 +40,8 @@ export function isUniformLikeCategory(categoryOrName = '') {
   if (categoryOrName && typeof categoryOrName === 'object') {
     const kind = categoryOrName.categoryKind || categoryOrName.category_kind;
     if (UNIFORM_KINDS.has(kind)) return true;
-    if (kind === 'LEARNING_KIT' || kind === 'TOOL_KIT' || kind === 'OTHER') return false;
+    const base = baseCategoryKind(kind);
+    if (base === 'LEARNING_KIT' || base === 'TOOL_KIT' || kind === 'OTHER') return false;
     if (categoryOrName.hasChildSkus || categoryOrName.has_child_skus) return false;
     return isUniformLikeCategoryName(categoryOrName.categoryName || categoryOrName.category_name || '');
   }

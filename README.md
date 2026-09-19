@@ -52,6 +52,7 @@ Run [001_initial_schema.sql](backend/database/migrations/001_initial_schema.sql)
 - `categories (1) → (many) inventory`: every item belongs to a controlled category.
 - `inventory (1) → (many) stock_movements`: the immutable transaction history for an item.
 - `categories.category_type`: `MERCHANDISE` or `SUPPLIES` (UI label: **Category type**). Independent of `category_kind`.
+- `categories.category_kind`: behavior template — Uniform (`SCHOOL_UNIFORM` / `PE_UNIFORM` / `LCA_SHIRT`), Bundle (`LEARNING_KIT`), Freebies (`FREEBIE_SCHOOL_UNIFORM` / `FREEBIE_PE_UNIFORM` / `FREEBIE_LCA_SHIRT` / `FREEBIE_LEARNING_KIT`, same item behavior as the matching base kind), Others (`OTHER`), plus legacy `TOOL_KIT`.
 - `categories.has_child_skus`: when true (typically with `OTHER`), items can be parent kits with raw child SKUs (former Tool Kit behavior). Existing Tool Kit rows were migrated to `OTHER` + this flag.
 - `inventory (1) → (many) inventory_bundle_components`: Kit bill of materials.
   - **Learning Kit**: category slots; concrete SKUs come from stock-request `components[]`. Available kits = min across category totals.

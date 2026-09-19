@@ -38,10 +38,11 @@ export function categoryTypeLabel(type) {
   return CATEGORY_TYPE_LABELS[normalizeCategoryType(type)] || 'Merchandise'
 }
 
-// Kind options shown in Add/Edit Category (Uniform groups School / PE / Shirt).
+// Kind options shown in Add/Edit Category (Uniform / Freebies group subtypes).
 export const CATEGORY_KIND_OPTIONS = [
   { value: 'UNIFORM', label: 'Uniform', categoryName: '' },
   { value: 'LEARNING_KIT', label: 'Bundle', categoryName: '' },
+  { value: 'FREEBIES', label: 'Freebies', categoryName: '' },
   { value: 'OTHER', label: 'Others', categoryName: '' },
 ]
 
@@ -52,6 +53,14 @@ export const UNIFORM_SUBTYPE_OPTIONS = [
   { value: 'LCA_SHIRT', label: 'Shirt', categoryName: 'Shirt' },
 ]
 
+/** Freebies subtype dropdown → stored as FREEBIE_* category_kind. */
+export const FREEBIE_SUBTYPE_OPTIONS = [
+  { value: 'FREEBIE_SCHOOL_UNIFORM', label: 'School Uniform', categoryName: 'School Uniform' },
+  { value: 'FREEBIE_PE_UNIFORM', label: 'PE Uniform', categoryName: 'PE Uniform' },
+  { value: 'FREEBIE_LCA_SHIRT', label: 'Shirt', categoryName: 'Shirt' },
+  { value: 'FREEBIE_LEARNING_KIT', label: 'Bundle', categoryName: 'Bundle' },
+]
+
 /** Labels for category tables (includes legacy TOOL_KIT). */
 export const CATEGORY_KIND_LABELS = {
   SCHOOL_UNIFORM: 'School Uniform',
@@ -60,9 +69,33 @@ export const CATEGORY_KIND_LABELS = {
   LEARNING_KIT: 'Bundle',
   TOOL_KIT: 'Tool Kit (legacy)',
   OTHER: 'Others',
+  FREEBIE_SCHOOL_UNIFORM: 'Freebies · School Uniform',
+  FREEBIE_PE_UNIFORM: 'Freebies · PE Uniform',
+  FREEBIE_LCA_SHIRT: 'Freebies · Shirt',
+  FREEBIE_LEARNING_KIT: 'Freebies · Bundle',
 }
 
-const UNIFORM_KINDS = new Set(['SCHOOL_UNIFORM', 'PE_UNIFORM', 'LCA_SHIRT'])
+const UNIFORM_KINDS = new Set([
+  'SCHOOL_UNIFORM',
+  'PE_UNIFORM',
+  'LCA_SHIRT',
+  'FREEBIE_SCHOOL_UNIFORM',
+  'FREEBIE_PE_UNIFORM',
+  'FREEBIE_LCA_SHIRT',
+])
+
+const FREEBIE_KINDS = new Set([
+  'FREEBIE_SCHOOL_UNIFORM',
+  'FREEBIE_PE_UNIFORM',
+  'FREEBIE_LCA_SHIRT',
+  'FREEBIE_LEARNING_KIT',
+])
+
+/** Strip FREEBIE_ prefix so freebie kinds share base Uniform / Bundle behavior. */
+export function baseCategoryKind(kind) {
+  const key = String(kind || '').trim().toUpperCase()
+  return key.startsWith('FREEBIE_') ? key.slice('FREEBIE_'.length) : key
+}
 
 export function categoryKindLabel(kind, hasChildSkus = false) {
   const key = String(kind || 'OTHER').toUpperCase()
@@ -71,7 +104,12 @@ export function categoryKindLabel(kind, hasChildSkus = false) {
 }
 
 export function isUniformFamilyKind(kind) {
-  return UNIFORM_KINDS.has(String(kind || '').toUpperCase())
+  const key = String(kind || '').toUpperCase()
+  return UNIFORM_KINDS.has(key) && !FREEBIE_KINDS.has(key)
+}
+
+export function isFreebieKind(kind) {
+  return FREEBIE_KINDS.has(String(kind || '').toUpperCase())
 }
 
 // Type dropdown options keyed by the normalized (lowercased) category name.
@@ -184,7 +222,7 @@ export function isLearningKitCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!category) return false
   const kind = categoryKindOf(category)
-  if (kind === 'LEARNING_KIT') return true
+  if (baseCategoryKind(kind) === 'LEARNING_KIT') return true
   if (kind && kind !== 'OTHER') return false
   return isLearningKitCategoryName(category.categoryName)
 }
@@ -216,7 +254,8 @@ export function isUniformCategory(categoryId, categories = []) {
   if (!category) return false
   const kind = categoryKindOf(category)
   if (UNIFORM_KINDS.has(kind)) return true
-  if (kind === 'LEARNING_KIT' || kind === 'TOOL_KIT' || kind === 'OTHER') return false
+  const base = baseCategoryKind(kind)
+  if (base === 'LEARNING_KIT' || base === 'TOOL_KIT' || kind === 'OTHER') return false
   if (category.hasChildSkus) return false
   return isUniformCategoryName(category.categoryName)
 }
@@ -224,7 +263,7 @@ export function isUniformCategory(categoryId, categories = []) {
 export function isSchoolUniformCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!category) return false
-  if (categoryKindOf(category) === 'SCHOOL_UNIFORM') return true
+  if (baseCategoryKind(categoryKindOf(category)) === 'SCHOOL_UNIFORM') return true
   if (categoryKindOf(category)) return false
   return category.categoryName?.toLowerCase().trim() === 'school uniform'
 }
@@ -232,7 +271,7 @@ export function isSchoolUniformCategory(categoryId, categories = []) {
 export function isPeUniformCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!category) return false
-  if (categoryKindOf(category) === 'PE_UNIFORM') return true
+  if (baseCategoryKind(categoryKindOf(category)) === 'PE_UNIFORM') return true
   if (categoryKindOf(category)) return false
   return category.categoryName?.toLowerCase().trim() === 'pe uniform'
 }
@@ -240,7 +279,7 @@ export function isPeUniformCategory(categoryId, categories = []) {
 export function isLcaShirtCategory(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!category) return false
-  if (categoryKindOf(category) === 'LCA_SHIRT') return true
+  if (baseCategoryKind(categoryKindOf(category)) === 'LCA_SHIRT') return true
   if (categoryKindOf(category)) return false
   return isLcaShirtCategoryName(category.categoryName)
 }
@@ -278,11 +317,12 @@ export function getUniformSizesForCategory(categoryId, categories = [], sizeList
 export function getFieldPlaceholders(categoryId, categories = []) {
   const category = categories.find((entry) => entry.categoryId === categoryId)
   const kind = categoryKindOf(category)
+  const base = baseCategoryKind(kind)
   const normalized = category?.categoryName?.toLowerCase().trim() || ''
-  if (kind === 'SCHOOL_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['school uniform']
-  if (kind === 'PE_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['pe uniform']
-  if (kind === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS.shirt
-  if (kind === 'LEARNING_KIT') {
+  if (base === 'SCHOOL_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['school uniform']
+  if (base === 'PE_UNIFORM') return CATEGORY_FIELD_PLACEHOLDERS['pe uniform']
+  if (base === 'LCA_SHIRT') return CATEGORY_FIELD_PLACEHOLDERS.shirt
+  if (base === 'LEARNING_KIT') {
     return CATEGORY_FIELD_PLACEHOLDERS[normalized]
       || { itemName: 'e.g. kit_name', variation: 'e.g. grade-1, sy-2026' }
   }
@@ -304,17 +344,18 @@ export function getUniformTypesForCategory(categoryId, categories = [], gender =
   const category = categories.find((entry) => entry.categoryId === categoryId)
   if (!isUniformCategory(categoryId, categories)) return []
   const kind = categoryKindOf(category)
+  const base = baseCategoryKind(kind)
   const shirtLogos = Array.isArray(typeLists.shirtLogos) && typeLists.shirtLogos.length
     ? typeLists.shirtLogos
     : LCA_SHIRT_TYPES
 
-  if (kind === 'SCHOOL_UNIFORM' || (!kind && category?.categoryName?.toLowerCase().trim() === 'school uniform')) {
+  if (base === 'SCHOOL_UNIFORM' || (!kind && category?.categoryName?.toLowerCase().trim() === 'school uniform')) {
     return gender === 'Female' ? SCHOOL_UNIFORM_FEMALE_TYPES : SCHOOL_UNIFORM_TYPES
   }
-  if (kind === 'LCA_SHIRT' || (!kind && isLcaShirtCategoryName(category?.categoryName))) {
+  if (base === 'LCA_SHIRT' || (!kind && isLcaShirtCategoryName(category?.categoryName))) {
     return [...shirtLogos]
   }
-  if (kind === 'PE_UNIFORM') return PE_UNIFORM_TYPES
+  if (base === 'PE_UNIFORM') return PE_UNIFORM_TYPES
 
   const normalized = category?.categoryName?.toLowerCase().trim() || ''
   return UNIFORM_TYPE_LISTS[normalized] || PE_UNIFORM_TYPES
@@ -370,6 +411,18 @@ function categoryPrefix(categoryName = '') {
   return (cleaned.slice(0, 3) || 'CAT').padEnd(3, 'X')
 }
 
+/** Category segment for freebie SKUs (avoids FRE-FRE when the name starts with Freebie). */
+function freebieCategoryPrefix(category) {
+  const kind = categoryKindOf(category)
+  const name = String(category?.categoryName || '').trim()
+  const stripped = name.replace(/^freebies?\b[\s-]*/i, '').trim()
+  if (stripped) return categoryPrefix(stripped)
+
+  const subtype = FREEBIE_SUBTYPE_OPTIONS.find((entry) => entry.value === kind)
+  if (subtype?.categoryName) return categoryPrefix(subtype.categoryName)
+  return 'CAT'
+}
+
 function slugifyName(name = '') {
   return name
     .trim()
@@ -382,7 +435,9 @@ export function generateSku(form, categories = []) {
   const category = categories.find((entry) => entry.categoryId === form.categoryId)
   if (!category) return ''
 
-  const prefix = categoryPrefix(category.categoryName)
+  const freebie = isFreebieKind(categoryKindOf(category))
+  const catPrefix = freebie ? freebieCategoryPrefix(category) : categoryPrefix(category.categoryName)
+  const prefix = freebie ? `FRE-${catPrefix}` : catPrefix
 
   if (isUniformCategory(form.categoryId, categories)) {
     const { uniformGender, uniformType, uniformSize } = form

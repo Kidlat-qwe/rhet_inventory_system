@@ -16,7 +16,7 @@ import {
   rejectStockRequest,
   returnStockRequest,
 } from '../../services/inventoryApi'
-import { formatCurrency, formatDate, formatStatus } from '../../utils/format'
+import { formatCurrency, formatDate, formatStockRequestStatus } from '../../utils/format'
 import {
   branchDisplayName,
   canShipRequest,
@@ -508,7 +508,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             onClick={() => { setFilter(status); setPage(1) }}
           >
             <span>{tabCounts[status] || 0}</span>
-            {formatStatus(status)}
+            {formatStockRequestStatus(status)}
           </button>
         ))}
       </div>
@@ -636,7 +636,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                   </td>
                   <td className="reason-cell">{group.reason}</td>
                   <td>
-                    <StatusBadge status={group.status} />
+                    <StatusBadge status={group.status} label={formatStockRequestStatus(group.status)} />
                     {group.requestKind === 'RETURN' && group.status === 'PENDING' && (
                       <small>Awaiting return check</small>
                     )}
@@ -653,7 +653,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                       </small>
                     )}
                     {group.requestKind !== 'RETURN' && group.status === 'PARTIAL' && (
-                      <small>{group.pendingCount} pending · {group.shippedCount} shipped</small>
+                      <small>{group.pendingCount} pending · {group.shippedCount} arranged delivery</small>
                     )}
                   </td>
                   <td className="muted">{formatDate(group.createdAt)}</td>
@@ -687,8 +687,8 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                   <td colSpan={9}>
                     <EmptyState
                       title={branchFilter
-                        ? `No ${formatStatus(filter).toLowerCase()} request groups for this branch`
-                        : `No ${formatStatus(filter).toLowerCase()} request groups`}
+                        ? `No ${formatStockRequestStatus(filter).toLowerCase()} request groups for this branch`
+                        : `No ${formatStockRequestStatus(filter).toLowerCase()} request groups`}
                       message={filter === 'RETURNED'
                         ? 'After you inspect a CMS return, it moves here. Use Reusable / Not reusable to filter.'
                         : filter === 'PENDING'
@@ -722,7 +722,7 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
             </div>
 
             <div className="request-detail-status">
-              <StatusBadge status={selectedGroup.status} />
+              <StatusBadge status={selectedGroup.status} label={formatStockRequestStatus(selectedGroup.status)} />
               <span className="muted">
                 {selectedGroup.lineCount} line{selectedGroup.lineCount === 1 ? '' : 's'} · {isBranchReturn ? 'Branch return' : 'Requested'} {formatDate(selectedGroup.createdAt)}
                 {!isBranchReturn && selectedGroup.receivedAt ? ` · Received ${formatDate(selectedGroup.receivedAt)}` : ''}
@@ -835,14 +835,14 @@ export default function StockRequestsPage({ requests, onRefresh, admin }) {
                           <td className="col-status">
                             {isBranchReturn && request.status === 'PENDING' ? (
                               <>
-                                <StatusBadge status={request.status} />
+                                <StatusBadge status={request.status} label={formatStockRequestStatus(request.status)} />
                                 <small>Awaiting return check</small>
                               </>
                             ) : request.status === 'PENDING' && issue ? (
                               <span className="batch-status warn">{issue.title}</span>
                             ) : (
                               <>
-                                <StatusBadge status={request.status} />
+                                <StatusBadge status={request.status} label={formatStockRequestStatus(request.status)} />
                                 {request.deliveredAt && (request.status === 'DELIVERED' || request.status === 'RETURNED') ? (
                                   <small>
                                     Received {formatDate(request.deliveredAt)}

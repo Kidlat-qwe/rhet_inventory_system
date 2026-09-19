@@ -9,4 +9,4 @@ Shared helpers used across pages and print flows.
 | `stockRequestExport.js` | XLSX export of **Delivered** stock-request lines. Branch filter first (all or multi-select), then today / specific date / ISO week / calendar month (`deliveredAt` in app timezone). |
 | `christmasCountdown.js` | Christmas Day countdown helpers locked to `Asia/Manila` (UTC+8) for the Santa parade banner. |
 | `stockRequestChecklist.js` | Dispatch checklist print (invoice-aligned sections: title under brand → Deliver to → Items → signatures side-by-side) + Manila date helpers. |
-| `format.js` | Status labels, currency, dates, timezone helpers. `normalizeInventoryText` lowercases item names and turns spaces/hyphens into `_`. Live typing keeps a trailing `_`; save trims edges. |
+| `format.js` | Status labels, currency, dates, timezone helpers. Stock Requests use `formatStockRequestStatus` (`SHIPPED` → **Arranged Delivery**). `normalizeInventoryText` lowercases item names and turns spaces/hyphens into `_`. Live typing keeps a trailing `_`; save trims edges. |
