@@ -277,6 +277,43 @@ html[data-theme='dark'] .category-toggle-row strong {
   color: var(--text);
 }
 
+html[data-theme='dark'] .delete-category-modal label strong,
+html[data-theme='dark'] .delete-category-modal .modal-body strong {
+  color: var(--text-strong, var(--text));
+}
+
+html[data-theme='dark'] .delete-category-modal input {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme='dark'] .delete-category-modal input::placeholder {
+  color: var(--muted);
+}
+
+html[data-theme='dark'] .delete-category-warning {
+  background: #3a2220;
+  border-color: #5a3530;
+  color: #f0a19a;
+}
+
+html[data-theme='dark'] .delete-category-warning strong {
+  color: #f8c4bf;
+}
+
+html[data-theme='dark'] .settings-stack .settings-card-body {
+  scrollbar-color: #4a5f6e var(--surface-2);
+}
+
+html[data-theme='dark'] .table-head-menu button {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .table-head-menu button:hover {
+  background: var(--surface-2);
+}
+
 html[data-theme='dark'] .modal-head p,
 html[data-theme='dark'] .field-hint,
 html[data-theme='dark'] .category-type-hint {
@@ -1062,10 +1099,6 @@ html[data-theme='dark'] .rollup-pill.red {
   color: #f0a19a;
 }
 
-html[data-theme='dark'] .branch-col-menu button:hover {
-  background: var(--surface-2);
-}
-
 html[data-theme='dark'] .qty-adjust-icon:hover {
   background: var(--surface-2);
 }
@@ -1177,6 +1210,20 @@ html[data-theme='dark'] .branch-col-trigger.is-active {
 html[data-theme='dark'] .branch-col-menu {
   background: var(--surface);
   border-color: var(--line);
+  box-shadow: 0 12px 28px #00000055;
+}
+
+html[data-theme='dark'] .branch-col-menu button {
+  color: var(--text);
+}
+
+html[data-theme='dark'] .branch-col-menu button:hover {
+  background: var(--surface-2);
+}
+
+html[data-theme='dark'] .branch-col-menu button.is-selected {
+  background: var(--navy-tint);
+  color: var(--navy);
 }
 
 html[data-theme='dark'] .stock-request-export-modal .modal-body label,

@@ -51,6 +51,7 @@ import {
 } from './services/inventoryApi'
 import { fetchManualOrders } from './services/manualOrdersApi'
 import { fetchOnlineOrders } from './services/onlineOrdersApi'
+import { hydrateCategoryImages } from './utils/categoryImage'
 import { setAppTimezone } from './utils/format'
 
 /** Movement types owned by marketplace / HQ outbound flows (Release Logs → Online orders). */
@@ -78,6 +79,8 @@ function AppShell() {
   const [inventoryFocusCategoryId, setInventoryFocusCategoryId] = useState(null)
   const [headerBreadcrumbs, setHeaderBreadcrumbs] = useState(null)
   const stockRequestsRefreshInFlight = useRef(false)
+  const adminRef = useRef(admin)
+  adminRef.current = admin
 
   const routeInfo = useMemo(() => pageFromPath(location.pathname), [location.pathname])
   const page = routeInfo?.page || 'Dashboard'
@@ -90,37 +93,62 @@ function AppShell() {
 
   const reload = useCallback(async (options = {}) => {
     const silent = Boolean(options?.silent)
+    const scopes = Array.isArray(options?.scopes) && options.scopes.length
+      ? new Set(options.scopes)
+      : null
+    const want = (key) => !scopes || scopes.has(key)
+
     if (!silent) setLoading(true)
     setError('')
     try {
-      const me = await fetchMe()
-      const roleIsAdmin = String(me?.role || 'ADMIN').toUpperCase() === 'ADMIN'
-      const [dash, cats, inv, mov, onlineMov, requests, online, manual, adminList, clients, appSettings] = await Promise.all([
-        fetchDashboard({ period: 'year' }),
-        fetchCategories(),
-        fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }),
-        fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }),
-        fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }),
-        fetchStockRequests({ limit: 500 }),
-        fetchOnlineOrders({ limit: 100 }),
-        fetchManualOrders({ limit: 100 }),
-        roleIsAdmin ? fetchUsers() : Promise.resolve([]),
-        roleIsAdmin ? fetchIntegrationClients() : Promise.resolve([]),
-        fetchSettings(),
+      const me = want('me') || want('users') || want('clients') || !scopes
+        ? await fetchMe()
+        : adminRef.current
+      const roleIsAdmin = String((me || adminRef.current)?.role || 'ADMIN').toUpperCase() === 'ADMIN'
+
+      const [
+        dash,
+        cats,
+        inv,
+        mov,
+        onlineMov,
+        requests,
+        online,
+        manual,
+        adminList,
+        clients,
+        appSettings,
+      ] = await Promise.all([
+        want('dashboard') ? fetchDashboard({ period: 'year' }) : Promise.resolve(null),
+        want('categories') ? fetchCategories() : Promise.resolve(null),
+        want('inventory') ? fetchInventory({ limit: 100, sortBy: 'updatedAt', order: 'desc' }) : Promise.resolve(null),
+        want('movements') ? fetchMovements({ limit: 100, excludeTypes: ONLINE_ORDER_MOVEMENT_TYPES }) : Promise.resolve(null),
+        want('onlineMovements') ? fetchMovements({ limit: 100, types: ONLINE_ORDER_MOVEMENT_TYPES }) : Promise.resolve(null),
+        want('stockRequests') ? fetchStockRequests({ limit: 500 }) : Promise.resolve(null),
+        want('onlineOrders') ? fetchOnlineOrders({ limit: 100 }) : Promise.resolve(null),
+        want('manualOrders') ? fetchManualOrders({ limit: 100 }) : Promise.resolve(null),
+        want('users') && roleIsAdmin ? fetchUsers() : Promise.resolve(null),
+        want('clients') && roleIsAdmin ? fetchIntegrationClients() : Promise.resolve(null),
+        want('settings') ? fetchSettings() : Promise.resolve(null),
       ])
-      setAdmin(me)
-      setDashboard(dash)
-      setCategories(cats)
-      setInventory(inv.data)
-      setMovements(mov.data)
-      setOnlineMovements(onlineMov.data)
-      setStockRequests(requests.data)
-      setOnlineOrders(online.data)
-      setManualOrders(manual.data)
-      setIntegrationClients(clients)
-      setAdmins(adminList)
-      setSettings(appSettings || DEFAULT_SETTINGS)
-      setAppTimezone(appSettings?.timezone)
+
+      if (me && (want('me') || !scopes)) setAdmin(me)
+      if (dash) setDashboard(dash)
+      if (cats) {
+        setCategories((prev) => hydrateCategoryImages(cats, prev))
+      }
+      if (inv) setInventory(inv.data)
+      if (mov) setMovements(mov.data)
+      if (onlineMov) setOnlineMovements(onlineMov.data)
+      if (requests) setStockRequests(requests.data)
+      if (online) setOnlineOrders(online.data)
+      if (manual) setManualOrders(manual.data)
+      if (adminList) setAdmins(adminList)
+      if (clients) setIntegrationClients(clients)
+      if (appSettings) {
+        setSettings(appSettings || DEFAULT_SETTINGS)
+        setAppTimezone(appSettings?.timezone)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -129,6 +157,34 @@ function AppShell() {
   }, [])
 
   const refreshQuietly = useCallback(() => reload({ silent: true }), [reload])
+  const refreshInventoryData = useCallback(
+    () => reload({ silent: true, scopes: ['categories', 'inventory', 'movements', 'onlineMovements', 'dashboard'] }),
+    [reload],
+  )
+  const refreshCategoriesData = useCallback(
+    () => reload({ silent: true, scopes: ['categories', 'inventory'] }),
+    [reload],
+  )
+  const refreshUsersData = useCallback(
+    () => reload({ silent: true, scopes: ['users', 'me'] }),
+    [reload],
+  )
+  const refreshClientsData = useCallback(
+    () => reload({ silent: true, scopes: ['clients'] }),
+    [reload],
+  )
+  const refreshSettingsData = useCallback(
+    () => reload({ silent: true, scopes: ['settings'] }),
+    [reload],
+  )
+  const refreshOnlineOrdersData = useCallback(
+    () => reload({ silent: true, scopes: ['onlineOrders', 'inventory', 'movements', 'onlineMovements'] }),
+    [reload],
+  )
+  const refreshManualOrdersData = useCallback(
+    () => reload({ silent: true, scopes: ['manualOrders', 'inventory', 'movements', 'onlineMovements'] }),
+    [reload],
+  )
 
   const refreshStockRequests = useCallback(async () => {
     if (stockRequestsRefreshInFlight.current) return
@@ -249,7 +305,7 @@ function AppShell() {
             <AdminInventory
               items={inventory}
               categories={categories}
-              onRefresh={refreshQuietly}
+              onRefresh={refreshInventoryData}
               initialCategoryId={inventoryFocusCategoryId}
               onInitialCategoryConsumed={() => setInventoryFocusCategoryId(null)}
               onBreadcrumbChange={setHeaderBreadcrumbs}
@@ -258,9 +314,9 @@ function AppShell() {
         case 'Stock Requests':
           return <AdminStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} admin={admin} />
         case 'Online Orders':
-          return <AdminOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
+          return <AdminOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshOnlineOrdersData} canManage />
         case 'Manual Orders':
-          return <AdminManualOrders orders={manualOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
+          return <AdminManualOrders orders={manualOrders} inventory={inventory} onRefresh={refreshManualOrdersData} canManage />
         case 'Release Logs':
           return <AdminReleaseLogs requests={stockRequests} onlineMovements={onlineMovements} />
         case 'Stock Movements':
@@ -270,7 +326,7 @@ function AppShell() {
             <AdminCategories
               categories={categories}
               items={inventory}
-              onRefresh={refreshQuietly}
+              onRefresh={refreshCategoriesData}
               onOpenInventory={(categoryId) => {
                 setInventoryFocusCategoryId(categoryId)
                 goTo('Inventory')
@@ -278,11 +334,11 @@ function AppShell() {
             />
           )
         case 'Users':
-          return <AdminUsers users={admins} currentAdmin={admin} onRefresh={refreshQuietly} />
+          return <AdminUsers users={admins} currentAdmin={admin} onRefresh={refreshUsersData} />
         case 'API Keys':
-          return <AdminApiKeys clients={integrationClients} onRefresh={refreshQuietly} />
+          return <AdminApiKeys clients={integrationClients} onRefresh={refreshClientsData} />
         case 'Settings':
-          return <AdminSettings settings={settings} onRefresh={refreshQuietly} />
+          return <AdminSettings settings={settings} onRefresh={refreshSettingsData} />
         default:
           return <EmptyState title={page} message="This page is not available." />
       }
@@ -296,7 +352,7 @@ function AppShell() {
           <UserInventory
             items={inventory}
             categories={categories}
-            onRefresh={refreshQuietly}
+            onRefresh={refreshInventoryData}
             initialCategoryId={inventoryFocusCategoryId}
             onInitialCategoryConsumed={() => setInventoryFocusCategoryId(null)}
             onBreadcrumbChange={setHeaderBreadcrumbs}
@@ -305,9 +361,9 @@ function AppShell() {
       case 'Stock Requests':
         return <UserStockRequests requests={stockRequests} onRefresh={refreshAfterStockDecision} admin={admin} />
       case 'Online Orders':
-        return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
+        return <UserOnlineOrders orders={onlineOrders} inventory={inventory} onRefresh={refreshOnlineOrdersData} canManage />
       case 'Manual Orders':
-        return <UserManualOrders orders={manualOrders} inventory={inventory} onRefresh={refreshQuietly} canManage />
+        return <UserManualOrders orders={manualOrders} inventory={inventory} onRefresh={refreshManualOrdersData} canManage />
       case 'Release Logs':
         return <UserReleaseLogs requests={stockRequests} onlineMovements={onlineMovements} />
       case 'Stock Movements':
@@ -317,7 +373,7 @@ function AppShell() {
           <UserCategories
             categories={categories}
             items={inventory}
-            onRefresh={refreshQuietly}
+            onRefresh={refreshCategoriesData}
             onOpenInventory={(categoryId) => {
               setInventoryFocusCategoryId(categoryId)
               goTo('Inventory')

@@ -7,6 +7,6 @@ Shared helpers used across pages and print flows.
 | `theme.js` | Per-user dark/light preference (`localStorage` + `document.documentElement.dataset.theme`). Includes `useIsDarkTheme` / `chartThemeColors` for Recharts. |
 | `stockRequestInvoice.js` | Stock-request invoice print / PDF download. Print uses the HTML layout. **Download invoice** renders that same HTML via `html2canvas` + `jspdf` into a PDF blob (`blob:…`) so the new-tab PDF matches the print invoice (logo, sections, ₱ amounts, signatures). |
 | `stockRequestExport.js` | XLSX export of **Delivered** stock-request lines. Branch filter first (all or multi-select), then today / specific date / ISO week / calendar month (`deliveredAt` in app timezone). |
-| `christmasCountdown.js` | Christmas Day countdown helpers locked to `Asia/Manila` (UTC+8) for the Santa parade banner. |
+| `categoryImage.js` | Category image file validation/read + in-memory thumb cache. List API omits large `data:` URLs; thumbs hydrate from cache or `GET /categories/:id/image`. |
 | `stockRequestChecklist.js` | Dispatch checklist print (invoice-aligned sections: title under brand → Deliver to → Items → signatures side-by-side) + Manila date helpers. |
 | `format.js` | Status labels, currency, dates, timezone helpers. Stock Requests use `formatStockRequestStatus` (`SHIPPED` → **Arranged Delivery**). `normalizeInventoryText` lowercases item names and turns spaces/hyphens into `_`. Live typing keeps a trailing `_`; save trims edges. |

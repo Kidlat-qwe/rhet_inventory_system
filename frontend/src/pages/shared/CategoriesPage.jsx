@@ -9,6 +9,7 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { categoryKindLabel, categoryTypeLabel } from '../../constants/uniformOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { createCategory, deleteCategory, updateCategory } from '../../services/inventoryApi'
+import { forgetCategoryImage, rememberCategoryImage } from '../../utils/categoryImage'
 import { formatDate } from '../../utils/format'
 
 export default function CategoriesPage({
@@ -42,15 +43,20 @@ export default function CategoriesPage({
     setError('')
     try {
       if (modal?.mode === 'edit') {
-        await updateCategory(modal.category.categoryId, {
+        const updated = await updateCategory(modal.category.categoryId, {
           categoryName, categoryType, categoryKind, hasChildSkus, imageUrl,
         })
+        if (imageUrl) rememberCategoryImage(updated.categoryId || modal.category.categoryId, imageUrl)
+        else if (imageUrl === null || imageUrl === '') {
+          forgetCategoryImage(updated.categoryId || modal.category.categoryId)
+        }
         setModal(null)
         await onRefresh()
       } else {
         const created = await createCategory({
           categoryName, categoryType, categoryKind, hasChildSkus, imageUrl,
         })
+        if (imageUrl) rememberCategoryImage(created.categoryId, imageUrl)
         setModal(null)
         await onRefresh()
         setCreatedOffer({
@@ -71,6 +77,7 @@ export default function CategoriesPage({
     setError('')
     try {
       await deleteCategory(category.categoryId, confirmationName || category.categoryName)
+      forgetCategoryImage(category.categoryId)
       setDeleteTarget(null)
       await onRefresh()
     } catch (err) {

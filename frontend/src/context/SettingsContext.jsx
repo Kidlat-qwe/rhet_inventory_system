@@ -11,6 +11,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   shirtLogos: Object.freeze(['Beeli', 'LCA']),
   helpAssistantEnabled: true,
   snowfallEnabled: false,
+  deliveredReportDailyEnabled: false,
+  deliveredReportMonthlyEnabled: false,
+  deliveredReportEmails: Object.freeze([]),
+  deliveredReportLastDailyYmd: null,
+  deliveredReportLastMonthlyYm: null,
   updatedAt: null,
   updatedBy: null,
 })
@@ -33,6 +38,9 @@ export function SettingsProvider({ settings, children }) {
     shirtLogos: settings?.shirtLogos?.length
       ? settings.shirtLogos
       : [...DEFAULT_SETTINGS.shirtLogos],
+    deliveredReportEmails: Array.isArray(settings?.deliveredReportEmails)
+      ? settings.deliveredReportEmails
+      : [...DEFAULT_SETTINGS.deliveredReportEmails],
   }), [settings])
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

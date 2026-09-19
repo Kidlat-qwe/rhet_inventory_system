@@ -41,6 +41,9 @@ const schema = z.object({
   DB_SSL_PRODUCTION: z.enum(['true', 'false']).optional(),
   PSMS_INTEGRATION_KEY: z.string().optional(),
   PSMS_WEBHOOK_URL: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().optional(),
+  BREVO_SENDER_NAME: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -87,4 +90,7 @@ export const env = {
   databaseUrl: hasDiscreteDb ? null : config.DATABASE_URL,
   databaseSsl: databaseSslFlag === 'true',
   authBypass: config.AUTH_BYPASS === 'true' && config.NODE_ENV !== 'production',
+  BREVO_API_KEY: config.BREVO_API_KEY || '',
+  BREVO_SENDER_EMAIL: config.BREVO_SENDER_EMAIL || '',
+  BREVO_SENDER_NAME: config.BREVO_SENDER_NAME || 'RHET Inventory',
 };

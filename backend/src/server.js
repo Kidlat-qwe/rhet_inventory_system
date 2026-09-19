@@ -1,6 +1,7 @@
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { pool } from './database/pool.js';
+import { startDeliveredReportScheduler } from './services/delivered-report.service.js';
 
 const server = app.listen(env.PORT, async () => {
   const expected = env.database?.database || 'DATABASE_URL';
@@ -15,6 +16,7 @@ const server = app.listen(env.PORT, async () => {
   } catch (error) {
     console.error(`Database "${expected}" is not reachable: ${error.message}`);
   }
+  startDeliveredReportScheduler();
 });
 
 async function shutdown(signal) {

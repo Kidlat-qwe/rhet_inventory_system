@@ -27,7 +27,7 @@ import {
 import * as integrationClientController from '../controllers/integration-client.controller.js';
 import * as usersController from '../controllers/users.controller.js';
 import * as settingsController from '../controllers/settings.controller.js';
-import { addShirtLogoSchema, updateSettingsSchema } from '../validation/settings.schemas.js';
+import { addShirtLogoSchema, runDeliveredReportSchema, updateSettingsSchema } from '../validation/settings.schemas.js';
 
 function normalizeCategoryImageUrl(value) {
   if (value === null || value === undefined) return null;
@@ -47,6 +47,18 @@ function normalizeCategoryImageUrl(value) {
   throw err;
 }
 
+function stripHeavyCategoryImage(row) {
+  const camel = camelize(row);
+  const url = camel.imageUrl || camel.image_url || null;
+  const hasImage = Boolean(url && String(url).trim());
+  const isData = typeof url === 'string' && url.startsWith('data:');
+  return {
+    ...camel,
+    imageUrl: isData ? null : (url || null),
+    hasImage,
+  };
+}
+
 function readCategoryImageBody(body) {
   if (!body || (body.imageUrl === undefined && body.image_url === undefined)) return undefined;
   return normalizeCategoryImageUrl(body.imageUrl ?? body.image_url ?? '');
@@ -63,8 +75,39 @@ api.get('/dashboard', asyncHandler(async (req, res) => success(res, await dashbo
 api.get('/settings', settingsController.get);
 api.patch('/settings', requireAdminRole, validate(updateSettingsSchema), settingsController.update);
 api.post('/settings/shirt-logos', validate(addShirtLogoSchema), settingsController.addShirtLogo);
+api.post(
+  '/settings/delivered-report/run',
+  requireAdminRole,
+  validate(runDeliveredReportSchema),
+  settingsController.runDeliveredReport,
+);
 api.get('/categories', asyncHandler(async (_req, res) => {
-  const result = await pool.query('SELECT * FROM categories ORDER BY category_name'); success(res, camelize(result.rows));
+  // Omit large data: URL images from the list payload (can be tens of MB).
+  // http(s) URLs are kept; has_image tells the UI a thumb exists for cache/hydration.
+  const result = await pool.query(
+    `SELECT category_id, category_name, category_kind, has_child_skus, category_type, status,
+            created_at, updated_at,
+            CASE
+              WHEN image_url IS NULL OR btrim(image_url) = '' THEN NULL
+              WHEN image_url LIKE 'data:%' THEN NULL
+              ELSE image_url
+            END AS image_url,
+            (image_url IS NOT NULL AND btrim(image_url) <> '') AS has_image
+     FROM categories
+     ORDER BY category_name`,
+  );
+  success(res, camelize(result.rows));
+}));
+api.get('/categories/:id/image', validate(idParams), asyncHandler(async (req, res) => {
+  const result = await pool.query(
+    'SELECT image_url FROM categories WHERE category_id = $1',
+    [req.params.id],
+  );
+  if (!result.rowCount) {
+    return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } });
+  }
+  const imageUrl = result.rows[0].image_url || null;
+  success(res, { imageUrl, hasImage: Boolean(imageUrl) });
 }));
 api.get('/users', requireAdminRole, usersController.list);
 api.post('/users', requireAdminRole, validate(createUserSchema), usersController.create);
@@ -116,7 +159,7 @@ api.post('/categories', asyncHandler(async (req, res) => {
       'INSERT INTO categories(category_name, category_kind, has_child_skus, category_type, image_url) VALUES($1, $2, $3, $4, $5) RETURNING *',
       [name, kind, hasChildSkus, type, imageUrl ?? null],
     );
-    success(res, camelize(result.rows[0]), null, 201);
+    success(res, stripHeavyCategoryImage(result.rows[0]), null, 201);
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({
@@ -221,7 +264,7 @@ api.patch('/categories/:id', validate(idParams), asyncHandler(async (req, res) =
        RETURNING *`,
       params,
     );
-    success(res, camelize(result.rows[0]));
+    success(res, stripHeavyCategoryImage(result.rows[0]));
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({

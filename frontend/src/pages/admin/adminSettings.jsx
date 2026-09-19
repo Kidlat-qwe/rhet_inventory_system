@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { useSettings } from '../../context/SettingsContext'
-import { updateSettings } from '../../services/inventoryApi'
+import { runDeliveredReport, updateSettings } from '../../services/inventoryApi'
 import { formatDate } from '../../utils/format'
 
 const TIMEZONE_OPTIONS = [
@@ -110,6 +110,9 @@ function cloneForm(settings) {
     shirtLogos: [...(settings.shirtLogos?.length ? settings.shirtLogos : ['Beeli', 'LCA'])],
     helpAssistantEnabled: settings.helpAssistantEnabled !== false,
     snowfallEnabled: settings.snowfallEnabled === true,
+    deliveredReportDailyEnabled: settings.deliveredReportDailyEnabled === true,
+    deliveredReportMonthlyEnabled: settings.deliveredReportMonthlyEnabled === true,
+    deliveredReportEmails: [...(settings.deliveredReportEmails || [])],
   }
 }
 
@@ -128,15 +131,19 @@ export default function AdminSettings({ settings, onRefresh }) {
     source.defaultLowStockThreshold,
     source.helpAssistantEnabled,
     source.snowfallEnabled,
+    source.deliveredReportDailyEnabled,
+    source.deliveredReportMonthlyEnabled,
     source.courierPresets,
     source.uniformSizes,
     source.shirtSizes,
     source.shirtLogos,
+    source.deliveredReportEmails,
   ])
   const [form, setForm] = useState(() => cloneForm(source))
   const [error, setError] = useState('')
   const [savedMessage, setSavedMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [reportBusy, setReportBusy] = useState('')
   const [formKey, setFormKey] = useState(0)
 
   useEffect(() => {
@@ -149,10 +156,13 @@ export default function AdminSettings({ settings, onRefresh }) {
     source.defaultLowStockThreshold,
     source.helpAssistantEnabled,
     source.snowfallEnabled,
+    source.deliveredReportDailyEnabled,
+    source.deliveredReportMonthlyEnabled,
     source.courierPresets,
     source.uniformSizes,
     source.shirtSizes,
     source.shirtLogos,
+    source.deliveredReportEmails,
   ])
 
   const dirty = useMemo(() => (
@@ -161,10 +171,13 @@ export default function AdminSettings({ settings, onRefresh }) {
     || Number(form.defaultLowStockThreshold) !== Number(baseline.defaultLowStockThreshold)
     || Boolean(form.helpAssistantEnabled) !== Boolean(baseline.helpAssistantEnabled)
     || Boolean(form.snowfallEnabled) !== Boolean(baseline.snowfallEnabled)
+    || Boolean(form.deliveredReportDailyEnabled) !== Boolean(baseline.deliveredReportDailyEnabled)
+    || Boolean(form.deliveredReportMonthlyEnabled) !== Boolean(baseline.deliveredReportMonthlyEnabled)
     || !sameList(form.courierPresets, baseline.courierPresets)
     || !sameList(form.uniformSizes, baseline.uniformSizes)
     || !sameList(form.shirtSizes, baseline.shirtSizes)
     || !sameList(form.shirtLogos, baseline.shirtLogos)
+    || !sameList(form.deliveredReportEmails, baseline.deliveredReportEmails)
   ), [form, baseline])
 
   function resetFromServer() {
@@ -195,6 +208,9 @@ export default function AdminSettings({ settings, onRefresh }) {
         shirtLogos: form.shirtLogos,
         helpAssistantEnabled: Boolean(form.helpAssistantEnabled),
         snowfallEnabled: Boolean(form.snowfallEnabled),
+        deliveredReportDailyEnabled: Boolean(form.deliveredReportDailyEnabled),
+        deliveredReportMonthlyEnabled: Boolean(form.deliveredReportMonthlyEnabled),
+        deliveredReportEmails: form.deliveredReportEmails,
       })
       await onRefresh?.()
       setSavedMessage('Settings saved.')
@@ -202,6 +218,33 @@ export default function AdminSettings({ settings, onRefresh }) {
       setError(err.message || 'Unable to save settings.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function sendReportNow(kind) {
+    if (dirty) {
+      setError('Save settings before sending a report.')
+      return
+    }
+    if (!form.deliveredReportEmails.length) {
+      setError('Add at least one recipient email first.')
+      return
+    }
+    setReportBusy(kind)
+    setError('')
+    setSavedMessage('')
+    try {
+      const result = await runDeliveredReport(kind)
+      setSavedMessage(
+        `${kind === 'daily' ? 'Daily' : 'Monthly'} report sent `
+        + `(${result.attachmentCount || 0} XLSX file${(result.attachmentCount || 0) === 1 ? '' : 's'}, `
+        + `${result.lineCount || 0} delivered line${(result.lineCount || 0) === 1 ? '' : 's'}).`,
+      )
+      await onRefresh?.()
+    } catch (err) {
+      setError(err.message || 'Unable to send delivered report.')
+    } finally {
+      setReportBusy('')
     }
   }
 
@@ -325,6 +368,89 @@ export default function AdminSettings({ settings, onRefresh }) {
               </label>
             </SettingsCard>
           </div>
+
+          <SettingsCard
+            icon="bell"
+            title="Delivered report emails"
+            description="Auto-email Delivered stock requests (same data as Export). One Excel (.xlsx) file per branch. Schedule uses Asia/Manila."
+            wide
+          >
+            <label className="settings-switch-row">
+              <span>
+                <strong>Daily report</strong>
+                <em>Every day at 5:00 PM Asia/Manila — that day’s Delivered lines (still sends when empty).</em>
+              </span>
+              <span className="settings-switch">
+                <input
+                  type="checkbox"
+                  checked={form.deliveredReportDailyEnabled}
+                  onChange={(e) => setField('deliveredReportDailyEnabled', e.target.checked)}
+                />
+                <span className="settings-switch-track" aria-hidden="true">
+                  <span className="settings-switch-thumb" />
+                </span>
+                <span className="settings-switch-state">
+                  {form.deliveredReportDailyEnabled ? 'On' : 'Off'}
+                </span>
+              </span>
+            </label>
+            <label className="settings-switch-row">
+              <span>
+                <strong>Monthly report</strong>
+                <em>Last day of each month at 5:00 PM Asia/Manila — all Delivered lines for that month.</em>
+              </span>
+              <span className="settings-switch">
+                <input
+                  type="checkbox"
+                  checked={form.deliveredReportMonthlyEnabled}
+                  onChange={(e) => setField('deliveredReportMonthlyEnabled', e.target.checked)}
+                />
+                <span className="settings-switch-track" aria-hidden="true">
+                  <span className="settings-switch-thumb" />
+                </span>
+                <span className="settings-switch-state">
+                  {form.deliveredReportMonthlyEnabled ? 'On' : 'Off'}
+                </span>
+              </span>
+            </label>
+
+            <TagListEditor
+              label="Recipient emails"
+              hint="All branch Excel files are attached to one email sent to these addresses. Sending uses Brevo (server BREVO_API_KEY)."
+              values={form.deliveredReportEmails}
+              onChange={(deliveredReportEmails) => setField('deliveredReportEmails', deliveredReportEmails)}
+              placeholder="e.g. ops@example.com"
+              emptyLabel="Add at least one email to receive reports"
+            />
+
+            <div className="settings-report-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={saving || Boolean(reportBusy) || dirty}
+                onClick={() => sendReportNow('daily')}
+              >
+                {reportBusy === 'daily' ? 'Sending…' : 'Send daily report now'}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={saving || Boolean(reportBusy) || dirty}
+                onClick={() => sendReportNow('monthly')}
+              >
+                {reportBusy === 'monthly' ? 'Sending…' : 'Send monthly report now'}
+              </button>
+            </div>
+            {(source.deliveredReportLastDailyYmd || source.deliveredReportLastMonthlyYm) && (
+              <p className="settings-hint">
+                Last auto-send:
+                {source.deliveredReportLastDailyYmd ? ` daily ${source.deliveredReportLastDailyYmd}` : ''}
+                {source.deliveredReportLastDailyYmd && source.deliveredReportLastMonthlyYm ? ' ·' : ''}
+                {source.deliveredReportLastMonthlyYm ? ` monthly ${source.deliveredReportLastMonthlyYm}` : ''}
+                {' '}(Asia/Manila)
+              </p>
+            )}
+          </SettingsCard>
 
           <SettingsCard
             icon="cart"

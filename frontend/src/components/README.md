@@ -7,7 +7,7 @@ Reusable presentational and modal components used across admin and user pages.
 | `Icon.jsx` | SVG icon set (`grid`, `box`, `swap`, `report`, `tag`, `users`, `settings`, `link`, `list`, `cart`, `bell`, `help`, `back`, `search`) |
 | `EmptyState.jsx` | Empty list / no-data placeholder |
 | `PageLoading.jsx` | Full-page loading indicator |
-| `ProcessingModal.jsx` | Global progress modal for mutating API calls (add / update / delete). Driven by `services/api.js`. |
+| `ProcessingModal.jsx` | Global progress modal for mutating API calls (add / update / delete). Driven by `services/api.js`. Only appears if a mutation takes longer than ~220ms (fast CRUD skips the blocking overlay). |
 | `ConfirmModal.jsx` | In-app confirmation dialog (replaces `window.confirm`). Used via `useConfirm()` from `ConfirmContext` on admin and user pages. |
 | `StatusBadge.jsx` | Status pill with color class. Optional `label` overrides display text (used for Shopee-aligned online-order fulfillment labels). |
 | `MovementTable.jsx` | Stock movement history table (optional order/notes column for online logs). `compact` hides Processed by for dashboard side-by-side layout. Always shows column headers; empty state renders inside the table body. |

@@ -14,7 +14,7 @@ Admin role entry points. Workspace pages re-export shared implementations; API K
 | `adminCategories.jsx` | Wrapper → `CategoriesPage` |
 | `adminApiKeys.jsx` | Full implementation. Docs open via bundled HTML (`src/docs/openIntegrationDoc.js`) so guides work on deployed SPA hosts, not only localhost. |
 | `adminUsers.jsx` | Full implementation (add, edit name, change role, activate/deactivate) |
-| `adminSettings.jsx` | Org settings UI: card sections for branding, inventory default, couriers, uniform/shirt sizes, **shirt logos**, Help Assistant + **Snowfall** switches; sticky save bar with dirty-state. Settings card heads use `<div>` (not `<header>`) so they do not inherit app chrome sticky/z-index and cover the account menu. |
+| `adminSettings.jsx` | Org settings UI: branding, inventory default, couriers, uniform/shirt sizes, **shirt logos**, Help Assistant + **Snowfall**, **Delivered report emails** (daily 5pm / month-end Asia/Manila, recipient list, send-now). Sticky save bar with dirty-state. |
 
 Import via the barrel:
 

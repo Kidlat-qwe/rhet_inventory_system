@@ -12,3 +12,9 @@ export const update = asyncHandler(async (req, res) => {
 export const addShirtLogo = asyncHandler(async (req, res) => {
   success(res, await service.addShirtLogo(req.validated.body.name, req.admin.user_id));
 });
+
+export const runDeliveredReport = asyncHandler(async (req, res) => {
+  const { runDeliveredReportOrThrow } = await import('../services/delivered-report.service.js');
+  const result = await runDeliveredReportOrThrow(req.validated.body.kind, { force: true });
+  success(res, result);
+});

@@ -12,6 +12,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   shirtLogos: Object.freeze(['Beeli', 'LCA']),
   helpAssistantEnabled: true,
   snowfallEnabled: false,
+  deliveredReportDailyEnabled: false,
+  deliveredReportMonthlyEnabled: false,
+  deliveredReportEmails: Object.freeze([]),
+  deliveredReportLastDailyYmd: null,
+  deliveredReportLastMonthlyYm: null,
 });
 
 const ALLOWED_TIMEZONES = new Set(['Asia/Manila', 'Asia/Singapore', 'UTC']);
@@ -47,6 +52,22 @@ function normalizeShirtLogos(value) {
   return out.length ? out : [...DEFAULT_SETTINGS.shirtLogos];
 }
 
+function cleanEmailList(value, { maxItems = 20 } = {}) {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const entry of value) {
+    const email = String(entry || '').trim().toLowerCase();
+    if (!email || email.length > 120) continue;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+    if (seen.has(email)) continue;
+    seen.add(email);
+    out.push(email);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
 function mergeSettings(stored = {}) {
   const courierPresets = cleanStringList(stored.courierPresets) || [...DEFAULT_SETTINGS.courierPresets];
   const uniformSizes = cleanStringList(stored.uniformSizes, { maxItems: 30, maxLen: 20 })
@@ -54,6 +75,8 @@ function mergeSettings(stored = {}) {
   const shirtSizes = cleanStringList(stored.shirtSizes, { maxItems: 30, maxLen: 20 })
     || [...DEFAULT_SETTINGS.shirtSizes];
   const shirtLogos = normalizeShirtLogos(stored.shirtLogos);
+  const deliveredReportEmails = cleanEmailList(stored.deliveredReportEmails)
+    || [...DEFAULT_SETTINGS.deliveredReportEmails];
 
   const threshold = Number(stored.defaultLowStockThreshold);
   const organizationName = String(stored.organizationName || '').trim().slice(0, 120)
@@ -74,6 +97,15 @@ function mergeSettings(stored = {}) {
     shirtLogos,
     helpAssistantEnabled: stored.helpAssistantEnabled === false ? false : true,
     snowfallEnabled: stored.snowfallEnabled === true,
+    deliveredReportDailyEnabled: stored.deliveredReportDailyEnabled === true,
+    deliveredReportMonthlyEnabled: stored.deliveredReportMonthlyEnabled === true,
+    deliveredReportEmails,
+    deliveredReportLastDailyYmd: stored.deliveredReportLastDailyYmd
+      ? String(stored.deliveredReportLastDailyYmd).slice(0, 10)
+      : null,
+    deliveredReportLastMonthlyYm: stored.deliveredReportLastMonthlyYm
+      ? String(stored.deliveredReportLastMonthlyYm).slice(0, 7)
+      : null,
   };
 }
 
@@ -174,6 +206,32 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     next.snowfallEnabled = Boolean(patch.snowfallEnabled);
   }
 
+  if (patch.deliveredReportDailyEnabled !== undefined) {
+    next.deliveredReportDailyEnabled = Boolean(patch.deliveredReportDailyEnabled);
+  }
+
+  if (patch.deliveredReportMonthlyEnabled !== undefined) {
+    next.deliveredReportMonthlyEnabled = Boolean(patch.deliveredReportMonthlyEnabled);
+  }
+
+  if (patch.deliveredReportEmails !== undefined) {
+    const list = cleanEmailList(patch.deliveredReportEmails);
+    if (list === null) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'deliveredReportEmails must be an array of email addresses');
+    }
+    next.deliveredReportEmails = list;
+  }
+
+  if (patch.deliveredReportLastDailyYmd !== undefined) {
+    const stamp = String(patch.deliveredReportLastDailyYmd || '').trim().slice(0, 10);
+    next.deliveredReportLastDailyYmd = /^\d{4}-\d{2}-\d{2}$/.test(stamp) ? stamp : null;
+  }
+
+  if (patch.deliveredReportLastMonthlyYm !== undefined) {
+    const stamp = String(patch.deliveredReportLastMonthlyYm || '').trim().slice(0, 7);
+    next.deliveredReportLastMonthlyYm = /^\d{4}-\d{2}$/.test(stamp) ? stamp : null;
+  }
+
   const document = {
     organizationName: next.organizationName,
     timezone: next.timezone,
@@ -184,6 +242,11 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     shirtLogos: next.shirtLogos,
     helpAssistantEnabled: next.helpAssistantEnabled,
     snowfallEnabled: next.snowfallEnabled,
+    deliveredReportDailyEnabled: next.deliveredReportDailyEnabled,
+    deliveredReportMonthlyEnabled: next.deliveredReportMonthlyEnabled,
+    deliveredReportEmails: next.deliveredReportEmails,
+    deliveredReportLastDailyYmd: next.deliveredReportLastDailyYmd,
+    deliveredReportLastMonthlyYm: next.deliveredReportLastMonthlyYm,
   };
 
   const result = await pool.query(
@@ -203,6 +266,11 @@ export async function updateSettings(patch = {}, actorUserId = null) {
     updatedAt: row.updated_at || null,
     updatedBy: row.updated_by || null,
   };
+}
+
+/** Internal merge (scheduler stamps) — no actor required. */
+export async function updateSettingsInternal(patch = {}) {
+  return updateSettings(patch, null);
 }
 
 export async function addShirtLogo(name, actorUserId = null) {

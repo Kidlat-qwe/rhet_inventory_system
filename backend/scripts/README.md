@@ -16,6 +16,34 @@ Default is a **dry run** unless the script says otherwise. Destructive scripts r
 | `rename-shirt-skus-to-shi.mjs` | Shirt SKU rename. |
 | `seed-shirt-logo-sizes.mjs` | Add missing Shirt sizes for a custom logo (e.g. ACC). Skips sizes that already exist; copies price/stock from the first existing row. |
 | `seed-school-uniform-blouse-skirt.mjs` | Add School Uniform Blouse + Skirt per-piece rows for one gender/size (default Female · 4XL). Skips pieces that already exist. |
+| `test-brevo-email.mjs` | Send a one-off Brevo test email (optional empty-branch XLSX). Verifies `BREVO_API_KEY` / sender. |
+| `test-delivered-report-email.mjs` | Force-send delivered report from DB (XLSX per branch). Use `--db=production --to=… --yes`. Does not stamp “already sent”. |
+
+## Test Brevo email
+
+```bash
+node scripts/test-brevo-email.mjs --to=you@example.com
+node scripts/test-brevo-email.mjs --to=you@example.com --with-xlsx
+```
+
+Or: `npm run test:brevo-email -- --to=you@example.com --with-xlsx`
+
+Requires `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` in `.env`.
+
+## Test delivered report (real DB + XLSX)
+
+Two types:
+
+```bash
+# Everyday — today's Delivered lines (e.g. September 19, 2026)
+node scripts/test-delivered-report-email.mjs --db=production --to=you@example.com --type=everyday --yes
+
+# Whole month — full calendar month (e.g. September 1–30, 2026)
+node scripts/test-delivered-report-email.mjs --db=production --to=you@example.com --type=monthly --yes
+```
+
+Aliases: `--type=daily` / `--type=month`. `--kind=` still works.  
+Sends only to `--to` (not Settings recipients). Does **not** update last-sent stamps.
 
 ## Seed Shirt logo sizes
 

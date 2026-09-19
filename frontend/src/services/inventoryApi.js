@@ -15,9 +15,17 @@ export const fetchDashboard = (params = {}) =>
 export const fetchSettings = () => api('/settings').then((response) => response.data)
 export const updateSettings = (body) =>
   api('/settings', { method: 'PATCH', body: JSON.stringify(body) }).then((response) => response.data)
+export const runDeliveredReport = (kind) =>
+  api('/settings/delivered-report/run', {
+    method: 'POST',
+    body: JSON.stringify({ kind }),
+  }).then((response) => response.data)
 export const addShirtLogo = (name) =>
   api('/settings/shirt-logos', { method: 'POST', body: JSON.stringify({ name }) }).then((response) => response.data)
 export const fetchCategories = () => api('/categories').then((response) => response.data)
+
+export const fetchCategoryImage = (categoryId) =>
+  api(`/categories/${categoryId}/image`, { silent: true }).then((response) => response.data)
 export const fetchUsers = () => api('/users').then((response) => response.data)
 
 export const createUser = (body) =>
